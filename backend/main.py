@@ -42,6 +42,9 @@ logger = logging.getLogger(__name__)
 
 _ingest_task: asyncio.Task | None = None
 
+# User preferences — updated via API, used in ingest cycles
+_user_prefs = UserPreferences()
+
 
 async def _run_ingest_cycle():
     """Fetch real jobs from APIs, score them through the LLM, add to pending.
@@ -71,9 +74,9 @@ async def _run_ingest_cycle():
         store.flush_seen()
 
         # Two-tier scoring: Flash triage → Pro full scoring
-        prefs = UserPreferences()
+        prefs = _user_prefs
         total_added = 0
-        batch_size = 10  # Larger batches OK since Flash is fast
+        batch_size = 10
         min_builder_score = 0.3
 
         for i in range(0, len(new_listings), batch_size):
@@ -227,7 +230,7 @@ async def job_action(req: JobActionRequest):
     """Apply, reject, or save a job."""
     success = store.act_on_job(req.job_id, req.action)
     if not success:
-        raise HTTPException(status_code=404, detail="Job not found in pending queue")
+        raise HTTPException(status_code=404, detail="Job not found")
     return JobActionResponse(
         job_id=req.job_id,
         action=req.action,
@@ -340,12 +343,33 @@ async def ingest_status():
     }
 
 
+# ── User Preferences ────────────────────────────────────────────────────────
+
+
+@app.get("/api/preferences", response_model=UserPreferences)
+async def get_preferences():
+    """Get current scoring preferences."""
+    return _user_prefs
+
+
+@app.put("/api/preferences", response_model=UserPreferences)
+async def update_preferences(prefs: UserPreferences):
+    """Update scoring preferences (used in future ingest cycles)."""
+    global _user_prefs
+    _user_prefs = prefs
+    return _user_prefs
+
+
 # ── Dev/Debug: Seed with mock data ──────────────────────────────────────────
 
 
 @app.post("/api/dev/seed")
 async def seed_mock_data():
     """Seed the store with mock job data for development."""
+    if not settings.debug:
+        raise HTTPException(
+            status_code=403, detail="Seed endpoint disabled in production"
+        )
     mock_jobs = [
         JobPayload(
             company_name="Cognition (Devin)",

@@ -33,11 +33,6 @@ class JobsViewModel: ObservableObject {
 
         do {
             pendingJobs = try await APIClient.shared.fetchPendingJobs()
-            if pendingJobs.isEmpty {
-                // Auto-seed on first load for dev
-                _ = try? await APIClient.shared.seedMockData()
-                pendingJobs = try await APIClient.shared.fetchPendingJobs()
-            }
         } catch {
             self.error = error.localizedDescription
         }
@@ -60,7 +55,16 @@ class JobsViewModel: ObservableObject {
     }
 
     func loadStats() async {
-        stats = try? await APIClient.shared.fetchStats()
+        do {
+            stats = try await APIClient.shared.fetchStats()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// Dismiss the current error banner
+    func dismissError() {
+        withAnimation { error = nil }
     }
 
     func refreshAll() async {

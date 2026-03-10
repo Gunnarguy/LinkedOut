@@ -27,15 +27,21 @@ struct UserPreferences: Codable {
         requireRemote: true,
         preferredRoles: [
             "AI Product Engineer",
+            "AI Engineer",
             "Founding Engineer",
-            "Senior Software Engineer",
+            "Product Engineer",
             "iOS Engineer",
-            "Full Stack Engineer"
+            "Machine Learning Engineer"
         ],
         excludedKeywords: [
             "LeetCode",
             "whiteboard",
-            "competitive programming"
+            "competitive programming",
+            "10+ years",
+            "Staff Engineer",
+            "Principal Engineer",
+            "DevOps",
+            "SRE"
         ],
         locationPreference: "Remote"
     )

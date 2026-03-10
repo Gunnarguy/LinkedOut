@@ -111,13 +111,22 @@ class JobStore:
         return None
 
     def act_on_job(self, job_id: str, action: JobAction) -> bool:
-        job = self._pending.pop(job_id, None)
-        if job is None:
-            if action == JobAction.apply:
-                job = self._saved.pop(job_id, None)
-            if job is None:
-                return False
+        # Search all buckets to find the job
+        job = None
+        source_bucket: dict[str, JobPayload] | None = None
+        for bucket in (self._pending, self._applied, self._saved, self._rejected):
+            if job_id in bucket:
+                job = bucket[job_id]
+                source_bucket = bucket
+                break
 
+        if job is None or source_bucket is None:
+            return False
+
+        # Remove from current bucket
+        source_bucket.pop(job_id, None)
+
+        # Place in destination bucket
         match action:
             case JobAction.apply:
                 self._applied[job_id] = job

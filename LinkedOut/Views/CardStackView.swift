@@ -55,6 +55,15 @@ struct CardStackView: View {
             .sheet(item: $jobs.selectedJob) { job in
                 JobDetailView(job: job)
             }
+            .overlay(alignment: .top) {
+                if let error = jobs.error {
+                    ErrorBanner(message: error) {
+                        jobs.dismissError()
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.3), value: jobs.error)
         }
     }
 

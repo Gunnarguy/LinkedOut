@@ -40,12 +40,29 @@ actor APIClient {
 
     init() {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 10
-        config.timeoutIntervalForResource = 30
+        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForResource = 120
         self.session = URLSession(configuration: config)
 
         self.decoder = JSONDecoder()
-        self.decoder.dateDecodingStrategy = .iso8601
+        // Flexible date decoding: handles ISO 8601, fractional seconds, and space-separated
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let fallbackFormatter = ISO8601DateFormatter()
+        fallbackFormatter.formatOptions = [.withInternetDateTime]
+        self.decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let str = try container.decode(String.self)
+            // Try ISO 8601 with fractional seconds first
+            if let date = formatter.date(from: str) { return date }
+            // Without fractional seconds
+            if let date = fallbackFormatter.date(from: str) { return date }
+            // Python's space-separated format: "2025-01-01 12:00:00+00:00"
+            let spaceFixed = str.replacingOccurrences(of: " ", with: "T")
+            if let date = formatter.date(from: spaceFixed) { return date }
+            if let date = fallbackFormatter.date(from: spaceFixed) { return date }
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot decode date: \(str)")
+        }
     }
 
     // MARK: - Jobs
@@ -78,6 +95,12 @@ actor APIClient {
 
     func refreshIngest() async throws -> IngestResponse {
         return try await post("/api/ingest/refresh", body: Optional<String>.none)
+    }
+
+    // MARK: - Preferences
+
+    func syncPreferences(_ prefs: UserPreferences) async throws -> UserPreferences {
+        return try await put("/api/preferences", body: prefs)
     }
 
     // MARK: - Auth
@@ -130,6 +153,23 @@ actor APIClient {
             encoder.keyEncodingStrategy = .convertToSnakeCase
             request.httpBody = try encoder.encode(body)
         }
+
+        let (data, response) = try await performRequest(request)
+        return try decode(data, response: response)
+    }
+
+    private func put<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {
+        guard let url = URL(string: "\(baseURL)\(path)") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        request.httpBody = try encoder.encode(body)
 
         let (data, response) = try await performRequest(request)
         return try decode(data, response: response)

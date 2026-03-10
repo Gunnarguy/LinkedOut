@@ -26,6 +26,13 @@ class JobPayload(BaseModel):
     location: str = ""
     tags: list[str] = Field(default_factory=list)
 
+    def model_dump(self, **kwargs):
+        """Override to serialize datetime as ISO 8601 consistently."""
+        data = super().model_dump(**kwargs)
+        if data.get("posted_at") and isinstance(data["posted_at"], datetime):
+            data["posted_at"] = data["posted_at"].isoformat()
+        return data
+
 
 class JobAction(str, Enum):
     apply = "apply"

@@ -1,6 +1,9 @@
 """LLM-powered job scoring engine — the AI bouncer.
 
-Supports both OpenAI and Google Gemini. Set LLM_PROVIDER in .env.
+Multi-provider with automatic fallback chain:
+  Gemini Pro → Gemini Flash → OpenAI GPT-5.4 (with thinking)
+
+Set LLM_PROVIDER in .env to choose the primary provider.
 """
 
 from __future__ import annotations
@@ -37,11 +40,41 @@ def _get_gemini_client():
     return _gemini_client
 
 
-async def _call_llm(system: str, user_msg: str, use_flash: bool = False) -> str:
-    """Route LLM call to the configured provider.
+async def _call_gemini(system: str, user_msg: str, use_flash: bool = False) -> str:
+    """Call Google Gemini (Pro or Flash). Raises on failure."""
+    client = _get_gemini_client()
+    model = settings.gemini_flash_model if use_flash else settings.gemini_model
+    combined = f"{system}\n\n---\n\n{user_msg}"
+    resp = await client.aio.models.generate_content(
+        model=model,
+        contents=combined,
+        config={
+            "temperature": 0.3,
+            "response_mime_type": "application/json",
+        },
+    )
+    return resp.text or ""
 
-    Args:
-        use_flash: If True and provider is gemini, use the flash model (cheaper/faster).
+
+async def _call_openai(system: str, user_msg: str) -> str:
+    """Call OpenAI GPT-5.4 with thinking enabled. Raises on failure."""
+    client = _get_openai_client()
+    resp = await client.chat.completions.create(
+        model=settings.openai_model,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_msg},
+        ],
+        temperature=0.3,
+        response_format={"type": "json_object"},
+    )
+    return resp.choices[0].message.content or ""
+
+
+async def _call_llm(system: str, user_msg: str, use_flash: bool = False) -> str:
+    """Route LLM call with automatic fallback chain.
+
+    Chain: Gemini Pro/Flash → Flash (if Pro rate-limited) → OpenAI GPT-5.4
     """
     provider = settings.llm_provider.lower()
     max_retries = 3
@@ -49,68 +82,46 @@ async def _call_llm(system: str, user_msg: str, use_flash: bool = False) -> str:
     for attempt in range(max_retries):
         try:
             if provider == "openai":
-                client = _get_openai_client()
-                resp = await client.chat.completions.create(
-                    model=settings.openai_model,
-                    messages=[
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": user_msg},
-                    ],
-                    temperature=0.3,
-                    response_format={"type": "json_object"},
-                )
-                return resp.choices[0].message.content or ""
-
+                return await _call_openai(system, user_msg)
             elif provider == "gemini":
-                client = _get_gemini_client()
-                model = (
-                    settings.gemini_flash_model if use_flash else settings.gemini_model
-                )
-                combined = f"{system}\n\n---\n\n{user_msg}"
-                resp = await client.aio.models.generate_content(
-                    model=model,
-                    contents=combined,
-                    config={
-                        "temperature": 0.3,
-                        "response_mime_type": "application/json",
-                    },
-                )
-                return resp.text or ""
-
+                return await _call_gemini(system, user_msg, use_flash=use_flash)
             else:
                 raise ValueError(f"Unknown LLM provider: {provider}")
 
         except Exception as e:
             error_str = str(e)
-            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-                if attempt < max_retries - 1:
-                    wait_time = 30 * (attempt + 1)
-                    logger.warning(
-                        f"Rate limited (attempt {attempt + 1}/{max_retries}), "
-                        f"waiting {wait_time}s..."
-                    )
-                    await asyncio.sleep(wait_time)
-                    continue
-                # Last retry: fall back to Flash if we were using Pro
+            is_rate_limit = "429" in error_str or "RESOURCE_EXHAUSTED" in error_str
+
+            if is_rate_limit and attempt < max_retries - 1:
+                wait_time = 15 * (attempt + 1)
+                logger.warning(
+                    f"Rate limited (attempt {attempt + 1}/{max_retries}), "
+                    f"waiting {wait_time}s..."
+                )
+                await asyncio.sleep(wait_time)
+                continue
+
+            if is_rate_limit:
+                # Exhausted retries — walk the fallback chain
                 if provider == "gemini" and not use_flash:
-                    logger.warning(
-                        "Pro quota exhausted — falling back to Flash for scoring"
-                    )
-                    client = _get_gemini_client()
-                    combined = f"{system}\n\n---\n\n{user_msg}"
-                    resp = await client.aio.models.generate_content(
-                        model=settings.gemini_flash_model,
-                        contents=combined,
-                        config={
-                            "temperature": 0.3,
-                            "response_mime_type": "application/json",
-                        },
-                    )
-                    return resp.text or ""
-                raise
+                    logger.warning("Gemini Pro exhausted → trying Flash...")
+                    try:
+                        return await _call_gemini(system, user_msg, use_flash=True)
+                    except Exception as flash_err:
+                        logger.warning(f"Flash also failed: {flash_err}")
+
+                # Final fallback: OpenAI GPT-5.4
+                if provider != "openai" and settings.openai_api_key:
+                    logger.warning("Gemini exhausted → falling back to OpenAI GPT-5.4")
+                    try:
+                        return await _call_openai(system, user_msg)
+                    except Exception as oai_err:
+                        logger.error(f"OpenAI fallback also failed: {oai_err}")
+                        raise oai_err from e
+
             raise
 
-    raise RuntimeError("LLM call failed after max retries (rate limited)")
+    raise RuntimeError("LLM call failed after max retries")
 
 
 SYSTEM_PROMPT = """\
@@ -312,12 +323,20 @@ async def triage_and_score(
     if not listings:
         return []
 
-    # Phase 1: Flash triage (cheap, fast, high throughput)
+    # Phase 1: Flash triage (with pacing to avoid rate limits)
     logger.info(f"Phase 1: Triaging {len(listings)} listings with Flash...")
-    triage_results = await asyncio.gather(
-        *(triage_job(raw) for raw in listings),
-        return_exceptions=True,
-    )
+    triage_results = []
+    # Process in small concurrent batches of 3 with delay between batches
+    batch_size = 3
+    for i in range(0, len(listings), batch_size):
+        batch = listings[i : i + batch_size]
+        batch_results = await asyncio.gather(
+            *(triage_job(raw) for raw in batch),
+            return_exceptions=True,
+        )
+        triage_results.extend(batch_results)
+        if i + batch_size < len(listings):
+            await asyncio.sleep(1)  # gentle pacing between triage batches
 
     survivors: list[RawJobListing] = []
     for raw, passed in zip(listings, triage_results):

@@ -1,4 +1,6 @@
 import os
+import secrets
+
 from pydantic_settings import BaseSettings
 
 
@@ -19,13 +21,13 @@ class Settings(BaseSettings):
 
     # Google Gemini
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-pro"
-    gemini_flash_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-3.1-pro-preview"
+    gemini_flash_model: str = "gemini-3-flash-preview"
 
     # Server
     host: str = "0.0.0.0"
     port: int = 8443
-    debug: bool = True
+    debug: bool = os.getenv("RENDER", "") == ""  # Auto-disable debug on Render
 
     # Job scoring defaults
     min_salary: int = 90000
@@ -34,8 +36,8 @@ class Settings(BaseSettings):
     # CORS
     allowed_origins: list[str] = ["*"]
 
-    # Secret key for signing tokens
-    secret_key: str = "change-me-in-production"
+    # Secret key for signing tokens (auto-generated if not set)
+    secret_key: str = os.getenv("SECRET_KEY", secrets.token_urlsafe(32))
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

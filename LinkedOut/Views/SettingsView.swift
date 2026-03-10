@@ -16,6 +16,19 @@ struct SettingsView: View {
     @State private var excludedKeywords: [String] = UserPreferences.default.excludedKeywords
     @State private var newRole = ""
     @State private var newKeyword = ""
+    @State private var syncStatus: SyncStatus = .idle
+
+    private enum SyncStatus { case idle, syncing, synced, failed(String) }
+
+    private var currentPreferences: UserPreferences {
+        UserPreferences(
+            minSalary: minSalary,
+            requireRemote: requireRemote,
+            preferredRoles: preferredRoles,
+            excludedKeywords: excludedKeywords,
+            locationPreference: locationPreference
+        )
+    }
 
     var body: some View {
         NavigationStack {
@@ -86,6 +99,25 @@ struct SettingsView: View {
                     }
                 }
 
+                Section {
+                    Button {
+                        Task { await syncPreferences() }
+                    } label: {
+                        HStack {
+                            Label(syncLabel, systemImage: syncIcon)
+                            if case .syncing = syncStatus {
+                                Spacer()
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(isSyncing)
+                } header: {
+                    Text("Sync")
+                } footer: {
+                    Text("Push your preferences to the backend so the AI scoring engine uses them.")
+                }
+
                 Section("Backend") {
                     TextField("Server URL", text: $serverURL)
                         .textInputAutocapitalization(.never)
@@ -107,6 +139,45 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+        }
+    }
+
+    // MARK: - Sync Helpers
+
+    private var isSyncing: Bool {
+        if case .syncing = syncStatus { return true }
+        return false
+    }
+
+    private var syncLabel: String {
+        switch syncStatus {
+        case .idle: return "Sync Preferences"
+        case .syncing: return "Syncing..."
+        case .synced: return "Synced!"
+        case .failed(let msg): return "Failed: \(msg)"
+        }
+    }
+
+    private var syncIcon: String {
+        switch syncStatus {
+        case .idle: return "arrow.triangle.2.circlepath"
+        case .syncing: return "arrow.triangle.2.circlepath"
+        case .synced: return "checkmark.circle.fill"
+        case .failed: return "exclamationmark.triangle"
+        }
+    }
+
+    private func syncPreferences() async {
+        syncStatus = .syncing
+        do {
+            _ = try await APIClient.shared.syncPreferences(currentPreferences)
+            syncStatus = .synced
+            try? await Task.sleep(for: .seconds(3))
+            if case .synced = syncStatus { syncStatus = .idle }
+        } catch {
+            syncStatus = .failed(error.localizedDescription)
+            try? await Task.sleep(for: .seconds(5))
+            syncStatus = .idle
         }
     }
 
