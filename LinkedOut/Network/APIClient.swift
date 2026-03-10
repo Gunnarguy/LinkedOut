@@ -91,6 +91,24 @@ actor APIClient {
         return try await post("/api/dev/seed", body: Optional<String>.none)
     }
 
+    // MARK: - Undo
+
+    func undoLastAction() async throws -> UndoResponse {
+        return try await post("/api/jobs/undo", body: Optional<String>.none)
+    }
+
+    // MARK: - Notes & Status
+
+    func updateJobNotes(jobId: String, notes: String) async throws -> JobPayload {
+        let body = JobNotesUpdate(notes: notes)
+        return try await put("/api/jobs/\(jobId)/notes", body: body)
+    }
+
+    func updateJobStatus(jobId: String, status: String) async throws -> JobPayload {
+        let body = JobStatusUpdate(applicationStatus: status)
+        return try await put("/api/jobs/\(jobId)/status", body: body)
+    }
+
     // MARK: - Ingest
 
     func refreshIngest() async throws -> IngestResponse {

@@ -32,6 +32,39 @@ struct JobCardView: View {
             }
             .padding(20)
 
+            // Quick intel badges
+            HStack(spacing: 6) {
+                if let level = job.experienceLevel, !level.isEmpty, level != "Not specified" {
+                    Text(level)
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(.purple.opacity(0.12))
+                        .foregroundStyle(.purple)
+                        .clipShape(Capsule())
+                }
+                if let stage = job.companyStage, !stage.isEmpty, stage != "Unknown" {
+                    Text(stage)
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(.teal.opacity(0.12))
+                        .foregroundStyle(.teal)
+                        .clipShape(Capsule())
+                }
+                if let size = job.companySize, !size.isEmpty, size != "Unknown" {
+                    Text("\(size) people")
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(.gray.opacity(0.12))
+                        .foregroundStyle(.secondary)
+                        .clipShape(Capsule())
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 6)
+
             Divider()
 
             // Meta row
@@ -76,6 +109,30 @@ struct JobCardView: View {
             .padding(20)
 
             Spacer(minLength: 0)
+
+            // Tech stack preview (first 4)
+            if let stack = job.techStack, !stack.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(stack.prefix(5), id: \.self) { tech in
+                            Text(tech)
+                                .font(.caption2.weight(.medium))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(.indigo.opacity(0.1))
+                                .foregroundStyle(.indigo)
+                                .clipShape(Capsule())
+                        }
+                        if stack.count > 5 {
+                            Text("+\(stack.count - 5)")
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
+                .padding(.bottom, 8)
+            }
 
             // Tags
             if !job.tags.isEmpty {

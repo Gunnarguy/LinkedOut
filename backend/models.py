@@ -26,6 +26,31 @@ class JobPayload(BaseModel):
     location: str = ""
     tags: list[str] = Field(default_factory=list)
 
+    # ── Rich Company Intelligence (LLM-extracted) ────────────────────────
+    description: str = ""  # Full original job description (preserved)
+    company_description: str = ""  # What the company does / mission
+    company_size: str = ""  # e.g. "10-50", "50-200", "500+"
+    company_stage: str = ""  # e.g. "Seed", "Series A", "Series B", "Public"
+    company_url: str = ""  # Company website
+    salary_max: int = 0  # Upper end of range (0 = unknown)
+    requirements: list[str] = Field(default_factory=list)  # Key requirements
+    nice_to_haves: list[str] = Field(
+        default_factory=list
+    )  # Nice-to-have qualifications
+    tech_stack: list[str] = Field(default_factory=list)  # Technologies mentioned
+    why_interesting: str = ""  # AI analysis: why this fits the user
+    red_flags: list[str] = Field(default_factory=list)  # Potential concerns
+    apply_url: str = ""  # Direct application link (if different from source)
+    experience_level: str = ""  # "Entry", "Junior", "Mid", "Senior" etc.
+    job_type: str = ""  # "Full-time", "Contract", "Part-time", "Internship"
+    benefits: list[str] = Field(default_factory=list)  # Perks/benefits mentioned
+
+    # ── User-Managed Fields (not from LLM) ───────────────────────────────
+    notes: str = ""  # User's personal notes
+    application_status: str = (
+        "new"  # new, applied, phone_screen, interview, offer, rejected
+    )
+
     def model_dump(self, **kwargs):
         """Override to serialize datetime as ISO 8601 consistently."""
         data = super().model_dump(**kwargs)
@@ -148,3 +173,14 @@ class ScoringResult(BaseModel):
     passed_filter: bool
     job: JobPayload | None = None
     rejection_reason: str = ""
+
+
+# ── Job Update Models ───────────────────────────────────────────────────────
+
+
+class JobNotesUpdate(BaseModel):
+    notes: str
+
+
+class JobStatusUpdate(BaseModel):
+    status: str  # new, applied, phone_screen, interview, offer, rejected

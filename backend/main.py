@@ -26,7 +26,9 @@ from models import (
     AuthStatusResponse,
     JobActionRequest,
     JobActionResponse,
+    JobNotesUpdate,
     JobPayload,
+    JobStatusUpdate,
     LoginURLResponse,
     RawJobListing,
     ScoringResult,
@@ -257,6 +259,15 @@ async def get_stats():
     return store.stats
 
 
+@app.post("/api/jobs/undo")
+async def undo_last_action():
+    """Undo the last swipe/action — restores the job to its previous bucket."""
+    job = store.undo_last()
+    if not job:
+        raise HTTPException(status_code=404, detail="Nothing to undo")
+    return {"success": True, "job_id": job.id, "message": "Action undone"}
+
+
 # Dynamic path param MUST come after all static /api/jobs/* routes
 @app.get("/api/jobs/{job_id}", response_model=JobPayload)
 async def get_job(job_id: str):
@@ -265,6 +276,22 @@ async def get_job(job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
+
+
+@app.put("/api/jobs/{job_id}/notes")
+async def update_job_notes(job_id: str, body: JobNotesUpdate):
+    """Update user notes on a job."""
+    if not store.update_job_notes(job_id, body.notes):
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"success": True, "job_id": job_id}
+
+
+@app.put("/api/jobs/{job_id}/status")
+async def update_job_status(job_id: str, body: JobStatusUpdate):
+    """Update application status on a job."""
+    if not store.update_job_status(job_id, body.status):
+        raise HTTPException(status_code=404, detail="Job not found or invalid status")
+    return {"success": True, "job_id": job_id, "status": body.status}
 
 
 # ── Scoring / Ingestion ─────────────────────────────────────────────────────
@@ -375,6 +402,7 @@ async def seed_mock_data():
             company_name="Cognition (Devin)",
             role_title="AI Product Engineer",
             salary_floor=180000,
+            salary_max=220000,
             is_remote=True,
             builder_score=0.96,
             ai_pitch_summary=(
@@ -397,11 +425,55 @@ async def seed_mock_data():
             source_url="https://cognition.ai/careers",
             location="Remote / SF",
             tags=["AI", "Agents", "Product", "Startup"],
+            description=(
+                "We're building Devin, the first AI software engineer. Our mission is to "
+                "make software engineering accessible to everyone. We need product engineers "
+                "who are obsessed with building great AI-native experiences. You'll own "
+                "features end-to-end — from ideation to production — in a team of <30 people."
+            ),
+            company_description=(
+                "Cognition is the company behind Devin, the world's first autonomous AI "
+                "software engineer. Founded by a team of competitive programmers, they raised "
+                "$175M Series B from Founders Fund. Building the future of autonomous coding."
+            ),
+            company_size="10-50",
+            company_stage="Series B",
+            company_url="https://cognition.ai",
+            requirements=[
+                "Strong product intuition",
+                "Rapid prototyping ability",
+                "Python or TypeScript",
+            ],
+            nice_to_haves=[
+                "AI/ML experience",
+                "iOS/mobile experience",
+                "Startup background",
+            ],
+            tech_stack=["Python", "TypeScript", "React", "LLMs", "AWS"],
+            why_interesting=(
+                "This is ground zero for agentic AI — exactly the thesis you've been building "
+                "around. Small team, insane trajectory, and they value shipping over pedigree. "
+                "Your hobbyist builder DNA is literally the profile they're looking for."
+            ),
+            red_flags=[
+                "Extremely fast-paced, potential for burnout",
+                "Competitive programming culture (may feel intimidating)",
+            ],
+            apply_url="https://cognition.ai/careers",
+            experience_level="Mid",
+            job_type="Full-time",
+            benefits=[
+                "Equity",
+                "Health/dental/vision",
+                "Unlimited PTO",
+                "Remote-first",
+            ],
         ),
         JobPayload(
             company_name="Cursor",
             role_title="Product Engineer",
             salary_floor=200000,
+            salary_max=250000,
             is_remote=True,
             builder_score=0.94,
             ai_pitch_summary=(
@@ -423,11 +495,61 @@ async def seed_mock_data():
             source_url="https://cursor.com/careers",
             location="Remote / SF",
             tags=["AI", "DevTools", "Product", "LLM"],
+            description=(
+                "Cursor is building the next generation of code editors — powered by AI. "
+                "We're looking for product engineers who care deeply about developer experience. "
+                "You'll work on AI-assisted coding features used by hundreds of thousands of developers."
+            ),
+            company_description=(
+                "Cursor is an AI-native code editor used by hundreds of thousands of developers. "
+                "They raised over $400M at a $9B valuation. The team is ~60 people with an "
+                "engineering-first culture. Building the IDE of the future."
+            ),
+            company_size="50-200",
+            company_stage="Series B",
+            company_url="https://cursor.com",
+            requirements=[
+                "Strong product sense",
+                "Ship quickly",
+                "Full-stack (frontend + backend)",
+            ],
+            nice_to_haves=[
+                "AI/ML background",
+                "Passion for dev tools",
+                "Editor/IDE experience",
+            ],
+            tech_stack=[
+                "TypeScript",
+                "React",
+                "Electron",
+                "Python",
+                "LLMs",
+                "VS Code APIs",
+            ],
+            why_interesting=(
+                "You use AI coding tools every day. Cursor is the one building what you already "
+                "live in. Product engineer means taste + execution, not LeetCode. Your builder "
+                "portfolio IS the interview."
+            ),
+            red_flags=[
+                "High valuation means high expectations",
+                "Rapid growth can be chaotic",
+            ],
+            apply_url="https://cursor.com/careers",
+            experience_level="Mid",
+            job_type="Full-time",
+            benefits=[
+                "Equity",
+                "Health insurance",
+                "Remote-friendly",
+                "Hardware stipend",
+            ],
         ),
         JobPayload(
             company_name="Replit",
             role_title="AI Product Engineer — Mobile",
             salary_floor=170000,
+            salary_max=210000,
             is_remote=True,
             builder_score=0.91,
             ai_pitch_summary=(
@@ -450,6 +572,51 @@ async def seed_mock_data():
             source_url="https://replit.com/careers",
             location="Remote",
             tags=["AI", "Mobile", "Product", "CreatorTools"],
+            description=(
+                "Replit is building the world's most accessible development environment. "
+                "We're expanding to mobile and need an AI product engineer to lead our "
+                "iOS experience. You'll design how millions of non-traditional builders "
+                "interact with AI-powered coding on their phones."
+            ),
+            company_description=(
+                "Replit is a cloud-based IDE and development platform with 30M+ users. "
+                "Known for democratizing coding — you can build and deploy full apps from "
+                "a browser. Backed by a16z, they're pushing hard into AI-assisted development."
+            ),
+            company_size="200-500",
+            company_stage="Series C+",
+            company_url="https://replit.com",
+            requirements=[
+                "iOS/SwiftUI experience",
+                "Product ownership",
+                "AI/ML familiarity",
+            ],
+            nice_to_haves=[
+                "Published apps on App Store",
+                "Community building",
+                "Teaching/content creation",
+            ],
+            tech_stack=["Swift", "SwiftUI", "Python", "React", "LLMs", "GCP"],
+            why_interesting=(
+                "You literally are their target user — a non-traditional builder who ships "
+                "real apps. Their mobile push needs iOS native experience, and your SwiftUI "
+                "portfolio speaks louder than any resume. Plus, their mission aligns with "
+                "your belief that AI makes CS gatekeeping obsolete."
+            ),
+            red_flags=[
+                "Larger company (200+), some startup scrappiness may be lost",
+                "Mobile push is newer — could shift priorities",
+            ],
+            apply_url="https://replit.com/careers",
+            experience_level="Mid",
+            job_type="Full-time",
+            benefits=[
+                "Equity",
+                "Health/dental/vision",
+                "Remote-first",
+                "Learning stipend",
+                "Home office budget",
+            ],
         ),
     ]
 

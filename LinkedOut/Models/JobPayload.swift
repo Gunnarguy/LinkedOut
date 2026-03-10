@@ -21,6 +21,27 @@ struct JobPayload: Codable, Identifiable, Hashable {
     let location: String
     let tags: [String]
 
+    // Rich company intelligence (all optional for backward compat)
+    var description: String?
+    var companyDescription: String?
+    var companySize: String?
+    var companyStage: String?
+    var companyUrl: String?
+    var salaryMax: Int?
+    var requirements: [String]?
+    var niceToHaves: [String]?
+    var techStack: [String]?
+    var whyInteresting: String?
+    var redFlags: [String]?
+    var applyUrl: String?
+    var experienceLevel: String?
+    var jobType: String?
+    var benefits: [String]?
+
+    // User-managed fields
+    var notes: String?
+    var applicationStatus: String?
+
     enum CodingKeys: String, CodingKey {
         case id
         case companyName = "company_name"
@@ -34,6 +55,23 @@ struct JobPayload: Codable, Identifiable, Hashable {
         case postedAt = "posted_at"
         case location
         case tags
+        case description
+        case companyDescription = "company_description"
+        case companySize = "company_size"
+        case companyStage = "company_stage"
+        case companyUrl = "company_url"
+        case salaryMax = "salary_max"
+        case requirements
+        case niceToHaves = "nice_to_haves"
+        case techStack = "tech_stack"
+        case whyInteresting = "why_interesting"
+        case redFlags = "red_flags"
+        case applyUrl = "apply_url"
+        case experienceLevel = "experience_level"
+        case jobType = "job_type"
+        case benefits
+        case notes
+        case applicationStatus = "application_status"
     }
 
     func hash(into hasher: inout Hasher) {
@@ -44,12 +82,17 @@ struct JobPayload: Codable, Identifiable, Hashable {
         lhs.id == rhs.id
     }
 
-    /// Formatted salary string
+    /// Formatted salary string (range if max available)
     var salaryDisplay: String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.maximumFractionDigits = 0
-        return "\(formatter.string(from: NSNumber(value: salaryFloor)) ?? "$\(salaryFloor)")+"
+        let floor = formatter.string(from: NSNumber(value: salaryFloor)) ?? "$\(salaryFloor)"
+        if let max = salaryMax, max > salaryFloor {
+            let maxStr = formatter.string(from: NSNumber(value: max)) ?? "$\(max)"
+            return "\(floor) – \(maxStr)"
+        }
+        return salaryFloor > 0 ? "\(floor)+" : "Not listed"
     }
 
     /// Score as percentage (0–100)
@@ -63,6 +106,26 @@ struct JobPayload: Codable, Identifiable, Hashable {
             .components(separatedBy: "\n")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
+    }
+
+    /// Formatted application status
+    var statusDisplay: String {
+        switch applicationStatus ?? "new" {
+        case "new": return "New"
+        case "applied": return "Applied"
+        case "phone_screen": return "Phone Screen"
+        case "interview": return "Interview"
+        case "offer": return "Offer"
+        case "rejected": return "Rejected"
+        default: return applicationStatus ?? "New"
+        }
+    }
+
+    /// Has any rich company intel?
+    var hasCompanyIntel: Bool {
+        (companyDescription ?? "").count > 5 ||
+        (companyStage ?? "").count > 1 ||
+        !(techStack ?? []).isEmpty
     }
 }
 
@@ -93,5 +156,25 @@ struct JobActionResponse: Codable {
     enum CodingKeys: String, CodingKey {
         case jobId = "job_id"
         case action, success, message
+    }
+}
+
+struct JobNotesUpdate: Codable {
+    let notes: String
+}
+
+struct JobStatusUpdate: Codable {
+    let status: String
+}
+
+struct UndoResponse: Codable {
+    let success: Bool
+    let jobId: String
+    let message: String
+
+    enum CodingKeys: String, CodingKey {
+        case success
+        case jobId = "job_id"
+        case message
     }
 }

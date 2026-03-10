@@ -20,7 +20,7 @@ struct AppliedJobsView: View {
                         Button {
                             jobs.selectedJob = job
                         } label: {
-                            JobListRow(job: job)
+                            JobListRow(job: job, showStatus: true)
                         }
                         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                     }
@@ -72,7 +72,7 @@ struct SavedJobsView: View {
                         Button {
                             jobs.selectedJob = job
                         } label: {
-                            JobListRow(job: job)
+                            JobListRow(job: job, showStatus: false)
                         }
                         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                     }
@@ -115,35 +115,87 @@ struct SavedJobsView: View {
 
 struct JobListRow: View {
     let job: JobPayload
+    var showStatus: Bool = false
 
     var body: some View {
-        HStack(spacing: 14) {
-            ScoreRing(score: job.builderScore, size: 44, lineWidth: 4)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 14) {
+                ScoreRing(score: job.builderScore, size: 44, lineWidth: 4)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(job.roleTitle)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(job.roleTitle)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
 
-                Text(job.companyName)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    Text(job.companyName)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(job.salaryDisplay)
+                        .font(.subheadline.weight(.medium))
+
+                    if job.isRemote {
+                        Text("Remote")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                    }
+                }
             }
 
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(job.salaryDisplay)
-                    .font(.subheadline.weight(.medium))
-
-                if job.isRemote {
-                    Text("Remote")
-                        .font(.caption)
-                        .foregroundStyle(.green)
+            // Status badge + notes preview
+            HStack(spacing: 8) {
+                if showStatus, let status = job.applicationStatus, !status.isEmpty, status != "new" {
+                    Text(job.statusDisplay)
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(statusColor(status).opacity(0.12))
+                        .foregroundStyle(statusColor(status))
+                        .clipShape(Capsule())
                 }
+
+                if let stage = job.companyStage, !stage.isEmpty, stage != "Unknown" {
+                    Text(stage)
+                        .font(.caption2.weight(.medium))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(.teal.opacity(0.1))
+                        .foregroundStyle(.teal)
+                        .clipShape(Capsule())
+                }
+
+                if let stack = job.techStack, !stack.isEmpty {
+                    Text(stack.prefix(3).joined(separator: " · "))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            if let notes = job.notes, !notes.isEmpty {
+                Text(notes)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .padding(.top, 2)
             }
         }
         .padding(.vertical, 4)
+    }
+
+    private func statusColor(_ status: String) -> Color {
+        switch status {
+        case "applied": return .blue
+        case "phone_screen": return .orange
+        case "interview": return .purple
+        case "offer": return .green
+        case "rejected": return .red
+        default: return .secondary
+        }
     }
 }

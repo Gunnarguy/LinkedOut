@@ -22,6 +22,9 @@ class JobStore:
         self._rejected: dict[str, JobPayload] = {}
         self._saved: dict[str, JobPayload] = {}
         self._seen_urls: set[str] = set()
+        self._undo_stack: list[tuple[str, str, str]] = (
+            []
+        )  # (job_id, action, source_bucket)
         self._load()
 
     # ── Persistence ──────────────────────────────────────────────────────
@@ -114,14 +117,27 @@ class JobStore:
         # Search all buckets to find the job
         job = None
         source_bucket: dict[str, JobPayload] | None = None
-        for bucket in (self._pending, self._applied, self._saved, self._rejected):
+        source_name: str = ""
+        bucket_map = {
+            "pending": self._pending,
+            "applied": self._applied,
+            "saved": self._saved,
+            "rejected": self._rejected,
+        }
+        for name, bucket in bucket_map.items():
             if job_id in bucket:
                 job = bucket[job_id]
                 source_bucket = bucket
+                source_name = name
                 break
 
         if job is None or source_bucket is None:
             return False
+
+        # Track undo (keep last 20)
+        self._undo_stack.append((job_id, action.value, source_name))
+        if len(self._undo_stack) > 20:
+            self._undo_stack.pop(0)
 
         # Remove from current bucket
         source_bucket.pop(job_id, None)
@@ -137,6 +153,58 @@ class JobStore:
 
         self._save()
         return True
+
+    def undo_last(self) -> JobPayload | None:
+        """Undo the last swipe action. Returns the restored job or None."""
+        if not self._undo_stack:
+            return None
+
+        job_id, action, source_name = self._undo_stack.pop()
+
+        # Find the job in its current bucket
+        dest_map = {
+            "apply": self._applied,
+            "reject": self._rejected,
+            "save": self._saved,
+        }
+        source_map = {
+            "pending": self._pending,
+            "applied": self._applied,
+            "saved": self._saved,
+            "rejected": self._rejected,
+        }
+
+        current_bucket = dest_map.get(action)
+        if current_bucket is None or job_id not in current_bucket:
+            return None
+
+        job = current_bucket.pop(job_id)
+        original_bucket = source_map.get(source_name, self._pending)
+        original_bucket[job_id] = job
+
+        self._save()
+        return job
+
+    def update_job_notes(self, job_id: str, notes: str) -> bool:
+        """Update notes on any job in any bucket."""
+        for bucket in (self._pending, self._applied, self._saved, self._rejected):
+            if job_id in bucket:
+                bucket[job_id].notes = notes
+                self._save()
+                return True
+        return False
+
+    def update_job_status(self, job_id: str, status: str) -> bool:
+        """Update application status on any job."""
+        valid = {"new", "applied", "phone_screen", "interview", "offer", "rejected"}
+        if status not in valid:
+            return False
+        for bucket in (self._pending, self._applied, self._saved, self._rejected):
+            if job_id in bucket:
+                bucket[job_id].application_status = status
+                self._save()
+                return True
+        return False
 
     def get_applied(self) -> list[JobPayload]:
         return list(self._applied.values())

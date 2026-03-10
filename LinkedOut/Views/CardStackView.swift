@@ -158,6 +158,19 @@ struct CardStackView: View {
 
     private var actionButtons: some View {
         HStack(spacing: 24) {
+            // Undo
+            Button {
+                haptic()
+                Task { await jobs.undoLastAction() }
+            } label: {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.body.weight(.bold))
+                    .foregroundStyle(.orange)
+                    .frame(width: 40, height: 40)
+                    .background(.orange.opacity(0.1))
+                    .clipShape(Circle())
+            }
+
             // Reject
             Button {
                 haptic()

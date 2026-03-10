@@ -125,9 +125,11 @@ async def _call_llm(system: str, user_msg: str, use_flash: bool = False) -> str:
 
 
 SYSTEM_PROMPT = """\
-You are the AI Bouncer for LinkedOut — an elite career-screening engine.
+You are the AI Bouncer for LinkedOut — an elite career-screening and intelligence engine.
 
-Your job: evaluate a raw job listing and decide if it's worth the user's time.
+Your job: evaluate a raw job listing, extract EVERYTHING knowable about the company
+and role, and decide if it's worth the user's time. Be thorough. The user will use
+your output as their primary research document for this opportunity.
 
 ## User Profile
 The user is a HOBBYIST AI product builder, NOT a traditional software engineer.
@@ -172,12 +174,75 @@ Score LOWER (0.0–0.39) for:
 - Enterprise middleware, ERP, or B2B sales-tool companies
 - Roles that are 100% backend/infrastructure with zero product surface
 
-## ai_pitch_summary
+## EXTRACTION INSTRUCTIONS — Be Thorough!
+
+### company_description
+Write 2-3 sentences about what this company ACTUALLY builds/does. Their mission,
+product, target market. If the listing mentions funding, team size, or notable
+customers — include it. Don't guess; if you don't know, say "Not specified in listing."
+
+### company_size
+Extract the company size. Look for phrases like "small team", "50+ engineers",
+"Series A startup", team headcount mentions. Output one of: "1-10", "10-50",
+"50-200", "200-500", "500+", or "Unknown".
+
+### company_stage
+Infer the company stage: "Pre-seed", "Seed", "Series A", "Series B", "Series C+",
+"Public", "Bootstrapped", or "Unknown". Use clues like funding mentions, team size,
+product maturity.
+
+### company_url
+If the company website URL is mentioned or inferable, include it. Otherwise empty string.
+
+### requirements
+List the KEY requirements (hard skills, experience thresholds). Each item should be
+one concise line. Include years of experience, specific technologies, degree requirements.
+Maximum 8 items. Only include things explicitly stated.
+
+### nice_to_haves
+List the "nice to have" or "bonus" qualifications. Maximum 5 items.
+
+### tech_stack
+Extract ALL technologies, frameworks, languages, tools, platforms mentioned.
+Include infrastructure (AWS, GCP), languages (Python, Swift), frameworks (React, FastAPI),
+tools (Docker, K8s), ML/AI tools (PyTorch, LangChain, etc).
+
+### why_interesting
+Write 2-3 sentences explaining why THIS specific opportunity is interesting for the user,
+given their builder background. Be specific: reference what the company builds,
+why their culture might suit a self-taught builder, what excites about the problem space.
+This should feel like a trusted friend giving career advice.
+
+### red_flags
+List potential concerns/red flags. Examples: "posting mentions on-call rotation",
+"vague about salary", "mentions 'fast-paced environment' (potential burnout)",
+"requires degree with no flexibility", "posting has been up for 6+ months".
+Maximum 5 items. If none, use empty list.
+
+### experience_level
+One of: "Entry", "Junior", "Mid", "Senior", "Staff", "Lead", "Any", or "Not specified".
+
+### job_type
+One of: "Full-time", "Part-time", "Contract", "Freelance", "Internship", or "Not specified".
+
+### benefits
+Extract ALL mentioned benefits/perks: equity, health insurance, PTO policy, remote stipend,
+learning budget, gym membership, etc. Maximum 10 items.
+
+### apply_url
+If there's a direct application link (different from the source URL), include it.
+Often job postings link to an ATS or careers page.
+
+### salary_floor / salary_max
+Extract salary range if mentioned. salary_floor = lower bound, salary_max = upper bound.
+If only one number, use it for both. If not mentioned, salary_floor = 0, salary_max = 0.
+
+### ai_pitch_summary
 Write exactly 3 bullet points bridging the user's background (hobbyist iOS builder,
 AI product tinkerer, self-taught shipper) to THIS specific role. Be specific about
 what THIS company does and why the user's builder DNA fits. No generic platitudes.
 
-## drafted_cover_letter
+### drafted_cover_letter
 Write a punchy 150-word cover letter from the user's perspective. Tone: confident,
 curious, zero-fluff, slightly irreverent. The user is not begging for a job — they're
 exploring where their energy fits best. Reference specific things from the job listing.
@@ -191,12 +256,26 @@ Return ONLY valid JSON matching this schema:
   "company_name": "string",
   "role_title": "string",
   "salary_floor": integer,
+  "salary_max": integer,
   "is_remote": true/false,
   "builder_score": float,
   "ai_pitch_summary": "• bullet1\\n• bullet2\\n• bullet3",
   "drafted_cover_letter": "string",
   "location": "string",
-  "tags": ["string"]
+  "tags": ["string"],
+  "company_description": "string",
+  "company_size": "string",
+  "company_stage": "string",
+  "company_url": "string",
+  "requirements": ["string"],
+  "nice_to_haves": ["string"],
+  "tech_stack": ["string"],
+  "why_interesting": "string",
+  "red_flags": ["string"],
+  "apply_url": "string",
+  "experience_level": "string",
+  "job_type": "string",
+  "benefits": ["string"]
 }}
 """
 
@@ -244,7 +323,7 @@ async def score_job(
 
     system = SYSTEM_PROMPT.replace("{min_salary}", str(prefs.min_salary))
 
-    user_msg = f"""Evaluate this job listing:
+    user_msg = f"""Evaluate this job listing and extract EVERYTHING useful:
 
 **Title:** {raw.title}
 **Company:** {raw.company}
@@ -254,7 +333,7 @@ async def score_job(
 **URL:** {raw.url}
 
 **Full Description:**
-{raw.description[:6000]}
+{raw.description[:8000]}
 
 **User preferences:**
 - Min salary: ${prefs.min_salary}
@@ -286,6 +365,22 @@ async def score_job(
             posted_at=datetime.now(timezone.utc),
             location=data.get("location", raw.location),
             tags=data.get("tags", []),
+            # Rich company intelligence
+            description=raw.description[:12000],  # Preserve original
+            company_description=data.get("company_description", ""),
+            company_size=data.get("company_size", "Unknown"),
+            company_stage=data.get("company_stage", "Unknown"),
+            company_url=data.get("company_url", ""),
+            salary_max=data.get("salary_max") or 0,
+            requirements=data.get("requirements", []),
+            nice_to_haves=data.get("nice_to_haves", []),
+            tech_stack=data.get("tech_stack", []),
+            why_interesting=data.get("why_interesting", ""),
+            red_flags=data.get("red_flags", []),
+            apply_url=data.get("apply_url", ""),
+            experience_level=data.get("experience_level", "Not specified"),
+            job_type=data.get("job_type", "Not specified"),
+            benefits=data.get("benefits", []),
         )
 
         return ScoringResult(passed_filter=True, job=job)

@@ -143,6 +143,57 @@ class JobsViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Undo
+
+    func undoLastAction() async {
+        do {
+            let result = try await APIClient.shared.undoLastAction()
+            if result.success {
+                await refreshAll()
+            } else {
+                self.error = result.message
+            }
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    // MARK: - Notes & Status
+
+    func updateNotes(jobId: String, notes: String) async {
+        do {
+            let updated = try await APIClient.shared.updateJobNotes(jobId: jobId, notes: notes)
+            replaceJobInLists(updated)
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    func updateStatus(jobId: String, status: String) async {
+        do {
+            let updated = try await APIClient.shared.updateJobStatus(jobId: jobId, status: status)
+            replaceJobInLists(updated)
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// Replace a job in all local lists after an update
+    private func replaceJobInLists(_ job: JobPayload) {
+        if let idx = pendingJobs.firstIndex(where: { $0.id == job.id }) {
+            pendingJobs[idx] = job
+        }
+        if let idx = appliedJobs.firstIndex(where: { $0.id == job.id }) {
+            appliedJobs[idx] = job
+        }
+        if let idx = savedJobs.firstIndex(where: { $0.id == job.id }) {
+            savedJobs[idx] = job
+        }
+        if selectedJob?.id == job.id {
+            selectedJob = job
+        }
+    }
+
     var swipeHint: SwipeHint {
         if topCardOffset.width > 60 { return .apply }
         if topCardOffset.width < -60 { return .reject }
