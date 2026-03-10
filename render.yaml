@@ -1,0 +1,36 @@
+# Render Blueprint — one-click deploy
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: linkedout-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    envVars:
+      - key: LINKEDIN_CLIENT_ID
+        sync: false
+      - key: LINKEDIN_CLIENT_SECRET
+        sync: false
+      - key: LINKEDIN_REDIRECT_URI
+        sync: false
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.1-pro-preview
+      - key: GEMINI_FLASH_MODEL
+        value: gemini-3-flash-preview
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5.4
+      - key: SECRET_KEY
+        generateValue: true
+      - key: MIN_SALARY
+        value: "90000"
+      - key: REQUIRE_REMOTE
+        value: "true"
+      - key: DEBUG
+        value: "false"

@@ -1,0 +1,30 @@
+# Secrets — NEVER commit
+backend/.env
+.env
+
+# Data & persistence
+data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# macOS
+.DS_Store
+*.swp
+
+# Xcode
+*.xcuserstate
+xcuserdata/
+DerivedData/
+build/
+
+# TLS certs (local dev only)
+backend/cert.pem
+backend/key.pem
+
+# Misc
+*.pdf
+ksaf.txt
