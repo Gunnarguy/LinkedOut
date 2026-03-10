@@ -222,15 +222,6 @@ async def get_pending_jobs(
     return store.get_pending(limit=limit, offset=offset)
 
 
-@app.get("/api/jobs/{job_id}", response_model=JobPayload)
-async def get_job(job_id: str):
-    """Get a specific job by ID."""
-    job = store.get_job(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return job
-
-
 @app.post("/api/jobs/action", response_model=JobActionResponse)
 async def job_action(req: JobActionRequest):
     """Apply, reject, or save a job."""
@@ -261,6 +252,16 @@ async def get_saved_jobs():
 async def get_stats():
     """Pipeline statistics."""
     return store.stats
+
+
+# Dynamic path param MUST come after all static /api/jobs/* routes
+@app.get("/api/jobs/{job_id}", response_model=JobPayload)
+async def get_job(job_id: str):
+    """Get a specific job by ID."""
+    job = store.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
 
 
 # ── Scoring / Ingestion ─────────────────────────────────────────────────────
