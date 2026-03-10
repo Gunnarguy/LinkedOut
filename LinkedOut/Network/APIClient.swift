@@ -32,7 +32,7 @@ actor APIClient {
 
     /// Reads the server URL from UserDefaults (synced with Settings @AppStorage)
     private var baseURL: String {
-        UserDefaults.standard.string(forKey: "serverURL") ?? "https://linkedout-backend.onrender.com"
+        UserDefaults.standard.string(forKey: "serverURL") ?? "https://linkedout-backend-9q4t.onrender.com"
     }
 
     private let session: URLSession

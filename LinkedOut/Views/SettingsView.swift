@@ -11,7 +11,7 @@ struct SettingsView: View {
     @AppStorage("minSalary") private var minSalary: Int = 90000
     @AppStorage("requireRemote") private var requireRemote: Bool = true
     @AppStorage("locationPreference") private var locationPreference: String = "Remote"
-    @AppStorage("serverURL") private var serverURL: String = "https://linkedout-backend.onrender.com"
+    @AppStorage("serverURL") private var serverURL: String = "https://linkedout-backend-9q4t.onrender.com"
     @State private var preferredRoles: [String] = UserPreferences.default.preferredRoles
     @State private var excludedKeywords: [String] = UserPreferences.default.excludedKeywords
     @State private var newRole = ""
@@ -101,7 +101,7 @@ struct SettingsView: View {
                         locationPreference = defaults.locationPreference
                         preferredRoles = defaults.preferredRoles
                         excludedKeywords = defaults.excludedKeywords
-                        serverURL = "https://linkedout-backend.onrender.com"
+                        serverURL = "https://linkedout-backend-9q4t.onrender.com"
                     }
                     .foregroundStyle(.red)
                 }

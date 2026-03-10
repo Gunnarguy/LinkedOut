@@ -11,7 +11,7 @@ struct LoginView: View {
     @EnvironmentObject var auth: AuthViewModel
     @State private var backendReachable: Bool?
     @State private var discovering = true
-    @AppStorage("serverURL") private var serverURL: String = "https://linkedout-backend.onrender.com"
+    @AppStorage("serverURL") private var serverURL: String = "https://linkedout-backend-9q4t.onrender.com"
 
     var body: some View {
         VStack(spacing: 0) {

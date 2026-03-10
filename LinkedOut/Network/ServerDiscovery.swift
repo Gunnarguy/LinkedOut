@@ -13,7 +13,7 @@ struct ServerDiscovery {
     /// Cloud (Render) is first so the app works from anywhere.
     /// LAN fallbacks are kept for local dev.
     static let candidates: [String] = [
-        "https://linkedout-backend.onrender.com",
+        "https://linkedout-backend-9q4t.onrender.com",
         "http://Gunnars-Brain-Extension.local:8443",
         "http://10.0.0.175:8443",
         "http://localhost:8443"

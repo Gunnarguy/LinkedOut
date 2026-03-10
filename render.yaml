@@ -13,7 +13,7 @@ services:
       - key: LINKEDIN_CLIENT_SECRET
         sync: false
       - key: LINKEDIN_REDIRECT_URI
-        sync: false
+        value: https://linkedout-backend-9q4t.onrender.com/auth/callback
       - key: LLM_PROVIDER
         value: gemini
       - key: GEMINI_API_KEY

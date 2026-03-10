@@ -6,7 +6,9 @@ class Settings(BaseSettings):
     # LinkedIn OAuth
     linkedin_client_id: str = ""
     linkedin_client_secret: str = ""
-    linkedin_redirect_uri: str = "https://linkedout-backend.onrender.com/auth/callback"
+    linkedin_redirect_uri: str = (
+        "https://linkedout-backend-9q4t.onrender.com/auth/callback"
+    )
 
     # LLM Provider: "openai" or "gemini"
     llm_provider: str = "gemini"
