@@ -278,20 +278,22 @@ async def get_job(job_id: str):
     return job
 
 
-@app.put("/api/jobs/{job_id}/notes")
+@app.put("/api/jobs/{job_id}/notes", response_model=JobPayload)
 async def update_job_notes(job_id: str, body: JobNotesUpdate):
     """Update user notes on a job."""
     if not store.update_job_notes(job_id, body.notes):
         raise HTTPException(status_code=404, detail="Job not found")
-    return {"success": True, "job_id": job_id}
+    job = store.get_job(job_id)
+    return job
 
 
-@app.put("/api/jobs/{job_id}/status")
+@app.put("/api/jobs/{job_id}/status", response_model=JobPayload)
 async def update_job_status(job_id: str, body: JobStatusUpdate):
     """Update application status on a job."""
     if not store.update_job_status(job_id, body.status):
         raise HTTPException(status_code=404, detail="Job not found or invalid status")
-    return {"success": True, "job_id": job_id, "status": body.status}
+    job = store.get_job(job_id)
+    return job
 
 
 # ── Scoring / Ingestion ─────────────────────────────────────────────────────

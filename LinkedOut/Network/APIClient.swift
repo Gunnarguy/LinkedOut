@@ -105,7 +105,7 @@ actor APIClient {
     }
 
     func updateJobStatus(jobId: String, status: String) async throws -> JobPayload {
-        let body = JobStatusUpdate(applicationStatus: status)
+        let body = JobStatusUpdate(status: status)
         return try await put("/api/jobs/\(jobId)/status", body: body)
     }
 
