@@ -23,8 +23,16 @@ class AuthViewModel: ObservableObject {
     /// Stored person ID for session persistence
     @AppStorage("personId") private var storedPersonId: String = ""
 
+    /// Cached profile JSON so we can show profile immediately without backend
+    @AppStorage("cachedProfileJSON") private var cachedProfileJSON: String = ""
+
     init() {
-        // Check for existing session on launch
+        // Restore cached profile immediately (no network needed)
+        if let cached = loadCachedProfile() {
+            self.profile = cached
+            self.isAuthenticated = true
+        }
+        // Then verify with backend in background
         if !storedPersonId.isEmpty {
             Task { await checkExistingSession() }
         }
@@ -40,12 +48,21 @@ class AuthViewModel: ObservableObject {
             if status.authenticated, let profile = status.profile {
                 self.profile = profile
                 self.isAuthenticated = true
+                cacheProfile(profile)
             } else {
-                clearSession()
+                // Backend says not authenticated — but if we have a cached profile,
+                // keep the user logged in (they may just need to re-auth for LinkedIn API calls)
+                if loadCachedProfile() != nil {
+                    self.isAuthenticated = true
+                } else {
+                    clearSession()
+                }
             }
         } catch {
-            // Backend not reachable — keep stored session optimistically
-            self.isAuthenticated = !storedPersonId.isEmpty
+            // Backend not reachable — keep cached session
+            if loadCachedProfile() != nil {
+                self.isAuthenticated = true
+            }
         }
     }
 
@@ -80,6 +97,7 @@ class AuthViewModel: ObservableObject {
                 self.profile = profile
                 self.storedPersonId = profile.personId
                 self.isAuthenticated = true
+                cacheProfile(profile)
             } else {
                 self.error = "Authentication failed — backend didn't create a session"
             }
@@ -119,5 +137,21 @@ class AuthViewModel: ObservableObject {
         isAuthenticated = false
         profile = nil
         storedPersonId = ""
+        cachedProfileJSON = ""
+    }
+
+    // MARK: - Profile caching helpers
+
+    private func cacheProfile(_ profile: LinkedInProfile) {
+        if let data = try? JSONEncoder().encode(profile),
+           let json = String(data: data, encoding: .utf8) {
+            cachedProfileJSON = json
+        }
+    }
+
+    private func loadCachedProfile() -> LinkedInProfile? {
+        guard !cachedProfileJSON.isEmpty,
+              let data = cachedProfileJSON.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(LinkedInProfile.self, from: data)
     }
 }

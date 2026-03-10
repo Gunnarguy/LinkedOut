@@ -1,9 +1,15 @@
-"""LinkedIn OAuth 2.0 service — handles 3-legged auth flow."""
+"""LinkedIn OAuth 2.0 service — handles 3-legged auth flow.
+
+Sessions are persisted to disk so restarts/sleep don't log users out.
+"""
 
 from __future__ import annotations
 
+import json
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from urllib.parse import urlencode
 
 import httpx
@@ -11,14 +17,49 @@ import httpx
 from config import settings
 from models import AuthSession, LinkedInProfile, OAuthTokenResponse
 
+logger = logging.getLogger(__name__)
+
 # LinkedIn OAuth endpoints
 AUTHORIZE_URL = "https://www.linkedin.com/oauth/v2/authorization"
 TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
 USERINFO_URL = "https://api.linkedin.com/v2/userinfo"
 
-# In-memory state store (swap for Redis in production)
+# Persistent storage
+DATA_DIR = Path("/app/data") if Path("/app").exists() else Path("./data")
+SESSIONS_FILE = DATA_DIR / "sessions.json"
+
+# In-memory caches
 _pending_states: dict[str, datetime] = {}
 _sessions: dict[str, AuthSession] = {}  # keyed by person_id
+
+
+def _load_sessions() -> None:
+    """Load persisted sessions from disk on startup."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if SESSIONS_FILE.exists():
+        try:
+            raw = json.loads(SESSIONS_FILE.read_text())
+            for pid, data in raw.items():
+                _sessions[pid] = AuthSession(**data)
+            logger.info(f"Loaded {len(_sessions)} persisted auth sessions")
+        except Exception as e:
+            logger.error(f"Failed to load sessions: {e}")
+
+
+def _save_sessions() -> None:
+    """Persist sessions to disk."""
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        data = {}
+        for pid, session in _sessions.items():
+            data[pid] = session.model_dump(mode="json")
+        SESSIONS_FILE.write_text(json.dumps(data, default=str))
+    except Exception as e:
+        logger.error(f"Failed to save sessions: {e}")
+
+
+# Load on import
+_load_sessions()
 
 
 def generate_authorization_url() -> tuple[str, str]:
@@ -93,15 +134,17 @@ async def create_session(code: str) -> AuthSession:
         expires_at=datetime.now(timezone.utc) + timedelta(seconds=token.expires_in),
     )
     _sessions[profile.person_id] = session
+    _save_sessions()
     return session
 
 
 def get_session(person_id: str) -> AuthSession | None:
-    """Retrieve a stored session by person ID."""
-    session = _sessions.get(person_id)
-    if session and session.expires_at > datetime.now(timezone.utc):
-        return session
-    return None
+    """Retrieve a stored session by person ID.
+
+    Returns the session even if expired — the caller or iOS client
+    can decide whether to refresh or re-authenticate.
+    """
+    return _sessions.get(person_id)
 
 
 def get_all_sessions() -> dict[str, AuthSession]:
@@ -137,4 +180,5 @@ async def refresh_access_token(person_id: str) -> AuthSession | None:
         expires_at=datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"]),
     )
     _sessions[person_id] = new_session
+    _save_sessions()
     return new_session
