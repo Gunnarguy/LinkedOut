@@ -47,6 +47,10 @@ struct JobDetailView: View {
                         Divider().padding(.horizontal)
                         techStackSection
                     }
+                    if !(job.dealbreakerWarnings ?? []).isEmpty {
+                        Divider().padding(.horizontal)
+                        dealbreakerSection
+                    }
                     if !(job.redFlags ?? []).isEmpty {
                         Divider().padding(.horizontal)
                         redFlagsSection
@@ -338,6 +342,30 @@ struct JobDetailView: View {
             }
         }
         .padding(20)
+    }
+
+    // MARK: - Dealbreaker Warnings
+
+    private var dealbreakerSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Heads Up — Be Real With Yourself", systemImage: "hand.raised.fill")
+                .font(.headline)
+                .foregroundStyle(.red)
+
+            ForEach(job.dealbreakerWarnings ?? [], id: \.self) { warning in
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .padding(.top, 3)
+                    Text(warning)
+                        .font(.body)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(20)
+        .background(.red.opacity(0.04))
     }
 
     // MARK: - Red Flags

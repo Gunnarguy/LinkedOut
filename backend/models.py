@@ -47,6 +47,9 @@ class JobPayload(BaseModel):
     fit_reasons: list[str] = Field(
         default_factory=list
     )  # Why this fits the user (short badge-style reasons)
+    dealbreaker_warnings: list[str] = Field(
+        default_factory=list
+    )  # Honest warnings about why this role might reject the user
 
     # ── User-Managed Fields (not from LLM) ───────────────────────────────
     notes: str = ""  # User's personal notes

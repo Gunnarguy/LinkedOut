@@ -88,6 +88,24 @@ struct JobCardView: View {
                 .padding(.bottom, 4)
             }
 
+            // Dealbreaker warnings — honest heads-up about potential rejection risks
+            if let warnings = job.dealbreakerWarnings, !warnings.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(warnings.prefix(2), id: \.self) { warning in
+                        HStack(alignment: .top, spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 8))
+                            Text(warning)
+                                .lineLimit(2)
+                        }
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.red.opacity(0.8))
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 4)
+            }
+
             Divider()
 
             // Meta row

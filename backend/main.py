@@ -123,7 +123,7 @@ async def _run_ingest_cycle():
         prefs = _user_prefs
         total_added = 0
         batch_size = 10
-        min_builder_score = 0.15
+        min_builder_score = 0.45
 
         for i in range(0, len(new_listings), batch_size):
             batch = new_listings[i : i + batch_size]
@@ -705,6 +705,13 @@ async def reset_seen_urls():
     count = store.seen_count
     store.clear_seen()
     return {"cleared": count, "message": "Seen URLs cleared — next ingest will fetch fresh"}
+
+
+@app.post("/api/dev/clear-pending")
+async def clear_pending_jobs():
+    """Clear all pending jobs so re-ingest starts with a clean slate."""
+    count = store.clear_pending()
+    return {"cleared": count, "message": "Pending jobs cleared"}
 
 
 @app.get("/api/dev/logs")

@@ -99,6 +99,13 @@ class JobStore:
         self._seen_urls.clear()
         self._save_seen()
 
+    def clear_pending(self) -> int:
+        """Clear all pending jobs. Returns count of jobs cleared."""
+        count = len(self._pending)
+        self._pending.clear()
+        self._save()
+        return count
+
     # ── Core operations ──────────────────────────────────────────────────
 
     def add_pending(self, job: JobPayload) -> None:

@@ -38,6 +38,7 @@ struct JobPayload: Codable, Identifiable, Hashable {
     var jobType: String?
     var benefits: [String]?
     var fitReasons: [String]?
+    var dealbreakerWarnings: [String]?
 
     // User-managed fields
     var notes: String?
@@ -72,6 +73,7 @@ struct JobPayload: Codable, Identifiable, Hashable {
         case jobType = "job_type"
         case benefits
         case fitReasons = "fit_reasons"
+        case dealbreakerWarnings = "dealbreaker_warnings"
         case notes
         case applicationStatus = "application_status"
     }

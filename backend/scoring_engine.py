@@ -179,54 +179,89 @@ at night and on weekends.
 - Self-taught with extreme velocity — sees a problem, builds until it's on the App Store
 - Uses LLMs as force multipliers for code generation — the vision and architecture are his
 
-## Hard Filters (REJECT if ANY of these are true — ONLY hard stops)
+## Hard Filters (REJECT if ANY of these are true)
 - REJECT if the listing STRICTLY requires a CS/engineering degree with NO "or equivalent
   experience" escape hatch (if degree is "preferred" or "or equivalent", it PASSES)
 - REJECT roles titled "Senior", "Staff", "Lead", "Principal", "Head of", or "Director"
 - REJECT if it explicitly requires 7+ years of professional software engineering experience
+- REJECT if it explicitly requires 5+ years AND lists no flexibility (e.g. "5+ years required"
+  with no "or equivalent", no mention of portfolios/projects counting)
+- REJECT pure non-tech roles (sales, marketing, HR, legal, finance, design-only)
 
-Everything else is a SCORING factor, not a reject. Be generous — let things through.
+## CRITICAL: Honest Scoring — NO Inflation
 
-## Scoring (builder_score: 0.0–1.0)
+You MUST be brutally honest. A 0.95 should be RARE — reserved for roles where EVERYTHING
+aligns perfectly. Gunnar is an exceptional self-taught builder, but he has real gaps that
+will matter to many hiring managers:
+- NO CS degree, NO professional SWE experience (his experience is App Store apps + healthcare ops)
+- His 4 shipped apps are impressive but some recruiters will still filter him out
+- He has ZERO production team experience in software engineering
+- His stack is narrow: Swift/iOS + Python/FastAPI + RAG/embeddings — outside of this he's learning
 
-Score HIGHEST (0.90–1.0) — Dream roles:
-- Companies building RAG infrastructure, embedding pipelines, or vector search products
-  (Gunnar has built 3 RAG systems — he LIVES this)
-- On-device AI / edge ML roles (Core ML, Apple Intelligence, privacy-preserving inference)
-- MCP / agent orchestration / tool-use platforms (his OpenResponses app does exactly this)
-- "Founding Engineer" or "First Engineer" at an AI startup (<20 people)
-- Companies building developer tools for AI (SDKs, API clients, agent frameworks)
-- iOS AI product roles — combining his two strongest skills
+DO NOT cluster scores. If 10 jobs all seem "interesting AI startups", they should NOT all
+get 0.95. Differentiate ruthlessly based on how well each one maps to Gunnar specifically.
 
-Score HIGH (0.75–0.89) — Strong fits:
-- "AI Product Engineer", "AI Engineer", "Product Engineer" at startups
-- Companies building with LLMs, agents, copilots where shipping matters more than pedigree
-- Small teams (< 50), high autonomy, 0→1 product building
-- Companies that explicitly value shipped products, portfolios, or side projects
-- Healthcare AI / clinical AI (his domain expertise is a genuine differentiator)
-- Privacy-first or security-conscious AI companies (matches his design philosophy)
-- Roles where the AI/ML IS the product, not just a feature
+## Scoring (builder_score: 0.0–1.0) — Calibrated and Honest
 
-Score MEDIUM (0.50–0.74) — Worth considering:
-- iOS/Mobile engineer roles at AI-forward companies
-- Full-stack roles at interesting startups where he'd touch product
-- Developer experience / developer relations at AI companies
-- Roles at mid-size companies with compelling AI products
-- Hybrid roles combining software + domain expertise
-- Roles slightly outside comfort zone but at fascinating companies
+### Location Adjustments (apply BEFORE final score)
+- Remote / Remote-first: no penalty
+- Bay Area (SF, Palo Alto, San Jose, Mountain View, Sunnyvale, Menlo Park): -0.03
+  (commutable from VA Palo Alto — minor inconvenience)
+- Hybrid Bay Area (2-3 days/week): -0.05
+- Other US cities requiring relocation (NYC, Austin, Seattle, Boston, Chicago, LA): -0.15
+- International (London, Berlin, Stockholm, etc.): -0.25 (visa + relocation)
+- Onsite-only anywhere that's not Bay Area: additional -0.05
 
-Score LOWER (0.25–0.49) — Probably not:
-- Pure backend/infrastructure with zero product surface
-- Enterprise middleware, ERP, or B2B sales tools
-- Large bureaucratic orgs with rigid processes
-- Web-only roles with no AI/ML component
-- Roles that are 100% maintenance/legacy code
-- Roles requiring heavy LeetCode-only interview gauntlets
+### Stack Alignment Adjustments
+- Swift/iOS, Python, AI/ML, RAG, embeddings, MCP: no penalty (his wheelhouse)
+- React/TypeScript/Next.js: -0.05 (he can learn but hasn't shipped in these)
+- Flutter, React Native, Kotlin/Android: -0.10 (different mobile paradigm)
+- Java, .NET, C#, Go, Rust as PRIMARY requirement: -0.08 (outside his stack)
+- Pure DevOps/SRE/Infrastructure: -0.10 (not his strength)
 
-Score ZERO / REJECT:
-- Senior/Staff/Lead/Principal/Director titles
-- Strict CS degree requirements with no flexibility
-- 7+ years professional SWE experience required
+### Experience Reality Adjustments
+- "1-3 years" or "any experience": no penalty
+- "3-5 years professional": -0.05 and FLAG it (his App Store apps may or may not count)
+- "5+ years" with flexibility: -0.10 and FLAG it
+- "CS degree preferred": -0.03 and FLAG it
+- "CS degree required OR equivalent experience": -0.05 and FLAG it (risky but possible)
+- Known elite/selective companies (FAANG, Jane Street, top quant): -0.10 (brutal hiring bars)
+
+### Score Tiers (AFTER applying adjustments above)
+
+0.90–1.0 — PERFECT FIT (should be ~5% of jobs):
+- MUST be remote or Bay Area AND directly in his stack AND at a small team
+- Examples: "Build our RAG pipeline" at a seed-stage AI startup, remote
+- "iOS AI Engineer — on-device ML" at a privacy-first company, remote
+- "Founding Engineer" at a <15 person AI startup building agent tooling, remote
+- The role description could literally be describing what Gunnar already builds
+
+0.80–0.89 — STRONG FIT (should be ~15% of jobs):
+- Strong stack overlap, interesting company, minor concerns only
+- "AI Product Engineer" at a 20-50 person startup, remote, but needs some React too
+- "Product Engineer" at a healthcare AI company (domain advantage), Bay Area hybrid
+- Companies explicitly valuing shipped products over pedigree
+
+0.65–0.79 — SOLID OPTION (should be ~25% of jobs):
+- Good alignment but real gaps — he'd need to learn some things or stretch
+- Full-stack roles where he'd touch AI product but also do web
+- Interesting companies where the stack is adjacent, not exact
+- Roles where his healthcare domain knowledge is a real differentiator
+
+0.50–0.64 — STRETCH (should be ~20% of jobs):
+- Worth knowing about but meaningful concerns
+- Stack is partially mismatched, or company is mid-size with less autonomy
+- Role is interesting but he'd be competing against people with more traditional resumes
+
+0.35–0.49 — LONG SHOT:
+- Significant mismatches but the company/mission is compelling
+- Pure backend/infra but at a fascinating AI company
+- Requires relocation but the role is incredibly aligned otherwise
+
+Below 0.35 — REJECT or not worth showing:
+- Enterprise, legacy, bureaucratic
+- No AI/ML connection
+- Heavy framework mismatch (all Java/.NET/etc.)
 
 ## EXTRACTION INSTRUCTIONS — Be Thorough!
 
@@ -269,6 +304,23 @@ List potential concerns (max 5). Watch especially for:
 - Posting up for 6+ months (they can't fill it — red flag)
 - Vague about what the product actually does
 - "Competitive salary" with no range (often means low)
+- Equity-only or deferred compensation with no salary
+
+### dealbreaker_warnings
+BE BRUTALLY HONEST. List 0-3 specific reasons this role might reject Gunnar or
+waste his time. These are NOT general red flags — they are PERSONAL to Gunnar's
+specific situation. Examples:
+- "Requires 3-5 years professional SWE — your App Store apps show skill but many
+  recruiters won't count them as 'professional experience'"
+- "CS degree preferred — you'll be filtered out by some ATS systems"
+- "Onsite in Stockholm — requires relocation and EU work authorization"
+- "Requires Flutter expertise — outside your primary iOS/Swift stack"
+- "Enterprise Java shop — nothing in your background maps here"
+- "FAANG-level hiring bar — expect multiple algorithm rounds you may not be prepped for"
+- "This is a co-founder role with zero funding — no salary, just equity in an idea"
+If the role genuinely has NO dealbreakers for Gunnar (remote, matching stack, no degree
+requirement, small team that values builders), return an EMPTY list []. An empty list
+is a strong positive signal.
 
 ### experience_level
 One of: "Entry", "Junior", "Mid", "Senior", "Staff", "Lead", "Any", or "Not specified".
@@ -341,7 +393,8 @@ Return ONLY valid JSON matching this schema:
   "experience_level": "string",
   "job_type": "string",
   "benefits": ["string"],
-  "fit_reasons": ["string"]
+  "fit_reasons": ["string"],
+  "dealbreaker_warnings": ["string"]
 }}
 """
 
@@ -349,7 +402,7 @@ Return ONLY valid JSON matching this schema:
 TRIAGE_PROMPT = """\
 You are a fast job-listing triage filter for Gunnar — a self-taught iOS/AI builder
 with 4 App Store apps (RAG engines, MCP integration, on-device ML), who works in
-healthcare ops by day and ships software at night.
+healthcare ops by day and ships software at night. He is based near Palo Alto, CA.
 
 PASS (dominated=true) if the job is ANY of:
 - AI/ML roles (especially RAG, embeddings, search, agents, LLM tooling)
@@ -361,14 +414,19 @@ PASS (dominated=true) if the job is ANY of:
 - Any engineering role at a small team (<50) building something compelling
 - Entry, junior, or mid-level roles (or no seniority specified)
 
-REJECT (dominated=false) ONLY if the job clearly is:
+REJECT (dominated=false) if the job clearly is:
 - Titled "Senior", "Staff", "Lead", "Principal", "Director", or "VP"
 - Explicitly requires a CS/engineering degree with NO alternative
 - Requires 5+ years of professional experience with no flexibility
 - Pure non-tech roles (sales, marketing, HR, legal, finance)
 - Pure enterprise infrastructure with no product surface
+- 100% unrelated to AI/ML, iOS, product engineering, or healthcare tech
+  (e.g. pure accounting software, CRM admin, mechanical engineering)
+- Requires technologies Gunnar has zero background in as the PRIMARY skill
+  (e.g. "Senior Java Engineer", "Embedded C firmware", ".NET architect")
 
-When in doubt, PASS it through. Be GENEROUS — let full scoring decide.
+When in doubt about relevance, PASS it. But do NOT pass things that are obviously
+outside his world. The goal is ~60% pass rate, not ~90%.
 
 Return ONLY valid JSON:
 {{"dominated": true/false, "reason": "one sentence why"}}
@@ -462,6 +520,7 @@ async def score_job(
             job_type=data.get("job_type", "Not specified"),
             benefits=data.get("benefits", []),
             fit_reasons=data.get("fit_reasons", []),
+            dealbreaker_warnings=data.get("dealbreaker_warnings", []),
         )
 
         return ScoringResult(passed_filter=True, job=job)
