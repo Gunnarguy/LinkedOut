@@ -106,6 +106,21 @@ class JobStore:
         self._save()
         return count
 
+    def purge_keyword_scored(self) -> int:
+        """Remove jobs scored by local keyword matcher (bogus scores).
+        Also removes their source URLs from seen so they get re-fetched."""
+        to_remove = [
+            jid for jid, job in self._pending.items()
+            if "keyword" in (job.ai_pitch_summary or "").lower()
+        ]
+        for jid in to_remove:
+            job = self._pending.pop(jid)
+            self._seen_urls.discard(job.source_url)
+        if to_remove:
+            self._save()
+            self._save_seen()
+        return len(to_remove)
+
     # ── Core operations ──────────────────────────────────────────────────
 
     def add_pending(self, job: JobPayload) -> None:

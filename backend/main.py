@@ -714,6 +714,18 @@ async def clear_pending_jobs():
     return {"cleared": count, "message": "Pending jobs cleared"}
 
 
+@app.post("/api/dev/purge-keyword-scored")
+async def purge_keyword_scored():
+    """Remove jobs scored by local keyword matcher (bogus scores).
+    Their source URLs are un-seen so they get re-fetched and LLM-scored on next ingest."""
+    count = store.purge_keyword_scored()
+    return {
+        "purged": count,
+        "remaining_pending": store.pending_count,
+        "message": f"Removed {count} keyword-scored jobs — they'll be re-ingested with LLM scoring",
+    }
+
+
 @app.get("/api/dev/logs")
 async def get_recent_logs(n: int = Query(100, ge=1, le=500)):
     """Return recent backend log lines (ring buffer, newest last)."""
