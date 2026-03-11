@@ -199,9 +199,21 @@ actor APIClient {
     }
 
     private func performRequest(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        let method = request.httpMethod ?? "GET"
+        let url = request.url?.absoluteString ?? "?"
+        let start = CFAbsoluteTimeGetCurrent()
+        print("[API] ➡️ \(method) \(url)")
         do {
-            return try await session.data(for: request)
+            let (data, response) = try await session.data(for: request)
+            let elapsed = String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - start) * 1000)
+            if let http = response as? HTTPURLResponse {
+                let size = data.count
+                print("[API] ⬅️ \(http.statusCode) \(method) \(url) — \(elapsed)ms, \(size)B")
+            }
+            return (data, response)
         } catch {
+            let elapsed = String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - start) * 1000)
+            print("[API] ❌ NETWORK ERROR \(method) \(url) — \(elapsed)ms — \(error.localizedDescription)")
             throw APIError.networkError(error)
         }
     }
@@ -209,12 +221,18 @@ actor APIClient {
     private func decode<T: Decodable>(_ data: Data, response: URLResponse) throws -> T {
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             let body = String(data: data, encoding: .utf8) ?? "Unknown error"
+            print("[API] ⚠️ HTTP \(http.statusCode): \(body.prefix(300))")
             throw APIError.httpError(statusCode: http.statusCode, body: body)
         }
 
         do {
-            return try decoder.decode(T.self, from: data)
+            let result = try decoder.decode(T.self, from: data)
+            print("[API] ✅ Decoded \(T.self)")
+            return result
         } catch {
+            let raw = String(data: data.prefix(500), encoding: .utf8) ?? "<binary>"
+            print("[API] 💥 DECODE FAILED for \(T.self): \(error)")
+            print("[API]    Raw body: \(raw)")
             throw APIError.decodingError(error)
         }
     }

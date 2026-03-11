@@ -325,9 +325,12 @@ async def triage_job(raw: RawJobListing) -> bool:
     try:
         content = await _call_llm(TRIAGE_PROMPT, user_msg, use_flash=True)
         data = json.loads(content)
-        return data.get("dominated", False)
-    except Exception:
-        # If triage fails, let it through to full scoring
+        passed = data.get("dominated", False)
+        reason = data.get("reason", "")
+        logger.info(f"[TRIAGE] {'PASS' if passed else 'FAIL'} | {raw.title} @ {raw.company} | {reason}")
+        return passed
+    except Exception as e:
+        logger.warning(f"[TRIAGE] ERROR for {raw.title} @ {raw.company}: {e} — letting through")
         return True
 
 
@@ -366,9 +369,11 @@ async def score_job(
         data = json.loads(content)
 
         if not data.get("passed_filter", False):
+            reason = data.get("rejection_reason", "Did not pass filters")
+            logger.info(f"[SCORE] REJECTED by LLM | {raw.title} @ {raw.company} | {reason}")
             return ScoringResult(
                 passed_filter=False,
-                rejection_reason=data.get("rejection_reason", "Did not pass filters"),
+                rejection_reason=reason,
             )
 
         job = JobPayload(
@@ -404,7 +409,7 @@ async def score_job(
         return ScoringResult(passed_filter=True, job=job)
 
     except Exception as e:
-        logger.exception("Scoring engine error — falling back to local scorer")
+        logger.warning(f"[SCORE] LLM ERROR for {raw.title} @ {raw.company}: {e} — falling back to local")
         return score_job_locally(raw)
 
 
@@ -458,6 +463,7 @@ def score_job_locally(raw: RawJobListing) -> ScoringResult:
 
     # Hard reject: Senior titles
     if _SENIOR_RE.search(title):
+        logger.info(f"[LOCAL] REJECTED (senior title) | {title} @ {raw.company}")
         return ScoringResult(
             passed_filter=False,
             rejection_reason=f"Title contains seniority keyword: {title}",
@@ -465,6 +471,7 @@ def score_job_locally(raw: RawJobListing) -> ScoringResult:
 
     # Hard reject: Strict CS degree requirement
     if _STRICT_DEGREE_RE.search(raw.description):
+        logger.info(f"[LOCAL] REJECTED (CS degree) | {title} @ {raw.company}")
         return ScoringResult(
             passed_filter=False,
             rejection_reason="Strict CS degree requirement detected",
@@ -482,6 +489,7 @@ def score_job_locally(raw: RawJobListing) -> ScoringResult:
             score += penalty  # penalty is negative
 
     score = max(0.05, min(1.0, score))
+    logger.info(f"[LOCAL] PASS score={score:.2f} | {title} @ {raw.company}")
 
     # Extract basic info
     tech_stack = []
@@ -591,6 +599,8 @@ async def triage_and_score(
     logger.info(f"Phase 1: Triaging {len(listings)} listings with Flash...")
     triage_failed = False
     triage_results = []
+    import time as _time
+    t0 = _time.monotonic()
     try:
         batch_size = 5
         for i in range(0, len(listings), batch_size):
@@ -605,6 +615,9 @@ async def triage_and_score(
     except Exception as e:
         logger.warning(f"Triage phase failed entirely: {e}")
         triage_failed = True
+
+    triage_elapsed = _time.monotonic() - t0
+    logger.info(f"[TRIAGE] Phase 1 took {triage_elapsed:.1f}s")
 
     if triage_failed or not triage_results:
         # LLM triage unavailable — let everything through
@@ -629,7 +642,10 @@ async def triage_and_score(
     logger.info(f"Phase 2: Scoring {len(survivors)} survivors...")
 
     # Test LLM with first listing
+    t1 = _time.monotonic()
     test_result = await score_job(survivors[0], prefs)
+    test_elapsed = _time.monotonic() - t1
+    logger.info(f"[SCORE] Test scoring took {test_elapsed:.1f}s")
     llm_works = test_result.passed_filter or test_result.rejection_reason != ""
 
     # Check if the test itself used local fallback (it would have ai_pitch_summary starting with "Scored by local")

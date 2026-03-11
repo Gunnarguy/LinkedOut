@@ -43,6 +43,8 @@ TIMEOUT = httpx.Timeout(15.0, connect=10.0)
 
 async def fetch_remotive(queries: list[str] | None = None) -> list[RawJobListing]:
     """Fetch remote jobs from Remotive API (free, no auth)."""
+    import time as _time
+    t0 = _time.monotonic()
     queries = queries or SEARCH_QUERIES[:8]
     all_listings: list[RawJobListing] = []
     seen_urls: set[str] = set()
@@ -84,12 +86,14 @@ async def fetch_remotive(queries: list[str] | None = None) -> list[RawJobListing
             except Exception as e:
                 logger.warning(f"Remotive fetch failed for '{query}': {e}")
 
-    logger.info(f"Remotive: fetched {len(all_listings)} listings")
+    logger.info(f"Remotive: fetched {len(all_listings)} listings in {_time.monotonic() - t0:.1f}s")
     return all_listings
 
 
 async def fetch_himalayas() -> list[RawJobListing]:
     """Fetch jobs from Himalayas.app API (free, remote-first)."""
+    import time as _time
+    t0 = _time.monotonic()
     all_listings: list[RawJobListing] = []
     seen_urls: set[str] = set()
 
@@ -136,12 +140,14 @@ async def fetch_himalayas() -> list[RawJobListing]:
             except Exception as e:
                 logger.warning(f"Himalayas fetch failed for '{query}': {e}")
 
-    logger.info(f"Himalayas: fetched {len(all_listings)} listings")
+    logger.info(f"Himalayas: fetched {len(all_listings)} listings in {_time.monotonic() - t0:.1f}s")
     return all_listings
 
 
 async def fetch_hn_whoishiring() -> list[RawJobListing]:
     """Fetch from latest HN 'Who is hiring?' thread via Algolia API."""
+    import time as _time
+    t0 = _time.monotonic()
     all_listings: list[RawJobListing] = []
 
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
@@ -251,12 +257,14 @@ async def fetch_hn_whoishiring() -> list[RawJobListing]:
         except Exception as e:
             logger.warning(f"HN Who's Hiring fetch failed: {e}")
 
-    logger.info(f"HN Who's Hiring: fetched {len(all_listings)} listings")
+    logger.info(f"HN Who's Hiring: fetched {len(all_listings)} listings in {_time.monotonic() - t0:.1f}s")
     return all_listings
 
 
 async def fetch_jobicy() -> list[RawJobListing]:
     """Fetch jobs from Jobicy API (free, no auth, remote-first)."""
+    import time as _time
+    t0 = _time.monotonic()
     all_listings: list[RawJobListing] = []
     seen_urls: set[str] = set()
 
@@ -311,12 +319,14 @@ async def fetch_jobicy() -> list[RawJobListing]:
             except Exception as e:
                 logger.warning(f"Jobicy fetch failed for tag '{tag}': {e}")
 
-    logger.info(f"Jobicy: fetched {len(all_listings)} listings")
+    logger.info(f"Jobicy: fetched {len(all_listings)} listings in {_time.monotonic() - t0:.1f}s")
     return all_listings
 
 
 async def fetch_remoteok() -> list[RawJobListing]:
     """Fetch jobs from RemoteOK API (free, no auth)."""
+    import time as _time
+    t0 = _time.monotonic()
     all_listings: list[RawJobListing] = []
 
     async with httpx.AsyncClient(
@@ -363,12 +373,14 @@ async def fetch_remoteok() -> list[RawJobListing]:
         except Exception as e:
             logger.warning(f"RemoteOK fetch failed: {e}")
 
-    logger.info(f"RemoteOK: fetched {len(all_listings)} listings")
+    logger.info(f"RemoteOK: fetched {len(all_listings)} listings in {_time.monotonic() - t0:.1f}s")
     return all_listings
 
 
 async def fetch_all_sources() -> list[RawJobListing]:
     """Fetch from all sources concurrently. Returns deduplicated listings."""
+    import time as _time
+    t0 = _time.monotonic()
     results = await asyncio.gather(
         fetch_remotive(),
         fetch_himalayas(),
@@ -381,16 +393,20 @@ async def fetch_all_sources() -> list[RawJobListing]:
     all_listings: list[RawJobListing] = []
     seen_titles: set[str] = set()
 
-    for result in results:
+    for i, result in enumerate(results):
+        source_names = ["Remotive", "Himalayas", "HN", "Jobicy", "RemoteOK"]
+        name = source_names[i] if i < len(source_names) else f"Source{i}"
         if isinstance(result, BaseException):
-            logger.error(f"Source failed: {result}")
+            logger.error(f"[FETCH] {name} FAILED: {result}")
             continue
         listings: list[RawJobListing] = result
+        logger.info(f"[FETCH] {name}: {len(listings)} raw listings")
         for listing in listings:
             dedup_key = f"{listing.company.lower()}:{listing.title.lower()}"
             if dedup_key not in seen_titles:
                 seen_titles.add(dedup_key)
                 all_listings.append(listing)
 
-    logger.info(f"Total unique listings from all sources: {len(all_listings)}")
+    total_elapsed = _time.monotonic() - t0
+    logger.info(f"[FETCH] Total unique listings from all sources: {len(all_listings)} in {total_elapsed:.1f}s")
     return all_listings

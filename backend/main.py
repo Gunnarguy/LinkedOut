@@ -39,8 +39,23 @@ from models import (
 )
 from scoring_engine import score_batch, score_job, triage_and_score
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
+
+# ── In-memory log ring buffer for /api/dev/logs endpoint ─────────────────────
+import collections
+
+_LOG_RING: collections.deque[str] = collections.deque(maxlen=500)
+
+
+class _RingHandler(logging.Handler):
+    def emit(self, record: logging.LogRecord) -> None:
+        _LOG_RING.append(self.format(record))
+
+
+_ring_handler = _RingHandler()
+_ring_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+logging.getLogger().addHandler(_ring_handler)
 
 # ── Background ingest task ───────────────────────────────────────────────────
 
@@ -77,22 +92,32 @@ async def _run_ingest_cycle():
 
     Pipeline: Fetch → Dedup (skip seen URLs) → Flash triage → Pro scoring → Queue
     """
-    logger.info("Starting job ingest cycle...")
+    import time as _time
+    cycle_start = _time.monotonic()
+    logger.info("="*60)
+    logger.info("INGEST CYCLE STARTING")
+    logger.info("="*60)
     try:
+        t0 = _time.monotonic()
         raw_listings = await fetch_all_sources()
+        fetch_elapsed = _time.monotonic() - t0
+        logger.info(f"[FETCH] Got {len(raw_listings)} total listings in {fetch_elapsed:.1f}s")
         if not raw_listings:
-            logger.info("No listings fetched from any source")
+            logger.info("[FETCH] No listings fetched from any source")
             return 0
 
         # Dedup: skip URLs we've already scored
         new_listings = [r for r in raw_listings if not store.is_url_seen(r.url)]
         skipped = len(raw_listings) - len(new_listings)
-        if skipped:
-            logger.info(f"Skipped {skipped} already-seen URLs")
+        logger.info(f"[DEDUP] {len(new_listings)} new, {skipped} already-seen")
 
         if not new_listings:
-            logger.info("All listings already seen — nothing to score")
+            logger.info("[DEDUP] All listings already seen — nothing to score")
             return 0
+
+        # Log a sample of new listings
+        for i, nl in enumerate(new_listings[:5]):
+            logger.info(f"[SAMPLE {i}] {nl.title} @ {nl.company} — {nl.url[:80]}")
 
         # Two-tier scoring: Flash triage → Pro full scoring → local fallback
         prefs = _user_prefs
@@ -102,7 +127,9 @@ async def _run_ingest_cycle():
 
         for i in range(0, len(new_listings), batch_size):
             batch = new_listings[i : i + batch_size]
+            t1 = _time.monotonic()
             results = await triage_and_score(batch, prefs)
+            score_elapsed = _time.monotonic() - t1
 
             for raw_listing, result in zip(batch, results):
                 # Only mark as seen after we've processed it
@@ -111,24 +138,44 @@ async def _run_ingest_cycle():
                     if result.job.builder_score >= min_builder_score:
                         store.add_pending(result.job)
                         total_added += 1
+                        logger.info(
+                            f"[QUEUED] {result.job.role_title} @ {result.job.company_name} "
+                            f"score={result.job.builder_score:.2f}"
+                        )
+                    else:
+                        logger.info(
+                            f"[LOW SCORE] {result.job.role_title} @ {result.job.company_name} "
+                            f"score={result.job.builder_score:.2f} < {min_builder_score}"
+                        )
+                elif not result.passed_filter:
+                    logger.info(
+                        f"[REJECTED] {raw_listing.title} @ {raw_listing.company} "
+                        f"— {result.rejection_reason}"
+                    )
 
             store.flush_seen()
 
             passed = sum(1 for r in results if r.passed_filter)
             logger.info(
-                f"Batch {i // batch_size + 1}: "
-                f"{passed}/{len(batch)} passed → {total_added} total queued"
+                f"[BATCH {i // batch_size + 1}] "
+                f"{passed}/{len(batch)} passed → {total_added} total queued "
+                f"({score_elapsed:.1f}s)"
             )
 
+        total_elapsed = _time.monotonic() - cycle_start
+        logger.info("="*60)
         logger.info(
-            f"Ingest complete: {total_added} new jobs queued "
-            f"(from {len(new_listings)} new listings, "
-            f"{len(raw_listings)} total fetched)"
+            f"INGEST COMPLETE: {total_added} new jobs queued "
+            f"(from {len(new_listings)} new / {len(raw_listings)} total) "
+            f"in {total_elapsed:.1f}s"
         )
+        logger.info(f"STORE STATE: {store.stats}")
+        logger.info("="*60)
         return total_added
 
     except Exception as e:
-        logger.exception(f"Ingest cycle failed: {e}")
+        total_elapsed = _time.monotonic() - cycle_start
+        logger.exception(f"INGEST CYCLE FAILED after {total_elapsed:.1f}s: {e}")
         return 0
 
 
@@ -658,6 +705,13 @@ async def reset_seen_urls():
     count = store.seen_count
     store.clear_seen()
     return {"cleared": count, "message": "Seen URLs cleared — next ingest will fetch fresh"}
+
+
+@app.get("/api/dev/logs")
+async def get_recent_logs(n: int = Query(100, ge=1, le=500)):
+    """Return recent backend log lines (ring buffer, newest last)."""
+    lines = list(_LOG_RING)[-n:]
+    return {"count": len(lines), "logs": lines}
 
 
 if __name__ == "__main__":

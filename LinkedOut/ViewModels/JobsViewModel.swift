@@ -39,26 +39,38 @@ class JobsViewModel: ObservableObject {
         isLoading = true
         error = nil
         defer { isLoading = false }
+        print("[VM] loadPendingJobs — starting")
 
         do {
             pendingJobs = try await APIClient.shared.fetchPendingJobs()
+            print("[VM] loadPendingJobs — got \(pendingJobs.count) jobs")
+            for (i, j) in pendingJobs.prefix(5).enumerated() {
+                print("[VM]   [\(i)] \(j.roleTitle) @ \(j.companyName) score=\(j.builderScore)")
+            }
         } catch {
+            print("[VM] loadPendingJobs — ERROR: \(error)")
             self.error = error.localizedDescription
         }
     }
 
     func loadAppliedJobs() async {
+        print("[VM] loadAppliedJobs — starting")
         do {
             appliedJobs = try await APIClient.shared.fetchAppliedJobs()
+            print("[VM] loadAppliedJobs — got \(appliedJobs.count)")
         } catch {
+            print("[VM] loadAppliedJobs — ERROR: \(error)")
             self.error = error.localizedDescription
         }
     }
 
     func loadSavedJobs() async {
+        print("[VM] loadSavedJobs — starting")
         do {
             savedJobs = try await APIClient.shared.fetchSavedJobs()
+            print("[VM] loadSavedJobs — got \(savedJobs.count)")
         } catch {
+            print("[VM] loadSavedJobs — ERROR: \(error)")
             self.error = error.localizedDescription
         }
     }
@@ -66,9 +78,14 @@ class JobsViewModel: ObservableObject {
     func loadStats() async {
         statsLoading = true
         defer { statsLoading = false }
+        print("[VM] loadStats — starting")
         do {
             stats = try await APIClient.shared.fetchStats()
+            if let s = stats {
+                print("[VM] loadStats — pending=\(s.pending) applied=\(s.applied) saved=\(s.saved) rejected=\(s.rejected)")
+            }
         } catch {
+            print("[VM] loadStats — ERROR: \(error)")
             self.error = error.localizedDescription
         }
     }
@@ -94,25 +111,36 @@ class JobsViewModel: ObservableObject {
             isIngesting = false
             ingestProgress = ""
         }
+        print("[VM] ingestNewJobs — starting ingest cycle")
 
         do {
             ingestProgress = "Scanning & scoring with AI..."
+            print("[VM] ingestNewJobs — calling /api/ingest/refresh...")
             let result = try await APIClient.shared.refreshIngest()
+            print("[VM] ingestNewJobs — ingested=\(result.ingested) totalPending=\(result.totalPending)")
             ingestProgress = "Loading results..."
             pendingJobs = try await APIClient.shared.fetchPendingJobs()
+            print("[VM] ingestNewJobs — pending queue now has \(pendingJobs.count) jobs")
             await loadStats()
             if result.ingested == 0 {
+                print("[VM] ingestNewJobs — ⚠️ zero jobs ingested this round")
                 error = "No new jobs passed the AI filter this round"
             }
         } catch {
+            print("[VM] ingestNewJobs — ERROR: \(error)")
             self.error = error.localizedDescription
         }
     }
 
     /// Auto-ingest once per session when the queue loads empty
     func autoIngestIfNeeded() async {
-        guard pendingJobs.isEmpty && !isIngesting && !isLoading && !hasAutoIngested else { return }
+        print("[VM] autoIngestIfNeeded — pending=\(pendingJobs.count) ingesting=\(isIngesting) loading=\(isLoading) alreadyDone=\(hasAutoIngested)")
+        guard pendingJobs.isEmpty && !isIngesting && !isLoading && !hasAutoIngested else {
+            print("[VM] autoIngestIfNeeded — skipped (guard failed)")
+            return
+        }
         hasAutoIngested = true
+        print("[VM] autoIngestIfNeeded — queue empty, triggering auto-ingest")
         await ingestNewJobs()
     }
 
@@ -140,9 +168,11 @@ class JobsViewModel: ObservableObject {
     }
 
     func performAction(jobId: String, action: JobAction) async {
+        print("[VM] performAction — \(action.rawValue) on \(jobId)")
         let request = JobActionRequest(jobId: jobId, action: action)
         do {
             let response = try await APIClient.shared.performAction(request)
+            print("[VM] performAction — success=\(response.success) msg=\(response.message)")
             if response.success {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                     pendingJobs.removeAll { $0.id == jobId }
