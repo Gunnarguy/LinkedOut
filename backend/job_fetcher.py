@@ -19,17 +19,23 @@ from models import RawJobListing
 
 logger = logging.getLogger(__name__)
 
-# Search queries tuned for the user's profile
+# Search queries — broad net, let the LLM scoring decide what's relevant
 SEARCH_QUERIES = [
-    "AI product engineer",
     "AI engineer",
-    "founding engineer AI",
-    "product engineer LLM",
-    "iOS engineer AI",
+    "product engineer",
+    "founding engineer",
+    "iOS engineer",
     "machine learning engineer",
     "AI startup",
     "LLM engineer",
-    "agentic AI",
+    "software engineer startup",
+    "mobile engineer",
+    "full stack engineer",
+    "developer tools",
+    "frontend engineer",
+    "generative AI",
+    "junior engineer",
+    "engineer remote",
 ]
 
 TIMEOUT = httpx.Timeout(15.0, connect=10.0)
@@ -37,7 +43,7 @@ TIMEOUT = httpx.Timeout(15.0, connect=10.0)
 
 async def fetch_remotive(queries: list[str] | None = None) -> list[RawJobListing]:
     """Fetch remote jobs from Remotive API (free, no auth)."""
-    queries = queries or SEARCH_QUERIES[:4]
+    queries = queries or SEARCH_QUERIES[:8]
     all_listings: list[RawJobListing] = []
     seen_urls: set[str] = set()
 
@@ -46,7 +52,7 @@ async def fetch_remotive(queries: list[str] | None = None) -> list[RawJobListing
             try:
                 resp = await client.get(
                     "https://remotive.com/api/remote-jobs",
-                    params={"search": query, "limit": 15},
+                    params={"search": query, "limit": 25},
                 )
                 resp.raise_for_status()
                 data = resp.json()
@@ -88,11 +94,11 @@ async def fetch_himalayas() -> list[RawJobListing]:
     seen_urls: set[str] = set()
 
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-        for query in SEARCH_QUERIES[:3]:
+        for query in SEARCH_QUERIES[:6]:
             try:
                 resp = await client.get(
                     "https://himalayas.app/jobs/api",
-                    params={"q": query, "limit": 15},
+                    params={"q": query, "limit": 25},
                 )
                 resp.raise_for_status()
                 data = resp.json()
@@ -167,11 +173,15 @@ async def fetch_hn_whoishiring() -> list[RawJobListing]:
                 r"\bAI\b|artificial.intelligence|\bLLM\b|machine.learning|"
                 r"product.engineer|founding.engineer|"
                 r"agent(?:ic)?|copilot|GPT|generative.AI|deep.learning|"
-                r"(?:iOS|SwiftUI).+(?:AI|ML)|(?:AI|ML).+(?:iOS|mobile)",
+                r"(?:iOS|SwiftUI).+(?:AI|ML)|(?:AI|ML).+(?:iOS|mobile)|"
+                r"\bstartup\b|seed.stage|series.A|early.stage|"
+                r"full.stack|mobile.engineer|\biOS\b|SwiftUI|"
+                r"product.minded|remote|python|react|typescript|"
+                r"engineer|developer|software",
                 re.IGNORECASE,
             )
 
-            # Must also NOT match strong negative signals
+            # Only filter out clearly senior/director-level roles
             neg_keywords = re.compile(
                 r"\bsenior\b|\bstaff\b|\blead\b|\bprincipal\b|"
                 r"\bdirector\b|\bVP\b|\bhead of\b|"

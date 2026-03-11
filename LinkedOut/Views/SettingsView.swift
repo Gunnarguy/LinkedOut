@@ -12,8 +12,10 @@ struct SettingsView: View {
     @AppStorage("requireRemote") private var requireRemote: Bool = true
     @AppStorage("locationPreference") private var locationPreference: String = "Remote"
     @AppStorage("serverURL") private var serverURL: String = "https://linkedout-backend-9q4t.onrender.com"
-    @State private var preferredRoles: [String] = UserPreferences.default.preferredRoles
-    @State private var excludedKeywords: [String] = UserPreferences.default.excludedKeywords
+    @AppStorage("preferredRolesJSON") private var preferredRolesJSON: String = "[]"
+    @AppStorage("excludedKeywordsJSON") private var excludedKeywordsJSON: String = "[]"
+    @State private var preferredRoles: [String] = []
+    @State private var excludedKeywords: [String] = []
     @State private var newRole = ""
     @State private var newKeyword = ""
     @State private var syncStatus: SyncStatus = .idle
@@ -62,6 +64,7 @@ struct SettingsView: View {
                     }
                     .onDelete { indexSet in
                         preferredRoles.remove(atOffsets: indexSet)
+                        saveRolesToStorage()
                     }
 
                     HStack {
@@ -70,6 +73,7 @@ struct SettingsView: View {
                             guard !newRole.trimmingCharacters(in: .whitespaces).isEmpty else { return }
                             preferredRoles.append(newRole.trimmingCharacters(in: .whitespaces))
                             newRole = ""
+                            saveRolesToStorage()
                         } label: {
                             Image(systemName: "plus.circle.fill")
                         }
@@ -84,6 +88,7 @@ struct SettingsView: View {
                     }
                     .onDelete { indexSet in
                         excludedKeywords.remove(atOffsets: indexSet)
+                        saveKeywordsToStorage()
                     }
 
                     HStack {
@@ -92,6 +97,7 @@ struct SettingsView: View {
                             guard !newKeyword.trimmingCharacters(in: .whitespaces).isEmpty else { return }
                             excludedKeywords.append(newKeyword.trimmingCharacters(in: .whitespaces))
                             newKeyword = ""
+                            saveKeywordsToStorage()
                         } label: {
                             Image(systemName: "plus.circle.fill")
                         }
@@ -134,11 +140,49 @@ struct SettingsView: View {
                         preferredRoles = defaults.preferredRoles
                         excludedKeywords = defaults.excludedKeywords
                         serverURL = "https://linkedout-backend-9q4t.onrender.com"
+                        saveRolesToStorage()
+                        saveKeywordsToStorage()
                     }
                     .foregroundStyle(.red)
                 }
             }
             .navigationTitle("Settings")
+            .onAppear { loadFromStorage() }
+        }
+    }
+
+    // MARK: - Local Persistence for String Arrays
+
+    private func loadFromStorage() {
+        if let data = preferredRolesJSON.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode([String].self, from: data),
+           !decoded.isEmpty {
+            preferredRoles = decoded
+        } else {
+            // First launch — seed from defaults
+            preferredRoles = UserPreferences.default.preferredRoles
+            saveRolesToStorage()
+        }
+
+        if let data = excludedKeywordsJSON.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode([String].self, from: data),
+           !decoded.isEmpty {
+            excludedKeywords = decoded
+        } else {
+            excludedKeywords = UserPreferences.default.excludedKeywords
+            saveKeywordsToStorage()
+        }
+    }
+
+    private func saveRolesToStorage() {
+        if let data = try? JSONEncoder().encode(preferredRoles) {
+            preferredRolesJSON = String(data: data, encoding: .utf8) ?? "[]"
+        }
+    }
+
+    private func saveKeywordsToStorage() {
+        if let data = try? JSONEncoder().encode(excludedKeywords) {
+            excludedKeywordsJSON = String(data: data, encoding: .utf8) ?? "[]"
         }
     }
 

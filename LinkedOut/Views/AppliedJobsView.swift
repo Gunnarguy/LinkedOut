@@ -9,6 +9,7 @@ import SwiftUI
 
 struct AppliedJobsView: View {
     @EnvironmentObject var jobs: JobsViewModel
+    @State private var selectedJob: JobPayload?
 
     var body: some View {
         NavigationStack {
@@ -18,7 +19,7 @@ struct AppliedJobsView: View {
                 } else {
                     List(jobs.appliedJobs) { job in
                         Button {
-                            jobs.selectedJob = job
+                            selectedJob = job
                         } label: {
                             JobListRow(job: job, showStatus: true)
                         }
@@ -30,7 +31,7 @@ struct AppliedJobsView: View {
             .navigationTitle("Applied")
             .task { await jobs.loadAppliedJobs() }
             .refreshable { await jobs.loadAppliedJobs() }
-            .sheet(item: $jobs.selectedJob) { job in
+            .sheet(item: $selectedJob) { job in
                 JobDetailView(job: job)
             }
             .overlay(alignment: .top) {
@@ -61,6 +62,7 @@ struct AppliedJobsView: View {
 
 struct SavedJobsView: View {
     @EnvironmentObject var jobs: JobsViewModel
+    @State private var selectedJob: JobPayload?
 
     var body: some View {
         NavigationStack {
@@ -70,7 +72,7 @@ struct SavedJobsView: View {
                 } else {
                     List(jobs.savedJobs) { job in
                         Button {
-                            jobs.selectedJob = job
+                            selectedJob = job
                         } label: {
                             JobListRow(job: job, showStatus: false)
                         }
@@ -82,7 +84,7 @@ struct SavedJobsView: View {
             .navigationTitle("Saved")
             .task { await jobs.loadSavedJobs() }
             .refreshable { await jobs.loadSavedJobs() }
-            .sheet(item: $jobs.selectedJob) { job in
+            .sheet(item: $selectedJob) { job in
                 JobDetailView(job: job)
             }
             .overlay(alignment: .top) {

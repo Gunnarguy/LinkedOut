@@ -49,11 +49,33 @@ struct CardStackView: View {
                     }
                 }
             }
-            .task { await jobs.loadPendingJobs() }
+            .task {
+                await jobs.loadPendingJobs()
+                await jobs.autoIngestIfNeeded()
+            }
             .task { await jobs.loadStats() }
             .refreshable { await jobs.refreshAll() }
             .sheet(item: $jobs.selectedJob) { job in
                 JobDetailView(job: job)
+            }
+            .alert("Apply to this role?", isPresented: applyAlertBinding) {
+                if let job = jobs.jobToApply {
+                    let applyURL = (job.applyUrl ?? job.sourceUrl)
+                    if let url = URL(string: applyURL) {
+                        Button("Open Application") {
+                            UIApplication.shared.open(url)
+                            Task { await jobs.confirmApply(job: job) }
+                        }
+                    }
+                    Button("Mark Applied (already applied)") {
+                        Task { await jobs.confirmApply(job: job) }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                }
+            } message: {
+                if let job = jobs.jobToApply {
+                    Text("\(job.roleTitle) at \(job.companyName)")
+                }
             }
             .overlay(alignment: .top) {
                 if let error = jobs.error {
@@ -65,6 +87,13 @@ struct CardStackView: View {
             }
             .animation(.spring(response: 0.3), value: jobs.error)
         }
+    }
+
+    private var applyAlertBinding: Binding<Bool> {
+        Binding(
+            get: { jobs.jobToApply != nil },
+            set: { if !$0 { jobs.jobToApply = nil } }
+        )
     }
 
     // MARK: - Card Stack
@@ -228,8 +257,14 @@ struct CardStackView: View {
                 .multilineTextAlignment(.center)
 
             if jobs.isIngesting {
-                ProgressView("Scanning & scoring...")
-                    .padding(.top, 8)
+                VStack(spacing: 8) {
+                    ProgressView()
+                    Text(jobs.ingestProgress.isEmpty ? "Scanning & scoring..." : jobs.ingestProgress)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.top, 8)
             } else {
                 Button {
                     haptic()

@@ -25,6 +25,11 @@ enum APIError: LocalizedError {
             return error.localizedDescription
         }
     }
+
+    var is404: Bool {
+        if case .httpError(let code, _) = self, code == 404 { return true }
+        return false
+    }
 }
 
 actor APIClient {

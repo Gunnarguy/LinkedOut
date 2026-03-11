@@ -140,39 +140,45 @@ The user is a HOBBYIST AI product builder, NOT a traditional software engineer.
 - Product-minded: thinks about UX, user problems, and 0→1 creation
 - Comfortable with ambiguity, prototyping, and wearing many hats
 
-## Hard Filters (REJECT if ANY fail)
-- Must be remote-friendly (fully remote or hybrid-optional)
-- Base salary must be ≥ ${min_salary}/year (if salary info available; if not stated, assume passes)
-- REJECT if the listing demands: LeetCode, competitive programming, whiteboard-heavy interviews,
-  or strict CS degree requirements with no "or equivalent experience" escape hatch
-- REJECT if it requires 5+ years of professional software engineering experience
+## Hard Filters (REJECT if ANY of these are true — these are the ONLY hard stops)
+- REJECT if the listing STRICTLY requires a CS/engineering degree with NO "or equivalent
+  experience" escape hatch (if degree is "preferred" or "or equivalent", it PASSES)
 - REJECT roles titled "Senior", "Staff", "Lead", "Principal", "Head of", or "Director"
-- REJECT pure DevOps/SRE/infra roles with no product or AI component
-- REJECT roles at large/established companies (FAANG, Fortune 500, big corps) — user wants scrappy startups
+- REJECT if it explicitly requires 7+ years of professional software engineering experience
+
+Everything else is a SCORING factor, not a reject. Be generous — let things through.
 
 ## Scoring (builder_score: 0.0–1.0)
 Score HIGHER (0.75–1.0) for:
 - "AI Product Engineer", "AI Engineer", "Founding Engineer", "Product Engineer"
-- EARLY-STAGE startups (seed, Series A, <50 people) building with LLMs, agents, copilots
+- Early-stage startups building with LLMs, agents, copilots
 - Small teams, high autonomy, 0→1 product building, "wear many hats"
-- Companies that explicitly value shipped products, side projects, and builder mentality
+- Companies that explicitly value shipped products, side projects, builder mentality
 - Junior/mid-level roles, or roles with NO seniority level (just "Engineer")
-- Roles where AI/ML is the PRODUCT, not just a buzzword in the stack
+- Roles where AI/ML is the PRODUCT, not just a buzzword
 - Intersection of AI + consumer products, creative tools, or developer tools
+- Remote-friendly roles
 
 Score MEDIUM (0.4–0.74) for:
-- "iOS Engineer" or "Mobile Engineer" at interesting AI/product companies (small ones)
-- Generalist roles at early-stage startups where you'd touch AI
-- Roles that mention "product-minded engineer" or "full-stack with AI"
-- Internships or apprenticeships at cool AI companies
+- iOS/Mobile engineer roles at interesting companies
+- Generalist roles at startups where you'd touch product
+- Roles that mention "product-minded engineer" or "full-stack"
+- Internships or apprenticeships at cool companies
+- Roles at mid-size companies that look interesting
+- Hybrid roles (if the company/product is compelling enough)
+- Roles that are slightly outside comfort zone but have growth potential
 
-Score LOWER (0.0–0.39) for:
-- ANY role with "Senior", "Staff", "Lead", "Principal" in the title
-- Pure algorithm grind shops, FAANG-style interview gauntlets
-- Massive bureaucratic orgs, Fortune 500, companies with 500+ engineers
-- "Maintain legacy CRUD app" roles
-- Enterprise middleware, ERP, or B2B sales-tool companies
-- Roles that are 100% backend/infrastructure with zero product surface
+Score LOWER (0.1–0.39) for:
+- Pure backend/infrastructure with zero product surface
+- Enterprise middleware, ERP, or B2B sales tools
+- Large bureaucratic orgs with rigid processes
+- Roles that are 100% maintenance/legacy
+- Roles that require heavy interview gauntlets (LeetCode-only)
+
+Score ZERO / REJECT for:
+- Senior/Staff/Lead/Principal/Director titles
+- Strict CS degree requirements with no flexibility
+- 7+ years experience required
 
 ## EXTRACTION INSTRUCTIONS — Be Thorough!
 
@@ -281,22 +287,27 @@ Return ONLY valid JSON matching this schema:
 
 
 TRIAGE_PROMPT = """\
-You are a fast job-listing triage filter. Given a job listing, decide if it's
-POTENTIALLY relevant for a hobbyist AI product builder (not a traditional SWE).
+You are a fast job-listing triage filter. Given a job listing, decide if it MIGHT be
+relevant for a self-taught builder who loves AI, product engineering, and shipping apps.
 
-They want: AI/ML product roles, founding engineer roles at EARLY-STAGE AI startups,
-iOS/mobile at small AI companies, product engineer roles. Remote preferred.
-Junior or mid-level only — small scrappy teams, not big corps.
+PASS (dominated=true) if the job is ANY of:
+- Tech/engineering roles at startups or small-to-mid companies
+- AI/ML roles at any company
+- Product engineer, mobile/iOS, full-stack, or generalist roles
+- Roles that don't require a CS degree (or say "or equivalent experience")
+- Entry, junior, or mid-level roles (or roles with no seniority specified)
+- Anything that sounds interesting for a builder/product person
 
-They DON'T want: Senior/Staff/Lead/Principal roles, pure DevOps/SRE, legacy CRUD,
-enterprise middleware, roles requiring 5+ years experience, CS degrees with no
-flexibility, LeetCode-heavy, big companies (FAANG, Fortune 500).
+REJECT (dominated=false) ONLY if the job clearly is:
+- Titled "Senior", "Staff", "Lead", "Principal", "Director", or "VP"
+- Explicitly requires a CS/engineering degree with NO alternative
+- Requires 5+ years of professional experience with no flexibility
+- Pure non-tech roles (sales, marketing, HR, legal, finance)
+
+When in doubt, PASS it through. Be GENEROUS — let the full scoring decide.
 
 Return ONLY valid JSON:
 {{"dominated": true/false, "reason": "one sentence why"}}
-
-- "dominated" = true means this listing is worth full scoring
-- "dominated" = false means skip it
 """
 
 
@@ -421,8 +432,8 @@ async def triage_and_score(
     # Phase 1: Flash triage (with pacing to avoid rate limits)
     logger.info(f"Phase 1: Triaging {len(listings)} listings with Flash...")
     triage_results = []
-    # Process in small concurrent batches of 3 with delay between batches
-    batch_size = 3
+    # Process in small concurrent batches of 5 with delay between batches
+    batch_size = 5
     for i in range(0, len(listings), batch_size):
         batch = listings[i : i + batch_size]
         batch_results = await asyncio.gather(

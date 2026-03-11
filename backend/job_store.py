@@ -94,6 +94,11 @@ class JobStore:
     def flush_seen(self) -> None:
         self._save_seen()
 
+    def clear_seen(self) -> None:
+        """Clear all seen URLs so the next ingest fetches everything fresh."""
+        self._seen_urls.clear()
+        self._save_seen()
+
     # ── Core operations ──────────────────────────────────────────────────
 
     def add_pending(self, job: JobPayload) -> None:

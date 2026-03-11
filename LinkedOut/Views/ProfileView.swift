@@ -71,8 +71,23 @@ struct ProfileView: View {
                         StatRow(label: "Applied", value: stats.applied, icon: "checkmark.circle", color: .green)
                         StatRow(label: "Saved", value: stats.saved, icon: "bookmark", color: .blue)
                         StatRow(label: "Rejected", value: stats.rejected, icon: "xmark.circle", color: .red)
-                    } else {
+                    } else if jobs.statsLoading {
                         ProgressView()
+                    } else {
+                        VStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                            Text("Couldn't load stats")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Button("Retry") {
+                                Task { await jobs.loadStats() }
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
                     }
                 }
 

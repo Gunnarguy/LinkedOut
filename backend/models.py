@@ -127,8 +127,8 @@ class AuthStatusResponse(BaseModel):
 
 
 class UserPreferences(BaseModel):
-    min_salary: int = 90000
-    require_remote: bool = True
+    min_salary: int = 50000
+    require_remote: bool = False
     preferred_roles: list[str] = Field(
         default_factory=lambda: [
             "AI Product Engineer",
@@ -137,18 +137,15 @@ class UserPreferences(BaseModel):
             "Product Engineer",
             "iOS Engineer",
             "Machine Learning Engineer",
+            "Software Engineer",
+            "Full Stack Engineer",
+            "Mobile Engineer",
         ]
     )
     excluded_keywords: list[str] = Field(
         default_factory=lambda: [
-            "LeetCode",
-            "whiteboard",
-            "competitive programming",
-            "10+ years",
             "Staff Engineer",
             "Principal Engineer",
-            "DevOps",
-            "SRE",
         ]
     )
     location_preference: str = "Remote"

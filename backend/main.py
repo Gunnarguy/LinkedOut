@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -45,7 +47,29 @@ logger = logging.getLogger(__name__)
 _ingest_task: asyncio.Task | None = None
 
 # User preferences — updated via API, used in ingest cycles
-_user_prefs = UserPreferences()
+_DATA_DIR = Path("/app/data") if Path("/app").exists() else Path("./data")
+_PREFS_FILE = _DATA_DIR / "user_prefs.json"
+
+
+def _load_prefs() -> UserPreferences:
+    try:
+        if _PREFS_FILE.exists():
+            data = json.loads(_PREFS_FILE.read_text())
+            return UserPreferences(**data)
+    except Exception:
+        pass
+    return UserPreferences()
+
+
+def _save_prefs(prefs: UserPreferences) -> None:
+    try:
+        _PREFS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _PREFS_FILE.write_text(json.dumps(prefs.model_dump(), indent=2))
+    except Exception:
+        logger.warning("Could not persist preferences to disk")
+
+
+_user_prefs = _load_prefs()
 
 
 async def _run_ingest_cycle():
@@ -79,7 +103,7 @@ async def _run_ingest_cycle():
         prefs = _user_prefs
         total_added = 0
         batch_size = 10
-        min_builder_score = 0.3
+        min_builder_score = 0.15
 
         for i in range(0, len(new_listings), batch_size):
             batch = new_listings[i : i + batch_size]
@@ -386,6 +410,7 @@ async def update_preferences(prefs: UserPreferences):
     """Update scoring preferences (used in future ingest cycles)."""
     global _user_prefs
     _user_prefs = prefs
+    _save_prefs(prefs)
     return _user_prefs
 
 
@@ -626,6 +651,14 @@ async def seed_mock_data():
         store.add_pending(job)
 
     return {"seeded": len(mock_jobs), "total_pending": store.pending_count}
+
+
+@app.post("/api/dev/reset-seen")
+async def reset_seen_urls():
+    """Clear all seen URLs so the next ingest fetches everything fresh."""
+    count = store.seen_count
+    store.clear_seen()
+    return {"cleared": count, "message": "Seen URLs cleared — next ingest will fetch fresh"}
 
 
 if __name__ == "__main__":
