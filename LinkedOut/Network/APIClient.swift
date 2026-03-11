@@ -37,7 +37,7 @@ actor APIClient {
 
     /// Reads the server URL from UserDefaults (synced with Settings @AppStorage)
     private var baseURL: String {
-        UserDefaults.standard.string(forKey: "serverURL") ?? "https://linkedout-backend-9q4t.onrender.com"
+        UserDefaults.standard.string(forKey: "serverURL") ?? "http://Gunnars-Brain-Extension.local:8443"
     }
 
     private let session: URLSession

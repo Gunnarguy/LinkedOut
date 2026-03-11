@@ -9,6 +9,8 @@ import SwiftUI
 
 struct MainTabView: View {
     @EnvironmentObject var jobs: JobsViewModel
+    @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("serverURL") private var serverURL: String = "http://Gunnars-Brain-Extension.local:8443"
 
     var body: some View {
         TabView {
@@ -38,6 +40,15 @@ struct MainTabView: View {
                 .tabItem {
                     Label("Settings", systemImage: "gearshape")
                 }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task {
+                    if let found = await ServerDiscovery.discover() {
+                        serverURL = found
+                    }
+                }
+            }
         }
     }
 }

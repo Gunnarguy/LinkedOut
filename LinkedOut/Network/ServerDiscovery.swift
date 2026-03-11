@@ -10,13 +10,13 @@ import Foundation
 
 struct ServerDiscovery {
     /// Candidate URLs to probe, in priority order.
-    /// Cloud (Render) is first so the app works from anywhere.
-    /// LAN fallbacks are kept for local dev.
+    /// Local Docker is first — it's always running at home with fresh data.
+    /// Render is the fallback for when you're away from home wifi.
     static let candidates: [String] = [
-        "https://linkedout-backend-9q4t.onrender.com",
         "http://Gunnars-Brain-Extension.local:8443",
         "http://10.0.0.175:8443",
-        "http://localhost:8443"
+        "http://localhost:8443",
+        "https://linkedout-backend-9q4t.onrender.com"
     ]
 
     /// Probes candidate URLs in order. Returns the FIRST one that responds to /health.
