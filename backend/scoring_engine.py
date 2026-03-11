@@ -84,7 +84,7 @@ async def _call_llm(system: str, user_msg: str, use_flash: bool = False) -> str:
     Chain: Gemini Pro/Flash → Flash (if Pro rate-limited) → OpenAI GPT-5.4
     """
     provider = settings.llm_provider.lower()
-    max_retries = 3
+    max_retries = 2
 
     for attempt in range(max_retries):
         try:
@@ -100,7 +100,7 @@ async def _call_llm(system: str, user_msg: str, use_flash: bool = False) -> str:
             is_rate_limit = "429" in error_str or "RESOURCE_EXHAUSTED" in error_str
 
             if is_rate_limit and attempt < max_retries - 1:
-                wait_time = 15 * (attempt + 1)
+                wait_time = 3 * (attempt + 1)
                 logger.warning(
                     f"Rate limited (attempt {attempt + 1}/{max_retries}), "
                     f"waiting {wait_time}s..."
@@ -365,7 +365,7 @@ async def score_job(
 """
 
     try:
-        content = await _call_llm(system, user_msg)
+        content = await _call_llm(system, user_msg, use_flash=True)
         data = json.loads(content)
 
         if not data.get("passed_filter", False):
@@ -659,10 +659,34 @@ async def triage_and_score(
 
     if llm_works:
         logger.info("LLM scoring working — using LLM for remaining listings")
+        consecutive_fallbacks = 0
         for raw in survivors[1:]:
             result = await score_job(raw, prefs)
+            # Detect if this job fell back to local scorer
+            is_local = (
+                result.job
+                and "local keyword" in (result.job.ai_pitch_summary or "").lower()
+            )
+            if is_local:
+                consecutive_fallbacks += 1
+            else:
+                consecutive_fallbacks = 0
+
             results.append(result)
-            await asyncio.sleep(1)
+
+            # If LLM failed 2+ times in a row, give up and use local for the rest
+            if consecutive_fallbacks >= 2:
+                remaining = survivors[len(results):]
+                if remaining:
+                    logger.warning(
+                        f"LLM failed {consecutive_fallbacks}x in a row — "
+                        f"switching to local scorer for remaining {len(remaining)} listings"
+                    )
+                    for r in remaining:
+                        results.append(score_job_locally(r))
+                break
+
+            await asyncio.sleep(0.5)
     else:
         logger.warning("LLM scoring failed — using local keyword scorer for all")
         for raw in survivors[1:]:
