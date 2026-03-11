@@ -71,18 +71,11 @@ struct LoginView: View {
 
             // Error banner
             if let error = auth.error {
-                HStack {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.yellow)
-                    Text(error)
-                        .font(.caption)
+                ErrorBanner(message: error) {
+                    auth.error = nil
                 }
-                .padding(12)
-                .frame(maxWidth: .infinity)
-                .background(.red.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .padding(.horizontal, 32)
-                .padding(.bottom, 12)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 4)
             }
 
             // Actions

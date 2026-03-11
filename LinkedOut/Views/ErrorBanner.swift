@@ -19,9 +19,9 @@ struct ErrorBanner: View {
             Text(message)
                 .font(.subheadline)
                 .foregroundStyle(.white)
-                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
 
-            Spacer()
+            Spacer(minLength: 0)
 
             Button {
                 onDismiss()
@@ -52,9 +52,9 @@ struct InfoBanner: View {
             Text(message)
                 .font(.subheadline)
                 .foregroundStyle(.white)
-                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
 
-            Spacer()
+            Spacer(minLength: 0)
 
             Button {
                 onDismiss()

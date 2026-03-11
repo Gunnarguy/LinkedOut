@@ -35,14 +35,23 @@ struct AppliedJobsView: View {
                 JobDetailView(job: job)
             }
             .overlay(alignment: .top) {
-                if let error = jobs.error {
-                    ErrorBanner(message: error) {
-                        jobs.dismissError()
+                VStack(spacing: 4) {
+                    if let error = jobs.error {
+                        ErrorBanner(message: error) {
+                            jobs.dismissError()
+                        }
+                        .transition(.move(edge: .top).combined(with: .opacity))
                     }
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    if let info = jobs.info {
+                        InfoBanner(message: info) {
+                            jobs.dismissInfo()
+                        }
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
                 }
             }
             .animation(.spring(response: 0.3), value: jobs.error)
+            .animation(.spring(response: 0.3), value: jobs.info)
         }
     }
 
@@ -88,14 +97,23 @@ struct SavedJobsView: View {
                 JobDetailView(job: job)
             }
             .overlay(alignment: .top) {
-                if let error = jobs.error {
-                    ErrorBanner(message: error) {
-                        jobs.dismissError()
+                VStack(spacing: 4) {
+                    if let error = jobs.error {
+                        ErrorBanner(message: error) {
+                            jobs.dismissError()
+                        }
+                        .transition(.move(edge: .top).combined(with: .opacity))
                     }
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    if let info = jobs.info {
+                        InfoBanner(message: info) {
+                            jobs.dismissInfo()
+                        }
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
                 }
             }
             .animation(.spring(response: 0.3), value: jobs.error)
+            .animation(.spring(response: 0.3), value: jobs.info)
         }
     }
 
@@ -128,7 +146,7 @@ struct JobListRow: View {
                     Text(job.roleTitle)
                         .font(.headline)
                         .foregroundStyle(.primary)
-                        .lineLimit(1)
+                        .lineLimit(2)
 
                     Text(job.companyName)
                         .font(.subheadline)
