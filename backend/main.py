@@ -94,12 +94,7 @@ async def _run_ingest_cycle():
             logger.info("All listings already seen — nothing to score")
             return 0
 
-        # Mark all as seen now (even if scoring fails, don't re-try same URLs)
-        for listing in new_listings:
-            store.mark_url_seen(listing.url)
-        store.flush_seen()
-
-        # Two-tier scoring: Flash triage → Pro full scoring
+        # Two-tier scoring: Flash triage → Pro full scoring → local fallback
         prefs = _user_prefs
         total_added = 0
         batch_size = 10
@@ -109,11 +104,15 @@ async def _run_ingest_cycle():
             batch = new_listings[i : i + batch_size]
             results = await triage_and_score(batch, prefs)
 
-            for result in results:
+            for raw_listing, result in zip(batch, results):
+                # Only mark as seen after we've processed it
+                store.mark_url_seen(raw_listing.url)
                 if result.passed_filter and result.job:
                     if result.job.builder_score >= min_builder_score:
                         store.add_pending(result.job)
                         total_added += 1
+
+            store.flush_seen()
 
             passed = sum(1 for r in results if r.passed_filter)
             logger.info(

@@ -146,13 +146,13 @@ async def fetch_hn_whoishiring() -> list[RawJobListing]:
 
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
         try:
-            # Find the latest "Who is hiring?" post
+            # Find the latest "Who is hiring?" post (sorted by date)
             search_resp = await client.get(
-                "https://hn.algolia.com/api/v1/search",
+                "https://hn.algolia.com/api/v1/search_by_date",
                 params={
                     "query": "Ask HN: Who is hiring?",
-                    "tags": "story",
-                    "hitsPerPage": 1,
+                    "tags": "story,ask_hn",
+                    "hitsPerPage": 5,
                 },
             )
             search_resp.raise_for_status()
@@ -160,7 +160,18 @@ async def fetch_hn_whoishiring() -> list[RawJobListing]:
             if not stories:
                 return all_listings
 
-            story_id = stories[0]["objectID"]
+            # Pick the actual monthly "Who is hiring?" (not "right now" variants)
+            story_id = None
+            for story in stories:
+                title = story.get("title", "")
+                # Monthly threads are titled "Ask HN: Who is hiring? (Month Year)"
+                if "who is hiring?" in title.lower() and "right now" not in title.lower():
+                    story_id = story["objectID"]
+                    logger.info(f"HN thread: {title} (id={story_id})")
+                    break
+            if not story_id:
+                # Fall back to first result
+                story_id = stories[0]["objectID"]
 
             # Fetch comments (each comment = 1 job listing)
             comments_resp = await client.get(
@@ -244,12 +255,126 @@ async def fetch_hn_whoishiring() -> list[RawJobListing]:
     return all_listings
 
 
+async def fetch_jobicy() -> list[RawJobListing]:
+    """Fetch jobs from Jobicy API (free, no auth, remote-first)."""
+    all_listings: list[RawJobListing] = []
+    seen_urls: set[str] = set()
+
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        for tag in [
+            "ai",
+            "python",
+            "javascript",
+            "ios",
+            "react",
+            "devops",
+            "data-science",
+        ]:
+            try:
+                resp = await client.get(
+                    "https://jobicy.com/api/v2/remote-jobs",
+                    params={"count": 20, "tag": tag},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+                for job in data.get("jobs", []):
+                    url = job.get("url", "")
+                    if not url or url in seen_urls:
+                        continue
+                    seen_urls.add(url)
+
+                    desc = job.get("jobDescription", "") or ""
+                    desc = re.sub(r"<[^>]+>", " ", desc)
+                    desc = re.sub(r"\s+", " ", desc).strip()
+
+                    salary_min = job.get("annualSalaryMin", "")
+                    salary_max = job.get("annualSalaryMax", "")
+                    salary_text = ""
+                    if salary_min and salary_max:
+                        salary_text = f"${salary_min} - ${salary_max}"
+
+                    location = job.get("jobGeo", "") or "Remote"
+
+                    all_listings.append(
+                        RawJobListing(
+                            title=job.get("jobTitle", "Unknown"),
+                            company=job.get("companyName", "Unknown"),
+                            description=desc[:8000],
+                            url=url,
+                            salary_text=salary_text,
+                            location=location,
+                            is_remote=True,
+                        )
+                    )
+
+            except Exception as e:
+                logger.warning(f"Jobicy fetch failed for tag '{tag}': {e}")
+
+    logger.info(f"Jobicy: fetched {len(all_listings)} listings")
+    return all_listings
+
+
+async def fetch_remoteok() -> list[RawJobListing]:
+    """Fetch jobs from RemoteOK API (free, no auth)."""
+    all_listings: list[RawJobListing] = []
+
+    async with httpx.AsyncClient(
+        timeout=TIMEOUT, headers={"User-Agent": "LinkedOut/1.0"}
+    ) as client:
+        try:
+            resp = await client.get("https://remoteok.com/api")
+            resp.raise_for_status()
+            data = resp.json()
+
+            # First element is metadata, skip it
+            jobs = data[1:] if len(data) > 1 else []
+
+            for job in jobs[:100]:
+                url = job.get("url", "")
+                if not url:
+                    url = f"https://remoteok.com/remote-jobs/{job.get('id', '')}"
+
+                desc = job.get("description", "") or ""
+                desc = re.sub(r"<[^>]+>", " ", desc)
+                desc = re.sub(r"\s+", " ", desc).strip()
+
+                salary_min = job.get("salary_min")
+                salary_max = job.get("salary_max")
+                salary_text = ""
+                if salary_min and salary_max:
+                    salary_text = f"${int(salary_min):,} - ${int(salary_max):,}"
+
+                tags = job.get("tags", []) or []
+                location = job.get("location", "") or "Remote"
+
+                all_listings.append(
+                    RawJobListing(
+                        title=job.get("position", "Unknown"),
+                        company=job.get("company", "Unknown"),
+                        description=desc[:8000],
+                        url=url,
+                        salary_text=salary_text,
+                        location=location,
+                        is_remote=True,
+                    )
+                )
+
+        except Exception as e:
+            logger.warning(f"RemoteOK fetch failed: {e}")
+
+    logger.info(f"RemoteOK: fetched {len(all_listings)} listings")
+    return all_listings
+
+
 async def fetch_all_sources() -> list[RawJobListing]:
     """Fetch from all sources concurrently. Returns deduplicated listings."""
     results = await asyncio.gather(
         fetch_remotive(),
         fetch_himalayas(),
         fetch_hn_whoishiring(),
+        fetch_jobicy(),
+        fetch_remoteok(),
         return_exceptions=True,
     )
 

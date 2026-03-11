@@ -1,7 +1,7 @@
 """LLM-powered job scoring engine — the AI bouncer.
 
 Multi-provider with automatic fallback chain:
-  Gemini Pro → Gemini Flash → OpenAI GPT-5.4 (with thinking)
+  Gemini Pro → Gemini Flash → OpenAI GPT-5.4 → Local keyword scorer
 
 Set LLM_PROVIDER in .env to choose the primary provider.
 """
@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from datetime import datetime, timezone
 
 from openai import AsyncOpenAI
@@ -45,13 +46,16 @@ async def _call_gemini(system: str, user_msg: str, use_flash: bool = False) -> s
     client = _get_gemini_client()
     model = settings.gemini_flash_model if use_flash else settings.gemini_model
     combined = f"{system}\n\n---\n\n{user_msg}"
-    resp = await client.aio.models.generate_content(
-        model=model,
-        contents=combined,
-        config={
-            "temperature": 0.3,
-            "response_mime_type": "application/json",
-        },
+    resp = await asyncio.wait_for(
+        client.aio.models.generate_content(
+            model=model,
+            contents=combined,
+            config={
+                "temperature": 0.3,
+                "response_mime_type": "application/json",
+            },
+        ),
+        timeout=30,
     )
     return resp.text or ""
 
@@ -59,14 +63,17 @@ async def _call_gemini(system: str, user_msg: str, use_flash: bool = False) -> s
 async def _call_openai(system: str, user_msg: str) -> str:
     """Call OpenAI GPT-5.4 with thinking enabled. Raises on failure."""
     client = _get_openai_client()
-    resp = await client.chat.completions.create(
-        model=settings.openai_model,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user_msg},
-        ],
-        temperature=0.3,
-        response_format={"type": "json_object"},
+    resp = await asyncio.wait_for(
+        client.chat.completions.create(
+            model=settings.openai_model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_msg},
+            ],
+            temperature=0.3,
+            response_format={"type": "json_object"},
+        ),
+        timeout=30,
     )
     return resp.choices[0].message.content or ""
 
@@ -397,23 +404,174 @@ async def score_job(
         return ScoringResult(passed_filter=True, job=job)
 
     except Exception as e:
-        logger.exception("Scoring engine error")
+        logger.exception("Scoring engine error — falling back to local scorer")
+        return score_job_locally(raw)
+
+
+# ── Local keyword-based scorer (no LLM needed) ──────────────────────────────
+
+# Seniority terms that are hard rejects
+_SENIOR_RE = re.compile(
+    r"\bsenior\b|\bstaff\b|\blead\b|\bprincipal\b|\bdirector\b|\bVP\b|\bhead of\b",
+    re.IGNORECASE,
+)
+
+# Strict degree requirements (hard reject)
+_STRICT_DEGREE_RE = re.compile(
+    r"(require[ds]?|must have).{0,30}(CS|computer science|engineering) (degree|bachelor)",
+    re.IGNORECASE,
+)
+
+# High-value keywords (boost score)
+_POSITIVE_KEYWORDS = [
+    (r"\bAI\b|artificial intelligence", 0.15),
+    (r"\bLLM\b|large language model|generative AI", 0.15),
+    (r"machine learning|\bML\b", 0.12),
+    (r"product engineer", 0.12),
+    (r"founding engineer", 0.15),
+    (r"\biOS\b|SwiftUI|mobile engineer", 0.10),
+    (r"\bstartup\b|early.stage|seed|series A", 0.10),
+    (r"full.stack", 0.08),
+    (r"\bremote\b", 0.08),
+    (r"python|typescript|react", 0.05),
+    (r"agent(?:ic)?|copilot|chatbot", 0.10),
+    (r"\bjunior\b|\bintern\b|\bentry.level\b", 0.08),
+    (r"product.minded|ship|builder", 0.10),
+]
+_POSITIVE_COMPILED = [(re.compile(p, re.IGNORECASE), s) for p, s in _POSITIVE_KEYWORDS]
+
+# Negative keywords (reduce score)
+_NEGATIVE_KEYWORDS = [
+    (r"10\+ years|15\+ years|8\+ years", -0.20),
+    (r"PhD required", -0.15),
+    (r"\bFortune 500\b|\bFAANG\b", -0.05),
+    (r"enterprise|legacy|CRUD|mainframe", -0.05),
+    (r"\bDevOps\b|\bSRE\b|infrastructure only", -0.03),
+]
+_NEGATIVE_COMPILED = [(re.compile(p, re.IGNORECASE), s) for p, s in _NEGATIVE_KEYWORDS]
+
+
+def score_job_locally(raw: RawJobListing) -> ScoringResult:
+    """Fast keyword-based scoring — no LLM, works offline. Used as fallback."""
+    title = raw.title
+    text = f"{raw.title} {raw.company} {raw.description}"
+
+    # Hard reject: Senior titles
+    if _SENIOR_RE.search(title):
         return ScoringResult(
             passed_filter=False,
-            rejection_reason=f"Scoring error: {e}",
+            rejection_reason=f"Title contains seniority keyword: {title}",
         )
+
+    # Hard reject: Strict CS degree requirement
+    if _STRICT_DEGREE_RE.search(raw.description):
+        return ScoringResult(
+            passed_filter=False,
+            rejection_reason="Strict CS degree requirement detected",
+        )
+
+    # Score based on keyword matches
+    score = 0.35  # Base score — be generous
+
+    for pattern, boost in _POSITIVE_COMPILED:
+        if pattern.search(text):
+            score += boost
+
+    for pattern, penalty in _NEGATIVE_COMPILED:
+        if pattern.search(text):
+            score += penalty  # penalty is negative
+
+    score = max(0.05, min(1.0, score))
+
+    # Extract basic info
+    tech_stack = []
+    tech_patterns = [
+        "Python",
+        "TypeScript",
+        "JavaScript",
+        "React",
+        "Swift",
+        "SwiftUI",
+        "Kotlin",
+        "Go",
+        "Rust",
+        "Java",
+        "Ruby",
+        "Rails",
+        "Django",
+        "FastAPI",
+        "Node.js",
+        "Next.js",
+        "Vue",
+        "Angular",
+        "Docker",
+        "Kubernetes",
+        "AWS",
+        "GCP",
+        "Azure",
+        "PostgreSQL",
+        "MongoDB",
+        "Redis",
+        "PyTorch",
+        "TensorFlow",
+        "LangChain",
+        "OpenAI",
+    ]
+    for tech in tech_patterns:
+        if re.search(r"\b" + re.escape(tech) + r"\b", text, re.IGNORECASE):
+            tech_stack.append(tech)
+
+    is_remote = raw.is_remote or bool(re.search(r"\bremote\b", text, re.IGNORECASE))
+
+    # Parse salary from text
+    salary_floor = 0
+    salary_max = 0
+    salary_match = re.search(r"\$(\d{2,3})[,.]?(\d{3})", raw.salary_text or text)
+    if salary_match:
+        salary_floor = int(salary_match.group(1) + salary_match.group(2))
+
+    job = JobPayload(
+        company_name=raw.company,
+        role_title=raw.title,
+        salary_floor=salary_floor,
+        salary_max=salary_max,
+        is_remote=is_remote,
+        builder_score=round(score, 2),
+        ai_pitch_summary="Scored by local keyword matcher (LLM unavailable)",
+        drafted_cover_letter="",
+        source_url=raw.url,
+        posted_at=datetime.now(timezone.utc),
+        location=raw.location or ("Remote" if is_remote else "Unknown"),
+        tags=tech_stack[:5],
+        description=raw.description[:12000],
+        company_description="",
+        company_size="Unknown",
+        company_stage="Unknown",
+        company_url="",
+        requirements=[],
+        nice_to_haves=[],
+        tech_stack=tech_stack,
+        why_interesting="",
+        red_flags=[],
+        apply_url="",
+        experience_level="Not specified",
+        job_type="Not specified",
+        benefits=[],
+    )
+
+    return ScoringResult(passed_filter=True, job=job)
 
 
 async def score_batch(
     listings: list[RawJobListing],
     prefs: UserPreferences | None = None,
 ) -> list[ScoringResult]:
-    """Score a batch of raw listings sequentially with a small delay to avoid rate limits."""
+    """Score a batch of raw listings. Falls back to local scoring on LLM failure."""
     results = []
     for raw in listings:
         result = await score_job(raw, prefs)
         results.append(result)
-        await asyncio.sleep(2)  # gentle pacing for Pro model
+        await asyncio.sleep(1)  # gentle pacing
     return results
 
 
@@ -421,35 +579,44 @@ async def triage_and_score(
     listings: list[RawJobListing],
     prefs: UserPreferences | None = None,
 ) -> list[ScoringResult]:
-    """Two-tier scoring: Flash triage first, then Pro for survivors.
+    """Two-tier scoring with local fallback.
 
-    This saves ~80% of Pro API calls by filtering out obvious mismatches
-    with the much cheaper/faster Flash model.
+    Tries: Flash triage → Pro scoring → Local keyword scorer (if LLM fails).
+    Always returns results — never drops jobs silently.
     """
     if not listings:
         return []
 
-    # Phase 1: Flash triage (with pacing to avoid rate limits)
+    # Phase 1: Try Flash triage (but if it fails entirely, skip triage and score all)
     logger.info(f"Phase 1: Triaging {len(listings)} listings with Flash...")
+    triage_failed = False
     triage_results = []
-    # Process in small concurrent batches of 5 with delay between batches
-    batch_size = 5
-    for i in range(0, len(listings), batch_size):
-        batch = listings[i : i + batch_size]
-        batch_results = await asyncio.gather(
-            *(triage_job(raw) for raw in batch),
-            return_exceptions=True,
-        )
-        triage_results.extend(batch_results)
-        if i + batch_size < len(listings):
-            await asyncio.sleep(1)  # gentle pacing between triage batches
+    try:
+        batch_size = 5
+        for i in range(0, len(listings), batch_size):
+            batch = listings[i : i + batch_size]
+            batch_results = await asyncio.gather(
+                *(triage_job(raw) for raw in batch),
+                return_exceptions=True,
+            )
+            triage_results.extend(batch_results)
+            if i + batch_size < len(listings):
+                await asyncio.sleep(1)
+    except Exception as e:
+        logger.warning(f"Triage phase failed entirely: {e}")
+        triage_failed = True
 
-    survivors: list[RawJobListing] = []
-    for raw, passed in zip(listings, triage_results):
-        if isinstance(passed, BaseException):
-            survivors.append(raw)  # On error, let it through
-        elif passed:
-            survivors.append(raw)
+    if triage_failed or not triage_results:
+        # LLM triage unavailable — let everything through
+        logger.info("Triage unavailable — passing all listings to scoring")
+        survivors = listings
+    else:
+        survivors: list[RawJobListing] = []
+        for raw, passed in zip(listings, triage_results):
+            if isinstance(passed, BaseException):
+                survivors.append(raw)  # On error, let it through
+            elif passed:
+                survivors.append(raw)
 
     logger.info(f"Phase 1 complete: {len(survivors)}/{len(listings)} passed triage")
 
@@ -458,8 +625,34 @@ async def triage_and_score(
             ScoringResult(passed_filter=False, rejection_reason="Failed triage")
         ] * len(listings)
 
-    # Phase 2: Full Pro scoring on survivors only
-    logger.info(f"Phase 2: Full scoring {len(survivors)} survivors with Pro...")
-    results = await score_batch(survivors, prefs)
+    # Phase 2: Try LLM scoring on first few, detect if LLM is working
+    logger.info(f"Phase 2: Scoring {len(survivors)} survivors...")
+
+    # Test LLM with first listing
+    test_result = await score_job(survivors[0], prefs)
+    llm_works = test_result.passed_filter or test_result.rejection_reason != ""
+
+    # Check if the test itself used local fallback (it would have ai_pitch_summary starting with "Scored by local")
+    if (
+        test_result.job
+        and "local keyword" in (test_result.job.ai_pitch_summary or "").lower()
+    ):
+        llm_works = False
+
+    results = [test_result]
+
+    if llm_works:
+        logger.info("LLM scoring working — using LLM for remaining listings")
+        for raw in survivors[1:]:
+            result = await score_job(raw, prefs)
+            results.append(result)
+            await asyncio.sleep(1)
+    else:
+        logger.warning("LLM scoring failed — using local keyword scorer for all")
+        for raw in survivors[1:]:
+            results.append(score_job_locally(raw))
+
+    passed = sum(1 for r in results if r.passed_filter)
+    logger.info(f"Phase 2 complete: {passed}/{len(survivors)} passed scoring")
 
     return results
