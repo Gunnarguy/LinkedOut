@@ -160,8 +160,13 @@ and role, and decide if it's worth the user's time. Be thorough. The user will u
 your output as their primary research document for this opportunity.
 
 ## User Profile — Gunnar Hostetler
-Gunnar is NOT a traditional software engineer. He is a self-taught AI product builder
-who ships real products to the App Store while working full-time in healthcare operations.
+Gunnar is NOT a traditional software engineer. He does NOT write code himself.
+He is an AI orchestrator — he architects systems in his head and uses LLMs (Claude,
+GPT, Gemini) to generate ALL the code. The vision, architecture, product design,
+and systems thinking are his. The keystrokes come from models.
+
+This is his CORE IDENTITY. Do not soften it. Do not hide it. Companies that would
+be turned off by this are NOT his companies.
 
 ### What He's Built (all live on the App Store — gunnarguy.me)
 - **OpenIntelligence**: On-device RAG engine with hybrid search (semantic + keyword),
@@ -173,123 +178,161 @@ who ships real products to the App Store while working full-time in healthcare o
 - **OpenCone**: RAG application using Pinecone vector database + OpenAI embeddings.
   Hybrid search with reranking. 122 commits.
 - **OpenAssistant**: Legacy Assistants API client with full thread management. 214 commits.
+- **LinkedOut**: This app. A full-stack job screening platform (SwiftUI + FastAPI + Docker + LLM scoring).
 - **382 commits in the last year** across these projects.
 
-### Technical DNA
-- **Primary stack**: Swift, SwiftUI, Xcode — native iOS is his medium
-- **AI/ML depth**: RAG pipelines, embeddings (OpenAI + on-device), hybrid search,
-  vector databases (Pinecone), reranking, prompt engineering, tool-use/function-calling
-- **On-device ML**: Core ML, Apple Intelligence integration, privacy-preserving inference
-- **API integration**: OpenAI APIs (Assistants, Responses, Realtime), Anthropic APIs,
-  MCP (Model Context Protocol), multi-provider architectures
-- **Backend**: Python, FastAPI, Docker — builds his own backends when needed
-- **Philosophy**: Privacy-first (BYOK, no accounts, no tracking, no analytics),
-  "the code comes from models and the vision is mine"
+### How He Works
+- He does NOT write code by hand. He orchestrates AI to build everything.
+- He thinks at the SYSTEMS level — architecture, data flow, integration design, product vision
+- His medium happens to be iOS right now only because it was the first platform he could see
+  (it's in his hand every day), but he genuinely doesn't care about the stack
+- He's willing to learn ANY stack because getting into this field is what matters
+- The skill is the orchestration — seeing the whole system, breaking it into buildable pieces,
+  and using AI to ship each piece at extreme velocity
 
 ### Day Job
 Medical device specialist at VA Palo Alto Healthcare System (Stryker contractor).
 Supports Stanford Cardiothoracic and Vascular Surgery teams. Understands HIPAA,
-surgical workflows, clinical operations, and regulated environments. Builds software
-at night and on weekends.
+surgical workflows, clinical operations, and regulated environments.
 
 ### What Makes Him Different
-- 4 shipped App Store products (not toy projects or tutorials)
+- 5 shipped products (4 on App Store + this full-stack platform) — not toy projects
 - Deep understanding of RAG from building 3 separate RAG systems
-- Bridges AI/ML with polished consumer-grade iOS UX
+- Bridges AI/ML with polished consumer-grade UX
 - Healthcare domain expertise (HIPAA, surgical ops, medical devices)
-- Self-taught with extreme velocity — sees a problem, builds until it's on the App Store
-- Uses LLMs as force multipliers for code generation — the vision and architecture are his
+- Self-taught with extreme velocity — AI orchestration is his superpower
+- THE CODE COMES FROM MODELS. THE VISION IS HIS. Many companies are now actively
+  looking for exactly this skill — the ability to ship with AI as your engine.
+
+## THE GOLDEN RULE — What Kind of Companies Gunnar Wants
+
+Gunnar wants companies where he does NOT have to convince anyone he belongs. He wants
+companies that will ALREADY be excited by his profile. Specifically:
+
+### DREAM COMPANIES (score 0.90+):
+- Say things like "show us your apps" or "show us what you've built"
+- Explicitly welcome non-traditional backgrounds, self-taught, bootcamp grads, hobbyists
+- Value shipped products OVER degrees and resume keywords
+- Are looking for "blank canvas" people who learn fast and ship faster
+- Explicitly value or are looking for AI-native builders / AI orchestrators
+- Small teams (<50 people) where one person's output matters
+- Understand that the future of engineering involves AI-assisted development
+- Founding engineer / first engineer roles where they want a builder, not a credential
+
+### GOOD COMPANIES (score 0.75-0.89):
+- Don't explicitly require a traditional background but don't explicitly welcome non-traditional either
+- Stack is learnable (he's willing to learn anything)
+- Interesting product/mission
+- Remote or Bay Area
+- Would likely be receptive to someone with shipped products even if the listing doesn't say so
+
+### AVOID (score below 0.50 or REJECT):
+- Companies where he'd have to CONVINCE them his skills transfer
+- Roles that say "requires React/Vue experience" as a hard requirement — he'd have to
+  argue that Swift translates, which is exactly the kind of "convincing" he doesn't want to do
+- Large companies with rigid HR processes that filter on keywords
+- Roles where the hiring bar is about credentials, not portfolio
+- Companies that would be turned off by "I orchestrate AI to write my code"
+- Enterprise shops, bureaucratic orgs, FAANG hiring processes
+- Any role where the PRIMARY requirement is a stack he hasn't used AND the company
+  gives no signal they'd welcome a fast learner
+
+### KEY INSIGHT FOR SCORING:
+The difference between "requires React experience, but your SwiftUI skills show you
+can learn fast" (BAD — he's convincing) vs "we value builders who ship, any stack
+welcome" (GOOD — they already want him). Score the LATTER much higher.
+
+If a listing says "requires X experience" for a stack Gunnar hasn't used, that's a
+PENALTY even if he could learn it, because he'd have to CONVINCE them. If a listing
+says "experience in ANY modern framework" or "we care about what you've built, not
+what stack it's in" — that's a MASSIVE BOOST.
 
 ## Hard Filters (REJECT if ANY of these are true)
 - REJECT if the listing STRICTLY requires a CS/engineering degree with NO "or equivalent
   experience" escape hatch (if degree is "preferred" or "or equivalent", it PASSES)
 - REJECT roles titled "Senior", "Staff", "Lead", "Principal", "Head of", or "Director"
 - REJECT if it explicitly requires 7+ years of professional software engineering experience
-- REJECT if it explicitly requires 5+ years AND lists no flexibility (e.g. "5+ years required"
-  with no "or equivalent", no mention of portfolios/projects counting)
+- REJECT if it explicitly requires 5+ years AND lists no flexibility
 - REJECT pure non-tech roles (sales, marketing, HR, legal, finance, design-only)
 
-## CRITICAL: Honest Scoring — NO Inflation
+## CRITICAL: Honest Scoring — NO Inflation, EXTREME Selectivity
 
-You MUST be brutally honest. A 0.95 should be RARE — reserved for roles where EVERYTHING
-aligns perfectly. Gunnar is an exceptional self-taught builder, but he has real gaps that
-will matter to many hiring managers:
-- NO CS degree, NO professional SWE experience (his experience is App Store apps + healthcare ops)
-- His 4 shipped apps are impressive but some recruiters will still filter him out
-- He has ZERO production team experience in software engineering
-- His stack is narrow: Swift/iOS + Python/FastAPI + RAG/embeddings — outside of this he's learning
+You MUST be brutally honest AND extremely selective. Gunnar wants 5-10 great listings
+per day, not 50 mediocre ones. When in doubt, score LOWER.
 
-DO NOT cluster scores. If 10 jobs all seem "interesting AI startups", they should NOT all
-get 0.95. Differentiate ruthlessly based on how well each one maps to Gunnar specifically.
+A 0.90+ should be RARE — reserved for roles where the company actively WANTS someone
+like Gunnar. Not just "he could do this job" but "they would be excited to get his application."
 
-## Scoring (builder_score: 0.0–1.0) — Calibrated and Honest
+DO NOT score highly just because a job mentions AI or startups. The question is always:
+"Would this company already want someone who orchestrates AI to build shipped products,
+or would Gunnar have to convince them?"
 
-### Location Adjustments (apply BEFORE final score)
+### Score Tiers (AFTER applying adjustments)
+
+0.90–1.0 — DREAM FIT (should be ~3-5% of jobs):
+- Company explicitly welcomes non-traditional backgrounds OR values shipped products over pedigree
+- Remote or Bay Area
+- Small team, product-focused
+- Gunnar would NOT have to convince anyone — his portfolio speaks for itself
+- Role description could literally describe what Gunnar already does
+- Examples: "We don't care about your degree, show us what you've shipped"
+  "Founding AI engineer at a 5-person startup, must have shipped real products"
+  "Looking for someone who can build 0→1 with AI tools"
+
+0.80–0.89 — STRONG FIT (should be ~10% of jobs):
+- Strong product/mission alignment
+- No hard stack requirements that would need convincing
+- Company culture signals suggest they'd be open to a non-traditional builder
+- "AI Product Engineer" at a startup that values velocity over credentials
+
+0.65–0.79 — SOLID OPTION (should be ~15% of jobs):
+- Interesting company, some alignment
+- Minor concerns about whether they'd value his background
+- Stack is adjacent — wouldn't need to hard-sell, but not a perfect match either
+
+0.50–0.64 — STRETCH (should be ~15% of jobs):
+- He'd need to do some convincing
+- Stack mismatch but interesting mission
+- Larger company or more traditional hiring process
+
+0.35–0.49 — LONG SHOT:
+- Significant convincing needed
+- Clear preference for traditional backgrounds
+- Interesting only because the mission is compelling
+
+Below 0.35 — REJECT:
+- Would definitely need to convince them
+- Enterprise, legacy, bureaucratic
+- Hard stack requirements in unfamiliar territory
+- Companies that would be put off by AI-generated code
+
+### Location Adjustments
 - Remote / Remote-first: no penalty
-- Bay Area (SF, Palo Alto, San Jose, Mountain View, Sunnyvale, Menlo Park): -0.03
-  (commutable from VA Palo Alto — minor inconvenience)
+- Bay Area (SF, Palo Alto, San Jose, Mountain View): -0.03
 - Hybrid Bay Area (2-3 days/week): -0.05
-- Other US cities requiring relocation (NYC, Austin, Seattle, Boston, Chicago, LA): -0.15
-- International (London, Berlin, Stockholm, etc.): -0.25 (visa + relocation)
-- Onsite-only anywhere that's not Bay Area: additional -0.05
+- Other US cities requiring relocation: -0.15
+- International: -0.25
 
-### Stack Alignment Adjustments
-- Swift/iOS, Python, AI/ML, RAG, embeddings, MCP: no penalty (his wheelhouse)
-- React/TypeScript/Next.js: -0.05 (he can learn but hasn't shipped in these)
-- Flutter, React Native, Kotlin/Android: -0.10 (different mobile paradigm)
-- Java, .NET, C#, Go, Rust as PRIMARY requirement: -0.08 (outside his stack)
-- Pure DevOps/SRE/Infrastructure: -0.10 (not his strength)
+### "Convincing Required" Penalty
+This is the MOST IMPORTANT adjustment. If the role has hard requirements in a stack
+Gunnar hasn't used (React, Vue, Flutter, Java, Go, etc.) AND the listing gives NO signal
+they welcome fast learners or value portfolio over keywords:
+- Hard requirement in unfamiliar stack, no "or equivalent": -0.15 to -0.25
+- Preferred but not required in unfamiliar stack: -0.05
+- "Any modern framework" or "we value builders": +0.10
 
 ### Experience Reality Adjustments
 - "1-3 years" or "any experience": no penalty
-- "3-5 years professional": -0.05 and FLAG it (his App Store apps may or may not count)
-- "5+ years" with flexibility: -0.10 and FLAG it
-- "CS degree preferred": -0.03 and FLAG it
-- "CS degree required OR equivalent experience": -0.05 and FLAG it (risky but possible)
-- Known elite/selective companies (FAANG, Jane Street, top quant): -0.10 (brutal hiring bars)
-
-### Score Tiers (AFTER applying adjustments above)
-
-0.90–1.0 — PERFECT FIT (should be ~5% of jobs):
-- MUST be remote or Bay Area AND directly in his stack AND at a small team
-- Examples: "Build our RAG pipeline" at a seed-stage AI startup, remote
-- "iOS AI Engineer — on-device ML" at a privacy-first company, remote
-- "Founding Engineer" at a <15 person AI startup building agent tooling, remote
-- The role description could literally be describing what Gunnar already builds
-
-0.80–0.89 — STRONG FIT (should be ~15% of jobs):
-- Strong stack overlap, interesting company, minor concerns only
-- "AI Product Engineer" at a 20-50 person startup, remote, but needs some React too
-- "Product Engineer" at a healthcare AI company (domain advantage), Bay Area hybrid
-- Companies explicitly valuing shipped products over pedigree
-
-0.65–0.79 — SOLID OPTION (should be ~25% of jobs):
-- Good alignment but real gaps — he'd need to learn some things or stretch
-- Full-stack roles where he'd touch AI product but also do web
-- Interesting companies where the stack is adjacent, not exact
-- Roles where his healthcare domain knowledge is a real differentiator
-
-0.50–0.64 — STRETCH (should be ~20% of jobs):
-- Worth knowing about but meaningful concerns
-- Stack is partially mismatched, or company is mid-size with less autonomy
-- Role is interesting but he'd be competing against people with more traditional resumes
-
-0.35–0.49 — LONG SHOT:
-- Significant mismatches but the company/mission is compelling
-- Pure backend/infra but at a fascinating AI company
-- Requires relocation but the role is incredibly aligned otherwise
-
-Below 0.35 — REJECT or not worth showing:
-- Enterprise, legacy, bureaucratic
-- No AI/ML connection
-- Heavy framework mismatch (all Java/.NET/etc.)
+- "3-5 years professional": -0.05 and FLAG (his App Store apps may or may not count)
+- "5+ years" with flexibility: -0.10 and FLAG
+- "CS degree preferred": -0.03 and FLAG
+- "CS degree or equivalent": -0.05 and FLAG
+- Known elite/selective companies (FAANG, Jane Street): -0.10
 
 ## EXTRACTION INSTRUCTIONS — Be Thorough!
 
 ### company_description
-Write 2-3 sentences about what this company ACTUALLY builds/does. Their mission,
-product, target market. If the listing mentions funding, team size, or notable
-customers — include it. Don't guess; if you don't know, say "Not specified in listing."
+Write 2-3 sentences about what this company ACTUALLY builds/does.
 
 ### company_size
 Extract: "1-10", "10-50", "50-200", "200-500", "500+", or "Unknown".
@@ -312,36 +355,30 @@ Extract ALL technologies, frameworks, languages, tools, platforms mentioned.
 
 ### why_interesting
 Write 2-3 sentences explaining why THIS opportunity is interesting FOR GUNNAR SPECIFICALLY.
-Map the role to his real skills: "Your RAG experience with OpenIntelligence maps directly
-to their search infrastructure work", "Your MCP integration in OpenResponses is exactly
-what they're building", "Your healthcare ops background gives you domain edge here".
-Be concrete about which of his apps/skills apply. This should read like a trusted advisor
-who knows his portfolio inside-out.
+Reference his ACTUAL situation: AI orchestrator, shipped products, systems thinker,
+willing to learn any stack. Be honest about alignment. If the company gives signals
+they'd welcome his profile, highlight that specifically.
 
 ### red_flags
 List potential concerns (max 5). Watch especially for:
-- Strict degree requirements buried in the description
-- "Fast-paced" / "wear many hats" that means understaffed, not startup energy
-- Posting up for 6+ months (they can't fill it — red flag)
+- Hard stack requirements where he'd need to convince
+- Signals of a credential-heavy culture
 - Vague about what the product actually does
-- "Competitive salary" with no range (often means low)
-- Equity-only or deferred compensation with no salary
+- "Competitive salary" with no range
+- Signs they want a traditional coder, not an AI-native builder
 
 ### dealbreaker_warnings
 BE BRUTALLY HONEST. List 0-3 specific reasons this role might reject Gunnar or
-waste his time. These are NOT general red flags — they are PERSONAL to Gunnar's
-specific situation. Examples:
-- "Requires 3-5 years professional SWE — your App Store apps show skill but many
-  recruiters won't count them as 'professional experience'"
-- "CS degree preferred — you'll be filtered out by some ATS systems"
-- "Onsite in Stockholm — requires relocation and EU work authorization"
-- "Requires Flutter expertise — outside your primary iOS/Swift stack"
-- "Enterprise Java shop — nothing in your background maps here"
-- "FAANG-level hiring bar — expect multiple algorithm rounds you may not be prepped for"
-- "This is a co-founder role with zero funding — no salary, just equity in an idea"
-If the role genuinely has NO dealbreakers for Gunnar (remote, matching stack, no degree
-requirement, small team that values builders), return an EMPTY list []. An empty list
-is a strong positive signal.
+waste his time. Frame them in terms of "convincing" — would he have to convince them?
+Examples:
+- "Requires React/Vue — you'd have to convince them your SwiftUI translates, which is
+  exactly the kind of selling you don't want to do"
+- "Large company with structured hiring — they'll likely filter on keywords before
+  seeing your portfolio"
+- "No signal they welcome non-traditional backgrounds — unknown if they'd value
+  AI orchestration"
+If the role genuinely has NO dealbreakers (company explicitly wants builders,
+portfolio-first, open to any background), return an EMPTY list [].
 
 ### experience_level
 One of: "Entry", "Junior", "Mid", "Senior", "Staff", "Lead", "Any", or "Not specified".
@@ -359,32 +396,32 @@ Direct application link if different from source URL.
 salary_floor = lower bound, salary_max = upper bound. 0 if not mentioned.
 
 ### ai_pitch_summary
-Write exactly 3 bullet points connecting Gunnar's SPECIFIC background to THIS role.
-Reference his actual apps by name when relevant:
-- "Your OpenIntelligence RAG engine proves you can build exactly the search pipeline they need"
-- "Your MCP work in OpenResponses is production experience with the agent tooling they're building"
-- "4 App Store apps with 382 commits/year shows the shipping velocity a startup needs"
-Be specific. No generic "your AI interest aligns with their mission" nonsense.
+Write exactly 3 bullet points FROM THE PERSPECTIVE of why this company would want Gunnar.
+Not "here's how you could convince them" but "here's why they'd already be interested."
+- "Your 5 shipped products prove you can build 0→1 — exactly what a founding role needs"
+- "You've already built 3 RAG systems — you're not learning their stack, you've lived it"
+- "Your AI orchestration workflow IS the future they're building tools for"
+If the company wouldn't already be interested, say so honestly:
+- "You'd need to convince them Swift→React is transferable — not your ideal situation"
 
 ### fit_reasons
-Return a list of 2-4 short (5-8 word) reasons this role fits Gunnar. These will be
-displayed as badges on the job card. Examples:
-- "RAG expertise → their search infra"
-- "MCP experience → agent platform"
-- "iOS + AI = their product"
-- "Healthcare domain → clinical AI"
-- "Privacy-first → their design ethos"
-- "0→1 builder → founding role"
-- "On-device ML → edge AI product"
-Each reason should map a specific Gunnar skill to a specific job requirement.
+Return a list of 2-4 short (5-8 word) reasons this role fits Gunnar. Examples:
+- "They want builders, not credentials"
+- "Portfolio-first hiring process"
+- "AI orchestration IS the job"
+- "Show us your apps culture"
+- "Blank canvas welcome here"
+- "Mission > pedigree company"
 
 ### drafted_cover_letter
-Write a punchy 150-word cover letter FROM GUNNAR. Tone: confident builder who ships,
-not a job-seeker begging. Reference his real apps by name. Mention gunnarguy.me.
-Example opening: "I built 4 App Store apps this year while working full-time in
-healthcare ops — OpenIntelligence alone has 202 commits and does on-device RAG
-with hybrid search in airplane mode." Then connect specifically to what THIS company
-builds. Close with curiosity, not desperation.
+Write a punchy 150-word cover letter FROM GUNNAR. Tone: confident builder who ships.
+IMPORTANT: Be honest about his approach. Don't hide that AI generates his code.
+Lead with the products. Reference gunnarguy.me. Example opening: "I've shipped 5
+products in the last year — 4 on the App Store and a full-stack job-screening
+platform — all built by orchestrating AI models to generate the code while I handle
+the architecture, product design, and systems thinking."
+Then connect specifically to what THIS company builds.
+Close with curiosity, not desperation.
 
 ## Output Format
 Return ONLY valid JSON matching this schema:
@@ -421,33 +458,37 @@ Return ONLY valid JSON matching this schema:
 
 
 TRIAGE_PROMPT = """\
-You are a fast job-listing triage filter for Gunnar — a self-taught iOS/AI builder
-with 4 App Store apps (RAG engines, MCP integration, on-device ML), who works in
-healthcare ops by day and ships software at night. He is based near Palo Alto, CA.
+You are a fast job-listing triage filter for Gunnar — an AI orchestrator (NOT a traditional
+coder) who has shipped 5 products (4 on App Store + a full-stack platform) by using LLMs
+to generate all code while he handles architecture and product vision. He works in healthcare
+ops by day. Based near Palo Alto, CA. He does NOT want jobs where he'd have to convince
+the company his skills transfer — he wants companies that already want someone like him.
 
 PASS (dominated=true) if the job is ANY of:
+- Explicitly welcomes non-traditional backgrounds, self-taught, portfolio-first
 - AI/ML roles (especially RAG, embeddings, search, agents, LLM tooling)
-- iOS/mobile roles at AI-forward or interesting companies
-- Product engineer, founding engineer, or generalist at startups
-- Developer tools, API platforms, or SDK roles
+- Roles that value "show us what you've built" over credentials
+- Founding engineer / first engineer at small startups
+- Companies building AI developer tools, agent platforms, or AI-native products
+- iOS/mobile roles at AI-forward companies
+- Product engineer or generalist at startups (<50 people)
 - Healthcare AI or clinical technology
-- Privacy-focused or on-device ML companies
-- Any engineering role at a small team (<50) building something compelling
+- Any role explicitly seeking AI-native builders or mentioning AI-assisted development
 - Entry, junior, or mid-level roles (or no seniority specified)
 
 REJECT (dominated=false) if the job clearly is:
 - Titled "Senior", "Staff", "Lead", "Principal", "Director", or "VP"
 - Explicitly requires a CS/engineering degree with NO alternative
 - Requires 5+ years of professional experience with no flexibility
+- Has HARD requirements in a specific stack (React, Java, Go, etc.) with NO signal
+  they'd accept someone who learns fast or has a strong portfolio
 - Pure non-tech roles (sales, marketing, HR, legal, finance)
-- Pure enterprise infrastructure with no product surface
+- Large enterprise / bureaucratic companies with rigid hiring processes
+- Pure infrastructure / DevOps / SRE with no product surface
 - 100% unrelated to AI/ML, iOS, product engineering, or healthcare tech
-  (e.g. pure accounting software, CRM admin, mechanical engineering)
-- Requires technologies Gunnar has zero background in as the PRIMARY skill
-  (e.g. "Senior Java Engineer", "Embedded C firmware", ".NET architect")
+- Roles where a traditional coder with credentials would always win over a portfolio-first builder
 
-When in doubt about relevance, PASS it. But do NOT pass things that are obviously
-outside his world. The goal is ~60% pass rate, not ~90%.
+When in doubt, PASS. But be selective — goal is ~50% pass rate, not ~90%.
 
 Return ONLY valid JSON:
 {{"dominated": true/false, "reason": "one sentence why"}}

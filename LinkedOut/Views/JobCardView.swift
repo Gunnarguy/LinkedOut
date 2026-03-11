@@ -95,8 +95,9 @@ struct JobCardView: View {
                         HStack(alignment: .top, spacing: 4) {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .font(.system(size: 8))
+                                .padding(.top, 3)
                             Text(warning)
-                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         .font(.caption2.weight(.medium))
                         .foregroundStyle(.red.opacity(0.8))

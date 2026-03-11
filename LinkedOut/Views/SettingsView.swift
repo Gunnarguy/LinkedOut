@@ -60,7 +60,7 @@ struct SettingsView: View {
                                 .foregroundStyle(.secondary)
                                 .tracking(1)
 
-                            Text("Self-taught iOS/AI builder with 4 shipped App Store apps, working in healthcare ops at VA Palo Alto. 382 commits/year. No CS degree, no professional SWE experience — but real products that real people use.")
+                            Text("AI orchestrator — does NOT write code by hand. Ships products by directing LLMs to generate all code while handling architecture, product design, and systems thinking. 5 shipped products (4 App Store + LinkedOut). 382 commits/year. Working in healthcare ops at VA Palo Alto. Looking for companies that already want someone like this — no convincing required.")
                                 .font(.subheadline)
                                 .foregroundStyle(.primary.opacity(0.85))
                         }
@@ -75,22 +75,22 @@ struct SettingsView: View {
 
                 // ── Your Weapons ────────────────────────────────────
                 Section {
+                    StrengthRow(icon: "sparkles", color: .purple, title: "AI Orchestration",
+                                detail: "THE core skill — directs LLMs to ship complete products at extreme velocity")
                     StrengthRow(icon: "hammer.fill", color: .orange, title: "RAG / Embeddings / Vector Search",
                                 detail: "OpenIntelligence, OpenCone, OpenAssistant — 3 production RAG systems")
-                    StrengthRow(icon: "iphone", color: .blue, title: "Swift / SwiftUI / iOS",
-                                detail: "4 App Store apps, Core ML, Apple Intelligence")
-                    StrengthRow(icon: "link", color: .indigo, title: "MCP / Agent Orchestration",
+                    StrengthRow(icon: "shippingbox.fill", color: .green, title: "5 Shipped Products",
+                                detail: "4 App Store + LinkedOut (full-stack). Not tutorials — real products.")
+                    StrengthRow(icon: "link", color: .indigo, title: "MCP / Agent Tooling",
                                 detail: "OpenResponses — tool-use, multi-model, Computer Use")
-                    StrengthRow(icon: "brain", color: .pink, title: "On-Device ML / Edge AI",
-                                detail: "Core ML embeddings, privacy-preserving inference")
+                    StrengthRow(icon: "brain", color: .pink, title: "Systems Thinking",
+                                detail: "Architecture, data flow, integration design — stack-agnostic")
                     StrengthRow(icon: "cross.case.fill", color: .red, title: "Healthcare Domain",
                                 detail: "HIPAA, surgical workflows, medical devices, VA system")
-                    StrengthRow(icon: "server.rack", color: .green, title: "Python / FastAPI / Docker",
-                                detail: "Builds backends when needed — this app runs on one")
                 } header: {
                     Text("Your Weapons (score boosters)")
                 } footer: {
-                    Text("Jobs matching these skills score highest. The closer the overlap, the higher the score.")
+                    Text("Companies that value these skills — especially AI orchestration and shipped products — score highest.")
                 }
 
                 // ── Hard Filters (instant reject) ───────────────────
@@ -116,12 +116,12 @@ struct SettingsView: View {
                         PenaltyRow(label: "International (London, Berlin…)", penalty: "−25%", color: .red)
                     }
 
-                    DisclosureGroup("Stack Alignment Penalties") {
-                        PenaltyRow(label: "Swift / iOS / Python / AI/ML / RAG", penalty: "None", color: .green)
-                        PenaltyRow(label: "React / TypeScript / Next.js", penalty: "−5%", color: .yellow)
-                        PenaltyRow(label: "Flutter / React Native / Kotlin", penalty: "−10%", color: .orange)
-                        PenaltyRow(label: "Java / .NET / C# / Go / Rust (primary)", penalty: "−8%", color: .orange)
-                        PenaltyRow(label: "Pure DevOps / SRE / Infrastructure", penalty: "−10%", color: .orange)
+                    DisclosureGroup("\"Convincing Required\" Penalties") {
+                        PenaltyRow(label: "Company wants builders / portfolio-first", penalty: "+10%", color: .green)
+                        PenaltyRow(label: "Any modern framework / stack-agnostic", penalty: "+10%", color: .green)
+                        PenaltyRow(label: "Stack preferred but not required", penalty: "−5%", color: .yellow)
+                        PenaltyRow(label: "Hard stack req, no learner signal", penalty: "−15 to −25%", color: .red)
+                        PenaltyRow(label: "Enterprise / rigid HR / credential-heavy", penalty: "−15%", color: .red)
                     }
 
                     DisclosureGroup("Experience Reality Penalties") {
@@ -140,20 +140,20 @@ struct SettingsView: View {
 
                 // ── Score Tiers Explained ───────────────────────────
                 Section {
-                    ScoreTierRow(range: "90-100", emoji: "🎯", label: "Perfect Fit",
-                                 detail: "Remote, your exact stack, small team. Rare — maybe 5% of jobs.", color: .green)
+                    ScoreTierRow(range: "90-100", emoji: "🎯", label: "Dream Fit",
+                                 detail: "They already want someone like you. No convincing needed. ~3-5% of jobs.", color: .green)
                     ScoreTierRow(range: "80-89", emoji: "💪", label: "Strong Fit",
-                                 detail: "Great alignment, minor gaps. Worth applying immediately.", color: .blue)
+                                 detail: "Culture signals say they'd be excited by your profile. ~10% of jobs.", color: .blue)
                     ScoreTierRow(range: "65-79", emoji: "👍", label: "Solid Option",
-                                 detail: "Good alignment but you'd need to learn or stretch.", color: .indigo)
+                                 detail: "Interesting company, some alignment. Minor unknowns. ~15% of jobs.", color: .indigo)
                     ScoreTierRow(range: "50-64", emoji: "🤔", label: "Stretch",
-                                 detail: "Meaningful concerns but worth knowing about.", color: .orange)
-                    ScoreTierRow(range: "45-49", emoji: "🎲", label: "Long Shot",
-                                 detail: "Significant mismatches but compelling mission.", color: .red)
+                                 detail: "You'd need to do some convincing. ~15% of jobs.", color: .orange)
+                    ScoreTierRow(range: "35-49", emoji: "🎲", label: "Long Shot",
+                                 detail: "Significant convincing needed but compelling mission.", color: .red)
                 } header: {
                     Text("What the scores mean")
                 } footer: {
-                    Text("Below 45 never reaches your queue. The old system showed 219 jobs at 0.95 — now scores actually mean something.")
+                    Text("Below 35 never reaches your queue. The key question: would they already want you, or would you have to convince them?");
                 }
 
                 // ── Editable Preferences ────────────────────────────
