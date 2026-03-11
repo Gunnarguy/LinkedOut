@@ -41,21 +41,23 @@ def _get_gemini_client():
     return _gemini_client
 
 
-async def _call_gemini(system: str, user_msg: str, use_flash: bool = False) -> str:
+async def _call_gemini(
+    system: str, user_msg: str, use_flash: bool = False, timeout: int = 60
+) -> str:
     """Call Google Gemini (Pro or Flash). Raises on failure."""
     client = _get_gemini_client()
     model = settings.gemini_flash_model if use_flash else settings.gemini_model
-    combined = f"{system}\n\n---\n\n{user_msg}"
     resp = await asyncio.wait_for(
         client.aio.models.generate_content(
             model=model,
-            contents=combined,
+            contents=user_msg,
             config={
-                "temperature": 0.3,
+                "system_instruction": system,
+                "temperature": 1.0,
                 "response_mime_type": "application/json",
             },
         ),
-        timeout=30,
+        timeout=timeout,
     )
     return resp.text or ""
 
@@ -78,32 +80,46 @@ async def _call_openai(system: str, user_msg: str) -> str:
     return resp.choices[0].message.content or ""
 
 
-async def _call_llm(system: str, user_msg: str, use_flash: bool = False) -> str:
+async def _call_llm(
+    system: str, user_msg: str, use_flash: bool = False, timeout: int = 60
+) -> str:
     """Route LLM call with automatic fallback chain.
 
     Chain: Gemini Pro/Flash → Flash (if Pro rate-limited) → OpenAI GPT-5.4
+    Retries on transient errors (rate limits, timeouts, server disconnects).
     """
     provider = settings.llm_provider.lower()
-    max_retries = 2
+    max_retries = 3
 
     for attempt in range(max_retries):
         try:
             if provider == "openai":
                 return await _call_openai(system, user_msg)
             elif provider == "gemini":
-                return await _call_gemini(system, user_msg, use_flash=use_flash)
+                return await _call_gemini(
+                    system, user_msg, use_flash=use_flash, timeout=timeout
+                )
             else:
                 raise ValueError(f"Unknown LLM provider: {provider}")
 
         except Exception as e:
             error_str = str(e)
+            error_type = type(e).__name__
             is_rate_limit = "429" in error_str or "RESOURCE_EXHAUSTED" in error_str
+            is_transient = (
+                is_rate_limit
+                or isinstance(e, asyncio.TimeoutError)
+                or "disconnected" in error_str.lower()
+                or "server" in error_str.lower()
+                or "connection" in error_str.lower()
+                or error_str == ""  # empty error = timeout
+            )
 
-            if is_rate_limit and attempt < max_retries - 1:
+            if is_transient and attempt < max_retries - 1:
                 wait_time = 3 * (attempt + 1)
                 logger.warning(
-                    f"Rate limited (attempt {attempt + 1}/{max_retries}), "
-                    f"waiting {wait_time}s..."
+                    f"[LLM] {error_type} (attempt {attempt + 1}/{max_retries}): "
+                    f"{error_str or '(empty)'} — retrying in {wait_time}s..."
                 )
                 await asyncio.sleep(wait_time)
                 continue
@@ -113,7 +129,9 @@ async def _call_llm(system: str, user_msg: str, use_flash: bool = False) -> str:
                 if provider == "gemini" and not use_flash:
                     logger.warning("Gemini Pro exhausted → trying Flash...")
                     try:
-                        return await _call_gemini(system, user_msg, use_flash=True)
+                        return await _call_gemini(
+                            system, user_msg, use_flash=True, timeout=timeout
+                        )
                     except Exception as flash_err:
                         logger.warning(f"Flash also failed: {flash_err}")
 
@@ -126,6 +144,9 @@ async def _call_llm(system: str, user_msg: str, use_flash: bool = False) -> str:
                         logger.error(f"OpenAI fallback also failed: {oai_err}")
                         raise oai_err from e
 
+            logger.error(
+                f"[LLM] Final failure ({error_type}): {error_str or '(empty)'}"
+            )
             raise
 
     raise RuntimeError("LLM call failed after max retries")
@@ -445,7 +466,7 @@ async def triage_job(raw: RawJobListing) -> bool:
         logger.info(f"[TRIAGE] {'PASS' if passed else 'FAIL'} | {raw.title} @ {raw.company} | {reason}")
         return passed
     except Exception as e:
-        logger.warning(f"[TRIAGE] ERROR for {raw.title} @ {raw.company}: {e} — letting through")
+        logger.warning(f"[TRIAGE] ERROR for {raw.title} @ {raw.company}: {type(e).__name__}: {e or '(empty)'} — letting through")
         return True
 
 
@@ -526,7 +547,7 @@ async def score_job(
         return ScoringResult(passed_filter=True, job=job)
 
     except Exception as e:
-        logger.warning(f"[SCORE] LLM ERROR for {raw.title} @ {raw.company}: {e} — falling back to local")
+        logger.warning(f"[SCORE] LLM ERROR for {raw.title} @ {raw.company}: {type(e).__name__}: {e or '(empty)'} — falling back to local")
         return score_job_locally(raw)
 
 
