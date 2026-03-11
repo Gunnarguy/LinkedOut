@@ -43,10 +43,13 @@ actor APIClient {
     private let session: URLSession
     private let decoder: JSONDecoder
 
+    /// Max retries for transient network errors
+    private let maxRetries = 2
+
     init() {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 120
+        config.timeoutIntervalForRequest = 60
+        config.timeoutIntervalForResource = 300
         self.session = URLSession(configuration: config)
 
         self.decoder = JSONDecoder()
@@ -118,6 +121,10 @@ actor APIClient {
 
     func refreshIngest() async throws -> IngestResponse {
         return try await post("/api/ingest/refresh", body: Optional<String>.none)
+    }
+
+    func fetchIngestStatus() async throws -> IngestStatusResponse {
+        return try await get("/api/ingest/status")
     }
 
     // MARK: - Preferences
@@ -201,21 +208,52 @@ actor APIClient {
     private func performRequest(_ request: URLRequest) async throws -> (Data, URLResponse) {
         let method = request.httpMethod ?? "GET"
         let url = request.url?.absoluteString ?? "?"
-        let start = CFAbsoluteTimeGetCurrent()
-        print("[API] ➡️ \(method) \(url)")
-        do {
-            let (data, response) = try await session.data(for: request)
-            let elapsed = String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - start) * 1000)
-            if let http = response as? HTTPURLResponse {
-                let size = data.count
-                print("[API] ⬅️ \(http.statusCode) \(method) \(url) — \(elapsed)ms, \(size)B")
+
+        for attempt in 0...maxRetries {
+            let start = CFAbsoluteTimeGetCurrent()
+            if attempt > 0 {
+                print("[API] 🔄 Retry \(attempt)/\(maxRetries) for \(method) \(url)")
+                // Exponential backoff: 1s, 2s
+                try await Task.sleep(nanoseconds: UInt64(attempt) * 1_000_000_000)
+            } else {
+                print("[API] ➡️ \(method) \(url)")
             }
-            return (data, response)
-        } catch {
-            let elapsed = String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - start) * 1000)
-            print("[API] ❌ NETWORK ERROR \(method) \(url) — \(elapsed)ms — \(error.localizedDescription)")
-            throw APIError.networkError(error)
+            do {
+                let (data, response) = try await session.data(for: request)
+                let elapsed = String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - start) * 1000)
+                if let http = response as? HTTPURLResponse {
+                    let size = data.count
+                    print("[API] ⬅️ \(http.statusCode) \(method) \(url) — \(elapsed)ms, \(size)B")
+                    // Don't retry client errors (4xx) — only server/network errors
+                    if http.statusCode >= 500 && attempt < maxRetries {
+                        print("[API] ⚠️ Server error \(http.statusCode), will retry...")
+                        continue
+                    }
+                }
+                return (data, response)
+            } catch {
+                let elapsed = String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - start) * 1000)
+                print("[API] ❌ NETWORK ERROR \(method) \(url) — \(elapsed)ms — \(error.localizedDescription)")
+
+                if attempt < maxRetries {
+                    // Try re-discovering the server on network failure
+                    if attempt == 0 {
+                        print("[API] 🔍 Re-discovering server after network error...")
+                        if let found = await ServerDiscovery.discover() {
+                            let current = UserDefaults.standard.string(forKey: "serverURL") ?? ""
+                            if found != current {
+                                print("[API] 🔄 Server URL changed: \(current) → \(found)")
+                                UserDefaults.standard.set(found, forKey: "serverURL")
+                            }
+                        }
+                    }
+                    continue
+                }
+                throw APIError.networkError(error)
+            }
         }
+        // Should not reach here, but satisfy compiler
+        throw APIError.networkError(URLError(.unknown))
     }
 
     private func decode<T: Decodable>(_ data: Data, response: URLResponse) throws -> T {

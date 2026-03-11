@@ -62,10 +62,26 @@ struct IngestResponse: Codable {
     let ingested: Int
     let totalPending: Int
     let store: StatsResponse
+    let status: String?
 
     enum CodingKeys: String, CodingKey {
         case ingested
         case totalPending = "total_pending"
+        case store
+        case status
+    }
+}
+
+struct IngestStatusResponse: Codable {
+    let taskRunning: Bool
+    let manualRunning: Bool
+    let lastIngestResult: Int?
+    let store: StatsResponse
+
+    enum CodingKeys: String, CodingKey {
+        case taskRunning = "task_running"
+        case manualRunning = "manual_running"
+        case lastIngestResult = "last_ingest_result"
         case store
     }
 }

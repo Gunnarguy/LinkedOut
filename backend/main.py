@@ -60,6 +60,8 @@ logging.getLogger().addHandler(_ring_handler)
 # ── Background ingest task ───────────────────────────────────────────────────
 
 _ingest_task: asyncio.Task | None = None
+_manual_ingest_task: asyncio.Task | None = None
+_last_ingest_result: int | None = None  # Result of last manual ingest
 
 # User preferences — updated via API, used in ingest cycles
 _DATA_DIR = Path("/app/data") if Path("/app").exists() else Path("./data")
@@ -424,10 +426,30 @@ async def share_job(person_id: str, job_id: str, custom_text: str = ""):
 
 @app.post("/api/ingest/refresh")
 async def ingest_refresh():
-    """Manually trigger a job ingest cycle (fetch + score + queue)."""
-    added = await _run_ingest_cycle()
+    """Trigger a job ingest cycle in the background (non-blocking).
+
+    Returns immediately so the client doesn't time out.
+    Poll GET /api/ingest/status to check progress.
+    """
+    global _manual_ingest_task, _last_ingest_result
+    if _manual_ingest_task is not None and not _manual_ingest_task.done():
+        return {
+            "status": "already_running",
+            "ingested": 0,
+            "total_pending": store.pending_count,
+            "store": store.stats,
+        }
+
+    _last_ingest_result = None
+
+    async def _do_manual_ingest():
+        global _last_ingest_result
+        _last_ingest_result = await _run_ingest_cycle()
+
+    _manual_ingest_task = asyncio.create_task(_do_manual_ingest())
     return {
-        "ingested": added,
+        "status": "started",
+        "ingested": 0,
         "total_pending": store.pending_count,
         "store": store.stats,
     }
@@ -435,9 +457,13 @@ async def ingest_refresh():
 
 @app.get("/api/ingest/status")
 async def ingest_status():
-    """Check if the background ingest task is running."""
+    """Check ingest status — both periodic and manual tasks."""
+    manual_running = _manual_ingest_task is not None and not _manual_ingest_task.done()
+    periodic_running = _ingest_task is not None and not _ingest_task.done()
     return {
-        "task_running": _ingest_task is not None and not _ingest_task.done(),
+        "task_running": manual_running or periodic_running,
+        "manual_running": manual_running,
+        "last_ingest_result": _last_ingest_result,
         "store": store.stats,
     }
 

@@ -78,14 +78,23 @@ struct CardStackView: View {
                 }
             }
             .overlay(alignment: .top) {
-                if let error = jobs.error {
-                    ErrorBanner(message: error) {
-                        jobs.dismissError()
+                VStack(spacing: 4) {
+                    if let error = jobs.error {
+                        ErrorBanner(message: error) {
+                            jobs.dismissError()
+                        }
+                        .transition(.move(edge: .top).combined(with: .opacity))
                     }
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    if let info = jobs.info {
+                        InfoBanner(message: info) {
+                            jobs.dismissInfo()
+                        }
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
                 }
             }
             .animation(.spring(response: 0.3), value: jobs.error)
+            .animation(.spring(response: 0.3), value: jobs.info)
         }
     }
 

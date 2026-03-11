@@ -18,6 +18,7 @@ class JobsViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var isIngesting = false
     @Published var error: String?
+    @Published var info: String?
 
     /// The job the user wants to apply to after swiping right
     @Published var jobToApply: JobPayload?
@@ -59,8 +60,7 @@ class JobsViewModel: ObservableObject {
             appliedJobs = try await APIClient.shared.fetchAppliedJobs()
             print("[VM] loadAppliedJobs — got \(appliedJobs.count)")
         } catch {
-            print("[VM] loadAppliedJobs — ERROR: \(error)")
-            self.error = error.localizedDescription
+            print("[VM] loadAppliedJobs — ERROR (suppressed): \(error)")
         }
     }
 
@@ -70,8 +70,7 @@ class JobsViewModel: ObservableObject {
             savedJobs = try await APIClient.shared.fetchSavedJobs()
             print("[VM] loadSavedJobs — got \(savedJobs.count)")
         } catch {
-            print("[VM] loadSavedJobs — ERROR: \(error)")
-            self.error = error.localizedDescription
+            print("[VM] loadSavedJobs — ERROR (suppressed): \(error)")
         }
     }
 
@@ -85,14 +84,19 @@ class JobsViewModel: ObservableObject {
                 print("[VM] loadStats — pending=\(s.pending) applied=\(s.applied) saved=\(s.saved) rejected=\(s.rejected)")
             }
         } catch {
-            print("[VM] loadStats — ERROR: \(error)")
-            self.error = error.localizedDescription
+            // Stats are non-critical — don't show red banner for this
+            print("[VM] loadStats — ERROR (suppressed): \(error)")
         }
     }
 
     /// Dismiss the current error banner
     func dismissError() {
         withAnimation { error = nil }
+    }
+
+    /// Dismiss the current info banner
+    func dismissInfo() {
+        withAnimation { info = nil }
     }
 
     func refreshAll() async {
@@ -106,6 +110,7 @@ class JobsViewModel: ObservableObject {
     func ingestNewJobs() async {
         isIngesting = true
         error = nil
+        info = nil
         ingestProgress = "Fetching jobs from boards..."
         defer {
             isIngesting = false
@@ -114,18 +119,47 @@ class JobsViewModel: ObservableObject {
         print("[VM] ingestNewJobs — starting ingest cycle")
 
         do {
-            ingestProgress = "Scanning & scoring with AI..."
+            // Kick off ingest (returns immediately — backend runs it in background)
             print("[VM] ingestNewJobs — calling /api/ingest/refresh...")
-            let result = try await APIClient.shared.refreshIngest()
-            print("[VM] ingestNewJobs — ingested=\(result.ingested) totalPending=\(result.totalPending)")
-            ingestProgress = "Loading results..."
-            pendingJobs = try await APIClient.shared.fetchPendingJobs()
-            print("[VM] ingestNewJobs — pending queue now has \(pendingJobs.count) jobs")
-            await loadStats()
-            if result.ingested == 0 {
-                print("[VM] ingestNewJobs — ⚠️ zero jobs ingested this round")
-                error = "No new jobs passed the AI filter this round"
+            let kickoff = try await APIClient.shared.refreshIngest()
+            print("[VM] ingestNewJobs — kickoff status=\(kickoff.status ?? "nil")")
+
+            // Poll for completion
+            ingestProgress = "Scanning & scoring with AI..."
+            var pollCount = 0
+            let maxPolls = 120  // ~4 minutes max
+            while pollCount < maxPolls {
+                try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+                pollCount += 1
+
+                let status = try await APIClient.shared.fetchIngestStatus()
+                if !status.manualRunning {
+                    // Ingest finished
+                    let ingested = status.lastIngestResult ?? 0
+                    print("[VM] ingestNewJobs — done after \(pollCount) polls, ingested=\(ingested)")
+                    ingestProgress = "Loading results..."
+                    pendingJobs = try await APIClient.shared.fetchPendingJobs()
+                    print("[VM] ingestNewJobs — pending queue now has \(pendingJobs.count) jobs")
+                    await loadStats()
+                    if ingested == 0 {
+                        print("[VM] ingestNewJobs — zero jobs ingested this round")
+                        info = "No new jobs matched your profile this round — try again later"
+                    }
+                    return
+                }
+
+                // Update progress message
+                if pollCount % 5 == 0 {
+                    ingestProgress = "Still scoring... (\(pollCount * 2)s)"
+                }
             }
+
+            // Timed out polling — still load what we have
+            print("[VM] ingestNewJobs — polling timed out, loading current state")
+            pendingJobs = try await APIClient.shared.fetchPendingJobs()
+            await loadStats()
+            info = "Scoring is still running — pull to refresh for latest results"
+
         } catch {
             print("[VM] ingestNewJobs — ERROR: \(error)")
             self.error = error.localizedDescription
