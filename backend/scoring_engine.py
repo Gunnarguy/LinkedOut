@@ -358,6 +358,10 @@ Write 2-3 sentences explaining why THIS opportunity is interesting FOR GUNNAR SP
 Reference his ACTUAL situation: AI orchestrator, shipped products, systems thinker,
 willing to learn any stack. Be honest about alignment. If the company gives signals
 they'd welcome his profile, highlight that specifically.
+CRITICAL: Reference the SPECIFIC company name, their actual product/mission, and
+concrete details from the listing. This must read as if written for this one job only.
+CRITICAL: Reference the SPECIFIC company name, their actual product/mission, and
+concrete details from the listing. This must read as if written for this one job only.
 
 ### red_flags
 List potential concerns (max 5). Watch especially for:
@@ -398,20 +402,30 @@ salary_floor = lower bound, salary_max = upper bound. 0 if not mentioned.
 ### ai_pitch_summary
 Write exactly 3 bullet points FROM THE PERSPECTIVE of why this company would want Gunnar.
 Not "here's how you could convince them" but "here's why they'd already be interested."
-- "Your 5 shipped products prove you can build 0→1 — exactly what a founding role needs"
-- "You've already built 3 RAG systems — you're not learning their stack, you've lived it"
-- "Your AI orchestration workflow IS the future they're building tools for"
+
+CRITICAL: Every bullet MUST reference something SPECIFIC from THIS job listing —
+the company's actual product, their stated values, a specific technology they use,
+or a concrete detail from the description. NEVER write generic bullets that could
+apply to any startup. Each bullet must be unique to THIS company and THIS role.
+Do NOT reuse or paraphrase the example bullets below — they are ONLY to show format/tone.
+
+Example FORMAT (do not copy these — write completely new ones based on the listing):
+- "[Company]'s focus on [specific thing from listing] maps directly to [specific Gunnar experience]"
+- "The [specific requirement from listing] is literally what Gunnar built with [specific project]"
+- "[Company detail] signals they'd value his [specific relevant skill], not just check credential boxes"
+
 If the company wouldn't already be interested, say so honestly:
-- "You'd need to convince them Swift→React is transferable — not your ideal situation"
+- "You'd need to convince them [specific gap] — not your ideal situation"
 
 ### fit_reasons
-Return a list of 2-4 short (5-8 word) reasons this role fits Gunnar. Examples:
-- "They want builders, not credentials"
-- "Portfolio-first hiring process"
-- "AI orchestration IS the job"
-- "Show us your apps culture"
-- "Blank canvas welcome here"
-- "Mission > pedigree company"
+Return a list of 2-4 short (5-8 word) reasons this role fits Gunnar.
+Each reason MUST reference something specific from THIS listing — the company name,
+their product, their hiring language, or a concrete detail. Never write generic reasons.
+Do NOT copy the examples below — they show format only:
+- "[Company] values demos over diplomas"
+- "[Their product] needs exactly his RAG experience"
+- "Posting says 'show us what you built'"
+- "10-person team = no credential gatekeeping"
 
 ### drafted_cover_letter
 Write a punchy 150-word cover letter FROM GUNNAR. Tone: confident builder who ships.
@@ -502,6 +516,8 @@ async def triage_job(raw: RawJobListing) -> bool:
     try:
         content = await _call_llm(TRIAGE_PROMPT, user_msg, use_flash=True)
         data = json.loads(content)
+        if isinstance(data, list) and len(data) > 0:
+            data = data[0]
         passed = data.get("dominated", False)
         reason = data.get("reason", "")
         logger.info(f"[TRIAGE] {'PASS' if passed else 'FAIL'} | {raw.title} @ {raw.company} | {reason}")
@@ -544,6 +560,10 @@ async def score_job(
     try:
         content = await _call_llm(system, user_msg, use_flash=True)
         data = json.loads(content)
+
+        # Gemini sometimes wraps the response in an array
+        if isinstance(data, list) and len(data) > 0:
+            data = data[0]
 
         if not data.get("passed_filter", False):
             reason = data.get("rejection_reason", "Did not pass filters")

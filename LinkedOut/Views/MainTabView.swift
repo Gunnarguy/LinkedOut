@@ -44,8 +44,14 @@ struct MainTabView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 Task {
+                    let previous = serverURL
                     if let found = await ServerDiscovery.discover() {
                         serverURL = found
+                        if found != previous {
+                            print("[DISCOVERY] Server changed: \(previous) → \(found) — reloading jobs")
+                            await jobs.loadPendingJobs()
+                            await jobs.loadStats()
+                        }
                     }
                 }
             }
