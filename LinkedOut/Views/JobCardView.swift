@@ -65,6 +65,29 @@ struct JobCardView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 6)
 
+            // Fit reasons — WHY this job matches Gunnar
+            if let reasons = job.fitReasons, !reasons.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(reasons.prefix(3), id: \.self) { reason in
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.right.circle.fill")
+                                    .font(.system(size: 8))
+                                Text(reason)
+                            }
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.green.opacity(0.12))
+                            .foregroundStyle(.green)
+                            .clipShape(Capsule())
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
+                .padding(.bottom, 4)
+            }
+
             Divider()
 
             // Meta row

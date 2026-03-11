@@ -44,6 +44,9 @@ class JobPayload(BaseModel):
     experience_level: str = ""  # "Entry", "Junior", "Mid", "Senior" etc.
     job_type: str = ""  # "Full-time", "Contract", "Part-time", "Internship"
     benefits: list[str] = Field(default_factory=list)  # Perks/benefits mentioned
+    fit_reasons: list[str] = Field(
+        default_factory=list
+    )  # Why this fits the user (short badge-style reasons)
 
     # ── User-Managed Fields (not from LLM) ───────────────────────────────
     notes: str = ""  # User's personal notes
@@ -131,21 +134,25 @@ class UserPreferences(BaseModel):
     require_remote: bool = False
     preferred_roles: list[str] = Field(
         default_factory=lambda: [
-            "AI Product Engineer",
             "AI Engineer",
+            "AI Product Engineer",
             "Founding Engineer",
             "Product Engineer",
             "iOS Engineer",
+            "Mobile Engineer",
             "Machine Learning Engineer",
             "Software Engineer",
             "Full Stack Engineer",
-            "Mobile Engineer",
+            "Developer Experience Engineer",
+            "Applied AI Engineer",
         ]
     )
     excluded_keywords: list[str] = Field(
         default_factory=lambda: [
             "Staff Engineer",
             "Principal Engineer",
+            "Engineering Manager",
+            "Director of Engineering",
         ]
     )
     location_preference: str = "Remote"

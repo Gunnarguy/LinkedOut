@@ -19,23 +19,26 @@ from models import RawJobListing
 
 logger = logging.getLogger(__name__)
 
-# Search queries — broad net, let the LLM scoring decide what's relevant
+# Search queries — tuned to Gunnar's real stack and interests
 SEARCH_QUERIES = [
     "AI engineer",
     "product engineer",
     "founding engineer",
     "iOS engineer",
     "machine learning engineer",
-    "AI startup",
+    "RAG engineer",
     "LLM engineer",
-    "software engineer startup",
+    "AI startup",
     "mobile engineer",
-    "full stack engineer",
-    "developer tools",
-    "frontend engineer",
+    "developer tools AI",
     "generative AI",
-    "junior engineer",
-    "engineer remote",
+    "software engineer startup",
+    "applied AI",
+    "AI product",
+    "healthcare AI",
+    "on-device ML",
+    "agent engineer",
+    "embeddings search",
 ]
 
 TIMEOUT = httpx.Timeout(15.0, connect=10.0)

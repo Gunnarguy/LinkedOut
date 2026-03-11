@@ -37,6 +37,7 @@ struct JobPayload: Codable, Identifiable, Hashable {
     var experienceLevel: String?
     var jobType: String?
     var benefits: [String]?
+    var fitReasons: [String]?
 
     // User-managed fields
     var notes: String?
@@ -70,6 +71,7 @@ struct JobPayload: Codable, Identifiable, Hashable {
         case experienceLevel = "experience_level"
         case jobType = "job_type"
         case benefits
+        case fitReasons = "fit_reasons"
         case notes
         case applicationStatus = "application_status"
     }

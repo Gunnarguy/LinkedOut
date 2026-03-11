@@ -29,7 +29,11 @@ struct JobDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     headerSection
-                    Divider().padding(.horizontal)
+                    // Fit reasons — top-level match signals
+                    if let reasons = job.fitReasons, !reasons.isEmpty {
+                        fitReasonsSection
+                        Divider().padding(.horizontal)
+                    }
                     scoreMetaSection
                     Divider().padding(.horizontal)
                     companyIntelSection
@@ -77,6 +81,33 @@ struct JobDetailView: View {
                 selectedStatus = job.applicationStatus ?? "new"
             }
         }
+    }
+
+    // MARK: - Fit Reasons
+
+    private var fitReasonsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Why This Fits You", systemImage: "target")
+                .font(.headline)
+                .foregroundStyle(.green)
+
+            FlowLayout(spacing: 8) {
+                ForEach(job.fitReasons ?? [], id: \.self) { reason in
+                    HStack(spacing: 5) {
+                        Image(systemName: "arrow.right.circle.fill")
+                            .font(.caption2)
+                        Text(reason)
+                            .font(.subheadline.weight(.medium))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(.green.opacity(0.1))
+                    .foregroundStyle(.green)
+                    .clipShape(Capsule())
+                }
+            }
+        }
+        .padding(20)
     }
 
     // MARK: - Header

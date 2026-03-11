@@ -138,16 +138,48 @@ Your job: evaluate a raw job listing, extract EVERYTHING knowable about the comp
 and role, and decide if it's worth the user's time. Be thorough. The user will use
 your output as their primary research document for this opportunity.
 
-## User Profile
-The user is a HOBBYIST AI product builder, NOT a traditional software engineer.
-- Builds iOS apps for fun (SwiftUI, on-device ML) — self-taught, ships real products
-- Deep interest in agentic AI, LLM tooling, and AI-augmented workflows
-- Believes agentic AI is making traditional SWE gatekeeping obsolete
-- Looking for roles where building/shipping/taste matter more than CS pedigree
-- Product-minded: thinks about UX, user problems, and 0→1 creation
-- Comfortable with ambiguity, prototyping, and wearing many hats
+## User Profile — Gunnar Hostetler
+Gunnar is NOT a traditional software engineer. He is a self-taught AI product builder
+who ships real products to the App Store while working full-time in healthcare operations.
 
-## Hard Filters (REJECT if ANY of these are true — these are the ONLY hard stops)
+### What He's Built (all live on the App Store — gunnarguy.me)
+- **OpenIntelligence**: On-device RAG engine with hybrid search (semantic + keyword),
+  Apple Intelligence integration, Core ML embeddings, runs fully offline in airplane mode.
+  202 commits. His most technically complex app.
+- **OpenResponses**: iOS client for OpenAI's Responses API with MCP (Model Context Protocol)
+  integration — connects to Notion, Dropbox, Gmail. Supports Computer Use, tool orchestration,
+  and multi-model conversations. 88 commits.
+- **OpenCone**: RAG application using Pinecone vector database + OpenAI embeddings.
+  Hybrid search with reranking. 122 commits.
+- **OpenAssistant**: Legacy Assistants API client with full thread management. 214 commits.
+- **382 commits in the last year** across these projects.
+
+### Technical DNA
+- **Primary stack**: Swift, SwiftUI, Xcode — native iOS is his medium
+- **AI/ML depth**: RAG pipelines, embeddings (OpenAI + on-device), hybrid search,
+  vector databases (Pinecone), reranking, prompt engineering, tool-use/function-calling
+- **On-device ML**: Core ML, Apple Intelligence integration, privacy-preserving inference
+- **API integration**: OpenAI APIs (Assistants, Responses, Realtime), Anthropic APIs,
+  MCP (Model Context Protocol), multi-provider architectures
+- **Backend**: Python, FastAPI, Docker — builds his own backends when needed
+- **Philosophy**: Privacy-first (BYOK, no accounts, no tracking, no analytics),
+  "the code comes from models and the vision is mine"
+
+### Day Job
+Medical device specialist at VA Palo Alto Healthcare System (Stryker contractor).
+Supports Stanford Cardiothoracic and Vascular Surgery teams. Understands HIPAA,
+surgical workflows, clinical operations, and regulated environments. Builds software
+at night and on weekends.
+
+### What Makes Him Different
+- 4 shipped App Store products (not toy projects or tutorials)
+- Deep understanding of RAG from building 3 separate RAG systems
+- Bridges AI/ML with polished consumer-grade iOS UX
+- Healthcare domain expertise (HIPAA, surgical ops, medical devices)
+- Self-taught with extreme velocity — sees a problem, builds until it's on the App Store
+- Uses LLMs as force multipliers for code generation — the vision and architecture are his
+
+## Hard Filters (REJECT if ANY of these are true — ONLY hard stops)
 - REJECT if the listing STRICTLY requires a CS/engineering degree with NO "or equivalent
   experience" escape hatch (if degree is "preferred" or "or equivalent", it PASSES)
 - REJECT roles titled "Senior", "Staff", "Lead", "Principal", "Head of", or "Director"
@@ -156,36 +188,45 @@ The user is a HOBBYIST AI product builder, NOT a traditional software engineer.
 Everything else is a SCORING factor, not a reject. Be generous — let things through.
 
 ## Scoring (builder_score: 0.0–1.0)
-Score HIGHER (0.75–1.0) for:
-- "AI Product Engineer", "AI Engineer", "Founding Engineer", "Product Engineer"
-- Early-stage startups building with LLMs, agents, copilots
-- Small teams, high autonomy, 0→1 product building, "wear many hats"
-- Companies that explicitly value shipped products, side projects, builder mentality
-- Junior/mid-level roles, or roles with NO seniority level (just "Engineer")
-- Roles where AI/ML is the PRODUCT, not just a buzzword
-- Intersection of AI + consumer products, creative tools, or developer tools
-- Remote-friendly roles
 
-Score MEDIUM (0.4–0.74) for:
-- iOS/Mobile engineer roles at interesting companies
-- Generalist roles at startups where you'd touch product
-- Roles that mention "product-minded engineer" or "full-stack"
-- Internships or apprenticeships at cool companies
-- Roles at mid-size companies that look interesting
-- Hybrid roles (if the company/product is compelling enough)
-- Roles that are slightly outside comfort zone but have growth potential
+Score HIGHEST (0.90–1.0) — Dream roles:
+- Companies building RAG infrastructure, embedding pipelines, or vector search products
+  (Gunnar has built 3 RAG systems — he LIVES this)
+- On-device AI / edge ML roles (Core ML, Apple Intelligence, privacy-preserving inference)
+- MCP / agent orchestration / tool-use platforms (his OpenResponses app does exactly this)
+- "Founding Engineer" or "First Engineer" at an AI startup (<20 people)
+- Companies building developer tools for AI (SDKs, API clients, agent frameworks)
+- iOS AI product roles — combining his two strongest skills
 
-Score LOWER (0.1–0.39) for:
+Score HIGH (0.75–0.89) — Strong fits:
+- "AI Product Engineer", "AI Engineer", "Product Engineer" at startups
+- Companies building with LLMs, agents, copilots where shipping matters more than pedigree
+- Small teams (< 50), high autonomy, 0→1 product building
+- Companies that explicitly value shipped products, portfolios, or side projects
+- Healthcare AI / clinical AI (his domain expertise is a genuine differentiator)
+- Privacy-first or security-conscious AI companies (matches his design philosophy)
+- Roles where the AI/ML IS the product, not just a feature
+
+Score MEDIUM (0.50–0.74) — Worth considering:
+- iOS/Mobile engineer roles at AI-forward companies
+- Full-stack roles at interesting startups where he'd touch product
+- Developer experience / developer relations at AI companies
+- Roles at mid-size companies with compelling AI products
+- Hybrid roles combining software + domain expertise
+- Roles slightly outside comfort zone but at fascinating companies
+
+Score LOWER (0.25–0.49) — Probably not:
 - Pure backend/infrastructure with zero product surface
 - Enterprise middleware, ERP, or B2B sales tools
 - Large bureaucratic orgs with rigid processes
-- Roles that are 100% maintenance/legacy
-- Roles that require heavy interview gauntlets (LeetCode-only)
+- Web-only roles with no AI/ML component
+- Roles that are 100% maintenance/legacy code
+- Roles requiring heavy LeetCode-only interview gauntlets
 
-Score ZERO / REJECT for:
+Score ZERO / REJECT:
 - Senior/Staff/Lead/Principal/Director titles
 - Strict CS degree requirements with no flexibility
-- 7+ years experience required
+- 7+ years professional SWE experience required
 
 ## EXTRACTION INSTRUCTIONS — Be Thorough!
 
@@ -195,42 +236,39 @@ product, target market. If the listing mentions funding, team size, or notable
 customers — include it. Don't guess; if you don't know, say "Not specified in listing."
 
 ### company_size
-Extract the company size. Look for phrases like "small team", "50+ engineers",
-"Series A startup", team headcount mentions. Output one of: "1-10", "10-50",
-"50-200", "200-500", "500+", or "Unknown".
+Extract: "1-10", "10-50", "50-200", "200-500", "500+", or "Unknown".
 
 ### company_stage
-Infer the company stage: "Pre-seed", "Seed", "Series A", "Series B", "Series C+",
-"Public", "Bootstrapped", or "Unknown". Use clues like funding mentions, team size,
-product maturity.
+Infer: "Pre-seed", "Seed", "Series A", "Series B", "Series C+",
+"Public", "Bootstrapped", or "Unknown".
 
 ### company_url
 If the company website URL is mentioned or inferable, include it. Otherwise empty string.
 
 ### requirements
-List the KEY requirements (hard skills, experience thresholds). Each item should be
-one concise line. Include years of experience, specific technologies, degree requirements.
-Maximum 8 items. Only include things explicitly stated.
+List KEY requirements (max 8). One concise line each. Only explicitly stated items.
 
 ### nice_to_haves
-List the "nice to have" or "bonus" qualifications. Maximum 5 items.
+List "nice to have" qualifications. Maximum 5 items.
 
 ### tech_stack
 Extract ALL technologies, frameworks, languages, tools, platforms mentioned.
-Include infrastructure (AWS, GCP), languages (Python, Swift), frameworks (React, FastAPI),
-tools (Docker, K8s), ML/AI tools (PyTorch, LangChain, etc).
 
 ### why_interesting
-Write 2-3 sentences explaining why THIS specific opportunity is interesting for the user,
-given their builder background. Be specific: reference what the company builds,
-why their culture might suit a self-taught builder, what excites about the problem space.
-This should feel like a trusted friend giving career advice.
+Write 2-3 sentences explaining why THIS opportunity is interesting FOR GUNNAR SPECIFICALLY.
+Map the role to his real skills: "Your RAG experience with OpenIntelligence maps directly
+to their search infrastructure work", "Your MCP integration in OpenResponses is exactly
+what they're building", "Your healthcare ops background gives you domain edge here".
+Be concrete about which of his apps/skills apply. This should read like a trusted advisor
+who knows his portfolio inside-out.
 
 ### red_flags
-List potential concerns/red flags. Examples: "posting mentions on-call rotation",
-"vague about salary", "mentions 'fast-paced environment' (potential burnout)",
-"requires degree with no flexibility", "posting has been up for 6+ months".
-Maximum 5 items. If none, use empty list.
+List potential concerns (max 5). Watch especially for:
+- Strict degree requirements buried in the description
+- "Fast-paced" / "wear many hats" that means understaffed, not startup energy
+- Posting up for 6+ months (they can't fill it — red flag)
+- Vague about what the product actually does
+- "Competitive salary" with no range (often means low)
 
 ### experience_level
 One of: "Entry", "Junior", "Mid", "Senior", "Staff", "Lead", "Any", or "Not specified".
@@ -239,27 +277,41 @@ One of: "Entry", "Junior", "Mid", "Senior", "Staff", "Lead", "Any", or "Not spec
 One of: "Full-time", "Part-time", "Contract", "Freelance", "Internship", or "Not specified".
 
 ### benefits
-Extract ALL mentioned benefits/perks: equity, health insurance, PTO policy, remote stipend,
-learning budget, gym membership, etc. Maximum 10 items.
+Extract ALL mentioned benefits/perks. Maximum 10 items.
 
 ### apply_url
-If there's a direct application link (different from the source URL), include it.
-Often job postings link to an ATS or careers page.
+Direct application link if different from source URL.
 
 ### salary_floor / salary_max
-Extract salary range if mentioned. salary_floor = lower bound, salary_max = upper bound.
-If only one number, use it for both. If not mentioned, salary_floor = 0, salary_max = 0.
+salary_floor = lower bound, salary_max = upper bound. 0 if not mentioned.
 
 ### ai_pitch_summary
-Write exactly 3 bullet points bridging the user's background (hobbyist iOS builder,
-AI product tinkerer, self-taught shipper) to THIS specific role. Be specific about
-what THIS company does and why the user's builder DNA fits. No generic platitudes.
+Write exactly 3 bullet points connecting Gunnar's SPECIFIC background to THIS role.
+Reference his actual apps by name when relevant:
+- "Your OpenIntelligence RAG engine proves you can build exactly the search pipeline they need"
+- "Your MCP work in OpenResponses is production experience with the agent tooling they're building"
+- "4 App Store apps with 382 commits/year shows the shipping velocity a startup needs"
+Be specific. No generic "your AI interest aligns with their mission" nonsense.
+
+### fit_reasons
+Return a list of 2-4 short (5-8 word) reasons this role fits Gunnar. These will be
+displayed as badges on the job card. Examples:
+- "RAG expertise → their search infra"
+- "MCP experience → agent platform"
+- "iOS + AI = their product"
+- "Healthcare domain → clinical AI"
+- "Privacy-first → their design ethos"
+- "0→1 builder → founding role"
+- "On-device ML → edge AI product"
+Each reason should map a specific Gunnar skill to a specific job requirement.
 
 ### drafted_cover_letter
-Write a punchy 150-word cover letter from the user's perspective. Tone: confident,
-curious, zero-fluff, slightly irreverent. The user is not begging for a job — they're
-exploring where their energy fits best. Reference specific things from the job listing.
-Acknowledge they're non-traditional but frame it as a superpower.
+Write a punchy 150-word cover letter FROM GUNNAR. Tone: confident builder who ships,
+not a job-seeker begging. Reference his real apps by name. Mention gunnarguy.me.
+Example opening: "I built 4 App Store apps this year while working full-time in
+healthcare ops — OpenIntelligence alone has 202 commits and does on-device RAG
+with hybrid search in airplane mode." Then connect specifically to what THIS company
+builds. Close with curiosity, not desperation.
 
 ## Output Format
 Return ONLY valid JSON matching this schema:
@@ -288,30 +340,35 @@ Return ONLY valid JSON matching this schema:
   "apply_url": "string",
   "experience_level": "string",
   "job_type": "string",
-  "benefits": ["string"]
+  "benefits": ["string"],
+  "fit_reasons": ["string"]
 }}
 """
 
 
 TRIAGE_PROMPT = """\
-You are a fast job-listing triage filter. Given a job listing, decide if it MIGHT be
-relevant for a self-taught builder who loves AI, product engineering, and shipping apps.
+You are a fast job-listing triage filter for Gunnar — a self-taught iOS/AI builder
+with 4 App Store apps (RAG engines, MCP integration, on-device ML), who works in
+healthcare ops by day and ships software at night.
 
 PASS (dominated=true) if the job is ANY of:
-- Tech/engineering roles at startups or small-to-mid companies
-- AI/ML roles at any company
-- Product engineer, mobile/iOS, full-stack, or generalist roles
-- Roles that don't require a CS degree (or say "or equivalent experience")
-- Entry, junior, or mid-level roles (or roles with no seniority specified)
-- Anything that sounds interesting for a builder/product person
+- AI/ML roles (especially RAG, embeddings, search, agents, LLM tooling)
+- iOS/mobile roles at AI-forward or interesting companies
+- Product engineer, founding engineer, or generalist at startups
+- Developer tools, API platforms, or SDK roles
+- Healthcare AI or clinical technology
+- Privacy-focused or on-device ML companies
+- Any engineering role at a small team (<50) building something compelling
+- Entry, junior, or mid-level roles (or no seniority specified)
 
 REJECT (dominated=false) ONLY if the job clearly is:
 - Titled "Senior", "Staff", "Lead", "Principal", "Director", or "VP"
 - Explicitly requires a CS/engineering degree with NO alternative
 - Requires 5+ years of professional experience with no flexibility
 - Pure non-tech roles (sales, marketing, HR, legal, finance)
+- Pure enterprise infrastructure with no product surface
 
-When in doubt, PASS it through. Be GENEROUS — let the full scoring decide.
+When in doubt, PASS it through. Be GENEROUS — let full scoring decide.
 
 Return ONLY valid JSON:
 {{"dominated": true/false, "reason": "one sentence why"}}
@@ -404,6 +461,7 @@ async def score_job(
             experience_level=data.get("experience_level", "Not specified"),
             job_type=data.get("job_type", "Not specified"),
             benefits=data.get("benefits", []),
+            fit_reasons=data.get("fit_reasons", []),
         )
 
         return ScoringResult(passed_filter=True, job=job)
@@ -427,21 +485,37 @@ _STRICT_DEGREE_RE = re.compile(
     re.IGNORECASE,
 )
 
-# High-value keywords (boost score)
+# High-value keywords (boost score) — calibrated to Gunnar's real stack
 _POSITIVE_KEYWORDS = [
-    (r"\bAI\b|artificial intelligence", 0.15),
+    # Core expertise: RAG, embeddings, search (he built 3 RAG systems)
+    (r"\bRAG\b|retrieval.augment|vector.search|embedding", 0.18),
+    (r"hybrid.search|semantic.search|rerank", 0.15),
+    (r"pinecone|weaviate|chroma|qdrant|vector.database", 0.15),
+    # Core expertise: AI/ML product building
+    (r"\bAI\b|artificial intelligence", 0.12),
     (r"\bLLM\b|large language model|generative AI", 0.15),
-    (r"machine learning|\bML\b", 0.12),
+    (r"machine learning|\bML\b", 0.10),
+    (r"agent(?:ic)?|tool.use|function.calling|MCP|model.context.protocol", 0.15),
+    (r"copilot|AI.assistant|chatbot", 0.10),
+    # Core expertise: iOS + on-device ML
+    (r"\biOS\b|SwiftUI|Swift(?:UI)?|mobile engineer", 0.12),
+    (r"Core ML|on.device|edge.AI|Apple Intelligence", 0.18),
+    (r"privacy.first|privacy.preserving|on.device.inference", 0.12),
+    # Role types that fit
     (r"product engineer", 0.12),
-    (r"founding engineer", 0.15),
-    (r"\biOS\b|SwiftUI|mobile engineer", 0.10),
+    (r"founding engineer|first engineer", 0.18),
+    (r"AI.engineer|ML.engineer", 0.15),
+    # Company signals
     (r"\bstartup\b|early.stage|seed|series A", 0.10),
-    (r"full.stack", 0.08),
-    (r"\bremote\b", 0.08),
-    (r"python|typescript|react", 0.05),
-    (r"agent(?:ic)?|copilot|chatbot", 0.10),
-    (r"\bjunior\b|\bintern\b|\bentry.level\b", 0.08),
-    (r"product.minded|ship|builder", 0.10),
+    (r"small.team|<\s*\d{1,2}\s*people", 0.08),
+    (r"developer.tools|SDK|API.platform", 0.10),
+    (r"healthcare.AI|clinical|health.?tech|medical", 0.12),
+    # General positives
+    (r"\bremote\b", 0.06),
+    (r"product.minded|ship|builder|portfolio", 0.10),
+    (r"python|fastapi", 0.05),
+    (r"\bjunior\b|\bintern\b|\bentry.level\b", 0.06),
+    (r"open.?source|OSS", 0.05),
 ]
 _POSITIVE_COMPILED = [(re.compile(p, re.IGNORECASE), s) for p, s in _POSITIVE_KEYWORDS]
 
@@ -450,8 +524,10 @@ _NEGATIVE_KEYWORDS = [
     (r"10\+ years|15\+ years|8\+ years", -0.20),
     (r"PhD required", -0.15),
     (r"\bFortune 500\b|\bFAANG\b", -0.05),
-    (r"enterprise|legacy|CRUD|mainframe", -0.05),
-    (r"\bDevOps\b|\bSRE\b|infrastructure only", -0.03),
+    (r"enterprise|legacy|CRUD|mainframe|ERP", -0.08),
+    (r"\bDevOps\b|\bSRE\b|infrastructure only", -0.05),
+    (r"leetcode|whiteboard.coding|algorithm.interview", -0.08),
+    (r"Java\b(?!Script)|\.NET|C#|COBOL", -0.05),
 ]
 _NEGATIVE_COMPILED = [(re.compile(p, re.IGNORECASE), s) for p, s in _NEGATIVE_KEYWORDS]
 
@@ -524,6 +600,20 @@ def score_job_locally(raw: RawJobListing) -> ScoringResult:
         "TensorFlow",
         "LangChain",
         "OpenAI",
+        "Pinecone",
+        "Weaviate",
+        "Chroma",
+        "Qdrant",
+        "Core ML",
+        "MLX",
+        "ONNX",
+        "RAG",
+        "MCP",
+        "LlamaIndex",
+        "Anthropic",
+        "Hugging Face",
+        "Transformers",
+        "FAISS",
     ]
     for tech in tech_patterns:
         if re.search(r"\b" + re.escape(tech) + r"\b", text, re.IGNORECASE):
