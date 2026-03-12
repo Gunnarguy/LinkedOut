@@ -7,6 +7,53 @@
 
 import SwiftUI
 
+// MARK: - Presets
+
+/// Each preset fully defines every weight. "Custom" means the user
+/// dragged an individual slider, so we stop overwriting values.
+private enum StrictnessPreset: String, CaseIterable, Identifiable {
+    case relaxed  = "Relaxed"
+    case balanced = "Balanced"
+    case strict   = "Strict"
+    case custom   = "Custom"
+
+    var id: String { rawValue }
+
+    var emoji: String {
+        switch self {
+        case .relaxed:  return "🌊"
+        case .balanced: return "⚖️"
+        case .strict:   return "🎯"
+        case .custom:   return "🔧"
+        }
+    }
+
+    var tagline: String {
+        switch self {
+        case .relaxed:  return "Cast a wide net — more volume, more variety"
+        case .balanced: return "Good mix of quality and quantity"
+        case .strict:   return "Only surface near-perfect matches"
+        case .custom:   return "You tweaked something — your rules"
+        }
+    }
+
+    // Maps preset → concrete weight values
+    var weights: (cutoff: Double, convincing: Double, boost: Double,
+                  relocation: Double, international: Double,
+                  experience: Double, credential: Double, portfolio: Double) {
+        switch self {
+        case .relaxed:
+            return (0.20, -0.10, 0.15, -0.05, -0.10, -0.05, -0.05, 0.15)
+        case .balanced:
+            return (0.35, -0.20, 0.10, -0.15, -0.25, -0.10, -0.15, 0.10)
+        case .strict:
+            return (0.50, -0.35, 0.05, -0.25, -0.40, -0.20, -0.25, 0.05)
+        case .custom:
+            return (0.35, -0.20, 0.10, -0.15, -0.25, -0.10, -0.15, 0.10)
+        }
+    }
+}
+
 struct SettingsView: View {
     @AppStorage("minSalary") private var minSalary: Int = 90000
     @AppStorage("requireRemote") private var requireRemote: Bool = true
@@ -32,8 +79,27 @@ struct SettingsView: View {
     @State private var newKeyword = ""
     @State private var syncStatus: SyncStatus = .idle
     @State private var pendingSyncTask: Task<Void, Never>?
+    @State private var showAdvanced = false
 
     private enum SyncStatus { case idle, syncing, synced, failed(String) }
+
+    // Detect which preset matches current weights (or .custom if none do)
+    private var activePreset: StrictnessPreset {
+        for preset in [StrictnessPreset.relaxed, .balanced, .strict] {
+            let w = preset.weights
+            if abs(scoreCutoff - w.cutoff) < 0.01 &&
+               abs(convincingPenalty - w.convincing) < 0.01 &&
+               abs(convincingBoost - w.boost) < 0.01 &&
+               abs(relocationPenalty - w.relocation) < 0.01 &&
+               abs(internationalPenalty - w.international) < 0.01 &&
+               abs(experiencePenalty - w.experience) < 0.01 &&
+               abs(credentialPenalty - w.credential) < 0.01 &&
+               abs(portfolioBoost - w.portfolio) < 0.01 {
+                return preset
+            }
+        }
+        return .custom
+    }
 
     private var currentPreferences: UserPreferences {
         UserPreferences(
@@ -54,10 +120,64 @@ struct SettingsView: View {
         )
     }
 
+    // ── Apply a preset ──
+    private func apply(_ preset: StrictnessPreset) {
+        guard preset != .custom else { return }
+        let w = preset.weights
+        withAnimation(.easeInOut(duration: 0.25)) {
+            scoreCutoff = w.cutoff
+            convincingPenalty = w.convincing
+            convincingBoost = w.boost
+            relocationPenalty = w.relocation
+            internationalPenalty = w.international
+            experiencePenalty = w.experience
+            credentialPenalty = w.credential
+            portfolioBoost = w.portfolio
+        }
+        debouncedSync()
+    }
+
     var body: some View {
         NavigationStack {
             List {
-                // ── Live Score Simulator ────────────────────────────
+                // ── How Picky Are You? ──────────────────────────────
+                Section {
+                    VStack(spacing: 12) {
+                        // Preset pills
+                        HStack(spacing: 10) {
+                            ForEach([StrictnessPreset.relaxed, .balanced, .strict], id: \.self) { preset in
+                                PresetPill(
+                                    preset: preset,
+                                    isActive: activePreset == preset,
+                                    onTap: { apply(preset) }
+                                )
+                            }
+                        }
+
+                        // Active description
+                        HStack(spacing: 8) {
+                            Text(activePreset.emoji)
+                                .font(.title2)
+                            Text(activePreset.tagline)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 4)
+                    }
+                    .padding(.vertical, 4)
+                } header: {
+                    Text("How Picky?")
+                } footer: {
+                    if activePreset == .custom {
+                        Text("You tweaked individual weights. Tap a preset to reset them.")
+                    } else {
+                        Text("Pick a vibe, or open Advanced to fine-tune individual weights.")
+                    }
+                }
+
+                // ── Live Preview ────────────────────────────────────
                 Section {
                     ScoreSimulatorView(
                         convincingPenalty: convincingPenalty,
@@ -70,109 +190,13 @@ struct SettingsView: View {
                         scoreCutoff: scoreCutoff
                     )
                 } header: {
-                    Text("Live Score Preview")
+                    Text("What That Looks Like")
                 } footer: {
-                    Text("See how your adjustments affect example job scenarios. Drag the sliders below to tune.")
+                    Text("How example jobs score with your current settings.")
                 }
 
-                // ── Score Cutoff ────────────────────────────────────
+                // ── Seniority + Salary + Location (the obvious stuff) ─
                 Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Reject Below")
-                                .font(.headline)
-                            Spacer()
-                            Text("\(Int(scoreCutoff * 100))%")
-                                .font(.title3.weight(.bold).monospaced())
-                                .foregroundStyle(scoreCutoff < 0.30 ? .green : scoreCutoff < 0.50 ? .orange : .red)
-                        }
-                        Slider(value: $scoreCutoff, in: 0.10...0.60, step: 0.05)
-                            .onChange(of: scoreCutoff) { _, _ in debouncedSync() }
-                        HStack {
-                            Text("More jobs").font(.caption2).foregroundStyle(.secondary)
-                            Spacer()
-                            Text("Higher quality").font(.caption2).foregroundStyle(.secondary)
-                        }
-                    }
-                } header: {
-                    Text("Quality Threshold")
-                } footer: {
-                    Text("Jobs scoring below this are auto-rejected. Lower = more volume, higher = pickier.")
-                }
-
-                // ── Convincing Penalty/Boost ────────────────────────
-                Section {
-                    WeightSlider(
-                        label: "Hard Stack Mismatch",
-                        detail: "Penalty when they require a stack you haven't used",
-                        value: $convincingPenalty,
-                        range: -0.40...0.0,
-                        step: 0.05,
-                        onChange: debouncedSync
-                    )
-                    WeightSlider(
-                        label: "Builders Welcome Boost",
-                        detail: "Bonus when they say \"show us what you've built\"",
-                        value: $convincingBoost,
-                        range: 0.0...0.25,
-                        step: 0.05,
-                        onChange: debouncedSync
-                    )
-                    WeightSlider(
-                        label: "Portfolio / Shipped Products",
-                        detail: "Bonus when they value shipped products over credentials",
-                        value: $portfolioBoost,
-                        range: 0.0...0.25,
-                        step: 0.05,
-                        onChange: debouncedSync
-                    )
-                } header: {
-                    Text("\"Convincing Required\" Weights")
-                } footer: {
-                    Text("The core question: would they already want you, or would you have to sell yourself?")
-                }
-
-                // ── Location Weights ────────────────────────────────
-                Section {
-                    WeightSlider(
-                        label: "Relocation (Other US City)",
-                        detail: "Penalty for jobs requiring relocation to NYC, Austin, etc.",
-                        value: $relocationPenalty,
-                        range: -0.40...0.0,
-                        step: 0.05,
-                        onChange: debouncedSync
-                    )
-                    WeightSlider(
-                        label: "International",
-                        detail: "Penalty for jobs in London, Berlin, etc.",
-                        value: $internationalPenalty,
-                        range: -0.50...0.0,
-                        step: 0.05,
-                        onChange: debouncedSync
-                    )
-                } header: {
-                    Text("Location Weights")
-                }
-
-                // ── Experience & Credentials ────────────────────────
-                Section {
-                    WeightSlider(
-                        label: "Experience Stretch",
-                        detail: "Penalty when they want 5+ years professional",
-                        value: $experiencePenalty,
-                        range: -0.30...0.0,
-                        step: 0.05,
-                        onChange: debouncedSync
-                    )
-                    WeightSlider(
-                        label: "Credential-Heavy Culture",
-                        detail: "Penalty for rigid HR, enterprise, FAANG-style hiring",
-                        value: $credentialPenalty,
-                        range: -0.30...0.0,
-                        step: 0.05,
-                        onChange: debouncedSync
-                    )
-
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Max Seniority Level")
                             .font(.subheadline.weight(.semibold))
@@ -186,17 +210,10 @@ struct SettingsView: View {
                         .onChange(of: maxSeniorityLevel) { _, _ in debouncedSync() }
                     }
                     .padding(.vertical, 4)
-                } header: {
-                    Text("Experience & Credentials")
-                } footer: {
-                    Text("Seniority filter: roles above your max level are auto-rejected in triage.")
-                }
 
-                // ── Salary ──────────────────────────────────────────
-                Section {
                     VStack(alignment: .leading) {
                         HStack {
-                            Text("Minimum")
+                            Text("Minimum Salary")
                                 .font(.subheadline)
                             Spacer()
                             Text(formattedSalary)
@@ -212,12 +229,7 @@ struct SettingsView: View {
                         )
                         .onChange(of: minSalary) { _, _ in debouncedSync() }
                     }
-                } header: {
-                    Text("Salary")
-                }
 
-                // ── Location ────────────────────────────────────────
-                Section {
                     Toggle("Remote Only", isOn: $requireRemote)
                         .onChange(of: requireRemote) { _, _ in debouncedSync() }
 
@@ -226,10 +238,10 @@ struct SettingsView: View {
                             .onSubmit { debouncedSync() }
                     }
                 } header: {
-                    Text("Location")
+                    Text("The Basics")
                 }
 
-                // ── Preferred Roles ─────────────────────────────────
+                // ── Roles & Keywords ────────────────────────────────
                 Section {
                     ForEach(preferredRoles, id: \.self) { role in
                         Text(role)
@@ -257,11 +269,9 @@ struct SettingsView: View {
                     Text("Preferred Roles")
                 }
 
-                // ── Excluded Keywords ───────────────────────────────
                 Section {
                     ForEach(excludedKeywords, id: \.self) { kw in
-                        Text(kw)
-                            .foregroundStyle(.red)
+                        Text(kw).foregroundStyle(.red)
                     }
                     .onDelete { indexSet in
                         excludedKeywords.remove(atOffsets: indexSet)
@@ -286,7 +296,79 @@ struct SettingsView: View {
                     Text("Excluded Keywords")
                 }
 
-                // ── Backend ─────────────────────────────────────────
+                // ── Advanced: Individual Weights ────────────────────
+                Section {
+                    DisclosureGroup("Fine-Tune Weights", isExpanded: $showAdvanced) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text("Reject Below")
+                                    .font(.subheadline.weight(.semibold))
+                                Spacer()
+                                Text("\(Int(scoreCutoff * 100))%")
+                                    .font(.callout.weight(.bold).monospaced())
+                                    .foregroundStyle(scoreCutoff < 0.30 ? .green : scoreCutoff < 0.50 ? .orange : .red)
+                            }
+                            Slider(value: $scoreCutoff, in: 0.10...0.60, step: 0.05)
+                                .onChange(of: scoreCutoff) { _, _ in debouncedSync() }
+                            HStack {
+                                Text("More jobs").font(.caption2).foregroundStyle(.secondary)
+                                Spacer()
+                                Text("Pickier").font(.caption2).foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+
+                        Divider()
+
+                        WeightSlider(
+                            label: "Stack Mismatch",
+                            detail: "They require a stack you haven't used",
+                            value: $convincingPenalty, range: -0.40...0.0, step: 0.05, onChange: debouncedSync
+                        )
+                        WeightSlider(
+                            label: "\"Builders Welcome\"",
+                            detail: "They say 'show us what you've built'",
+                            value: $convincingBoost, range: 0.0...0.25, step: 0.05, onChange: debouncedSync
+                        )
+                        WeightSlider(
+                            label: "Portfolio-First",
+                            detail: "Value shipped products over credentials",
+                            value: $portfolioBoost, range: 0.0...0.25, step: 0.05, onChange: debouncedSync
+                        )
+
+                        Divider()
+
+                        WeightSlider(
+                            label: "Relocation",
+                            detail: "Requires moving to another US city",
+                            value: $relocationPenalty, range: -0.40...0.0, step: 0.05, onChange: debouncedSync
+                        )
+                        WeightSlider(
+                            label: "International",
+                            detail: "Job is outside the US",
+                            value: $internationalPenalty, range: -0.50...0.0, step: 0.05, onChange: debouncedSync
+                        )
+
+                        Divider()
+
+                        WeightSlider(
+                            label: "Experience Stretch",
+                            detail: "Wants 5+ years professional",
+                            value: $experiencePenalty, range: -0.30...0.0, step: 0.05, onChange: debouncedSync
+                        )
+                        WeightSlider(
+                            label: "Credential-Heavy",
+                            detail: "FAANG / rigid HR / degree gates",
+                            value: $credentialPenalty, range: -0.30...0.0, step: 0.05, onChange: debouncedSync
+                        )
+                    }
+                } header: {
+                    Text("Advanced")
+                } footer: {
+                    Text("Changing individual weights switches you to \"Custom\" mode.")
+                }
+
+                // ── Sync + Backend ──────────────────────────────────
                 Section {
                     HStack {
                         Label(syncLabel, systemImage: syncIcon)
@@ -296,35 +378,26 @@ struct SettingsView: View {
                             ProgressView()
                         }
                     }
-                } header: {
-                    Text("Sync Status")
-                } footer: {
-                    Text("Changes auto-sync to the backend. The scoring engine picks them up on the next ingest.")
-                }
-
-                Section("Backend") {
                     TextField("Server URL", text: $serverURL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
+                        .font(.caption.monospaced())
+                } header: {
+                    Text("Backend")
+                } footer: {
+                    Text("Changes auto-sync. Scoring engine picks them up on next ingest.")
                 }
 
                 Section {
                     Button("Reset to Defaults") {
+                        apply(.balanced)
                         let defaults = UserPreferences.default
                         minSalary = defaults.minSalary
                         requireRemote = defaults.requireRemote
                         locationPreference = defaults.locationPreference
                         preferredRoles = defaults.preferredRoles
                         excludedKeywords = defaults.excludedKeywords
-                        scoreCutoff = defaults.scoreCutoff
-                        convincingPenalty = defaults.convincingPenalty
-                        convincingBoost = defaults.convincingBoost
-                        relocationPenalty = defaults.relocationPenalty
-                        internationalPenalty = defaults.internationalPenalty
-                        experiencePenalty = defaults.experiencePenalty
-                        credentialPenalty = defaults.credentialPenalty
-                        portfolioBoost = defaults.portfolioBoost
                         maxSeniorityLevel = defaults.maxSeniorityLevel
                         serverURL = "http://Gunnars-Brain-Extension.local:8443"
                         saveRolesToStorage()
@@ -386,11 +459,6 @@ struct SettingsView: View {
 
     // MARK: - Sync Helpers
 
-    private var isSyncing: Bool {
-        if case .syncing = syncStatus { return true }
-        return false
-    }
-
     private var syncLabel: String {
         switch syncStatus {
         case .idle: return "Ready"
@@ -437,6 +505,34 @@ struct SettingsView: View {
         fmt.numberStyle = .currency
         fmt.maximumFractionDigits = 0
         return fmt.string(from: NSNumber(value: minSalary)) ?? "$\(minSalary)"
+    }
+}
+
+// MARK: - Preset Pill Button
+
+private struct PresetPill: View {
+    let preset: StrictnessPreset
+    let isActive: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(spacing: 4) {
+                Text(preset.emoji)
+                    .font(.title2)
+                Text(preset.rawValue)
+                    .font(.caption.weight(.semibold))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(isActive ? Color.accentColor.opacity(0.15) : Color.gray.opacity(0.08))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isActive ? Color.accentColor : .clear, lineWidth: 2)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -504,16 +600,16 @@ private struct ScoreSimulatorView: View {
 
     private var scenarios: [Scenario] {
         [
-            Scenario(emoji: "🎯", name: "Dream: AI startup, 'show us your apps'",
+            Scenario(emoji: "🎯", name: "AI startup — \"show us your apps\"",
                      baseScore: 0.85,
                      adjustments: ["portfolio": portfolioBoost, "builders": convincingBoost]),
-            Scenario(emoji: "💪", name: "Good: Founding eng, remote, no stack req",
+            Scenario(emoji: "💪", name: "Founding eng, remote, open stack",
                      baseScore: 0.78,
                      adjustments: ["portfolio": portfolioBoost]),
-            Scenario(emoji: "🤔", name: "Stretch: Requires React, NYC office",
+            Scenario(emoji: "🤔", name: "Requires React + NYC office",
                      baseScore: 0.65,
                      adjustments: ["convincing": convincingPenalty, "relocation": relocationPenalty]),
-            Scenario(emoji: "⚠️", name: "Risky: Enterprise, 5yr req, Berlin",
+            Scenario(emoji: "⚠️", name: "Enterprise, 5yr req, Berlin",
                      baseScore: 0.55,
                      adjustments: ["credential": credentialPenalty, "experience": experiencePenalty, "international": internationalPenalty]),
         ]
@@ -563,7 +659,6 @@ private struct ScoreSimulatorView: View {
                         }
                     }
                     Spacer()
-                    // Mini score bar
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
                             Capsule()
@@ -586,96 +681,5 @@ private struct ScoreSimulatorView: View {
         .animation(.easeInOut(duration: 0.2), value: credentialPenalty)
         .animation(.easeInOut(duration: 0.2), value: portfolioBoost)
         .animation(.easeInOut(duration: 0.2), value: scoreCutoff)
-    }
-}
-
-// MARK: - Helper Views
-
-private struct StrengthRow: View {
-    let icon: String
-    let color: Color
-    let title: String
-    let detail: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(color)
-                .frame(width: 28)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.vertical, 2)
-    }
-}
-
-private struct HardFilterRow: View {
-    let icon: String
-    let text: String
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.caption)
-                .foregroundStyle(.red)
-            Text(text)
-                .font(.subheadline)
-        }
-    }
-}
-
-private struct PenaltyRow: View {
-    let label: String
-    let penalty: String
-    let color: Color
-
-    var body: some View {
-        HStack {
-            Text(label)
-                .font(.subheadline)
-            Spacer()
-            Text(penalty)
-                .font(.caption.weight(.bold).monospaced())
-                .foregroundStyle(color)
-        }
-        .padding(.vertical, 1)
-    }
-}
-
-private struct ScoreTierRow: View {
-    let range: String
-    let emoji: String
-    let label: String
-    let detail: String
-    let color: Color
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Text(emoji)
-                .font(.title3)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(range)
-                        .font(.caption.weight(.bold).monospaced())
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(color.opacity(0.15))
-                        .foregroundStyle(color)
-                        .clipShape(Capsule())
-                    Text(label)
-                        .font(.subheadline.weight(.semibold))
-                }
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.vertical, 2)
     }
 }
