@@ -159,11 +159,15 @@ class UserPreferences(BaseModel):
         ]
     )
     location_preference: str = "Remote"
+    home_city: str = "Kalamazoo"
+    home_state: str = "Michigan"
 
     # ── Scoring Weights (adjustable from app) ──
     score_cutoff: float = 0.35
     convincing_penalty: float = -0.20
     convincing_boost: float = 0.10
+    nearby_penalty: float = -0.03
+    regional_penalty: float = -0.08
     relocation_penalty: float = -0.15
     international_penalty: float = -0.25
     experience_penalty: float = -0.10

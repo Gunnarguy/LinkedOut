@@ -38,18 +38,20 @@ private enum StrictnessPreset: String, CaseIterable, Identifiable {
     }
 
     // Maps preset → concrete weight values
+    //         cutoff  convinc  boost   nearby  regional reloc   intl    exp     cred    portfolio
     var weights: (cutoff: Double, convincing: Double, boost: Double,
+                  nearby: Double, regional: Double,
                   relocation: Double, international: Double,
                   experience: Double, credential: Double, portfolio: Double) {
         switch self {
         case .relaxed:
-            return (0.20, -0.10, 0.15, -0.05, -0.10, -0.05, -0.05, 0.15)
+            return (0.20, -0.10, 0.15, -0.01, -0.03, -0.05, -0.10, -0.05, -0.05, 0.15)
         case .balanced:
-            return (0.35, -0.20, 0.10, -0.15, -0.25, -0.10, -0.15, 0.10)
+            return (0.35, -0.20, 0.10, -0.03, -0.08, -0.15, -0.25, -0.10, -0.15, 0.10)
         case .strict:
-            return (0.50, -0.35, 0.05, -0.25, -0.40, -0.20, -0.25, 0.05)
+            return (0.50, -0.35, 0.05, -0.05, -0.15, -0.25, -0.40, -0.20, -0.25, 0.05)
         case .custom:
-            return (0.35, -0.20, 0.10, -0.15, -0.25, -0.10, -0.15, 0.10)
+            return (0.35, -0.20, 0.10, -0.03, -0.08, -0.15, -0.25, -0.10, -0.15, 0.10)
         }
     }
 }
@@ -61,11 +63,15 @@ struct SettingsView: View {
     @AppStorage("serverURL") private var serverURL: String = "http://Gunnars-Brain-Extension.local:8443"
     @AppStorage("preferredRolesJSON") private var preferredRolesJSON: String = "[]"
     @AppStorage("excludedKeywordsJSON") private var excludedKeywordsJSON: String = "[]"
+    @AppStorage("homeCity") private var homeCity: String = "Kalamazoo"
+    @AppStorage("homeState") private var homeState: String = "Michigan"
 
     // ── Scoring Weights ──
     @AppStorage("scoreCutoff") private var scoreCutoff: Double = 0.35
     @AppStorage("convincingPenalty") private var convincingPenalty: Double = -0.20
     @AppStorage("convincingBoost") private var convincingBoost: Double = 0.10
+    @AppStorage("nearbyPenalty") private var nearbyPenalty: Double = -0.03
+    @AppStorage("regionalPenalty") private var regionalPenalty: Double = -0.08
     @AppStorage("relocationPenalty") private var relocationPenalty: Double = -0.15
     @AppStorage("internationalPenalty") private var internationalPenalty: Double = -0.25
     @AppStorage("experiencePenalty") private var experiencePenalty: Double = -0.10
@@ -90,6 +96,8 @@ struct SettingsView: View {
             if abs(scoreCutoff - w.cutoff) < 0.01 &&
                abs(convincingPenalty - w.convincing) < 0.01 &&
                abs(convincingBoost - w.boost) < 0.01 &&
+               abs(nearbyPenalty - w.nearby) < 0.01 &&
+               abs(regionalPenalty - w.regional) < 0.01 &&
                abs(relocationPenalty - w.relocation) < 0.01 &&
                abs(internationalPenalty - w.international) < 0.01 &&
                abs(experiencePenalty - w.experience) < 0.01 &&
@@ -116,7 +124,11 @@ struct SettingsView: View {
             experiencePenalty: experiencePenalty,
             credentialPenalty: credentialPenalty,
             portfolioBoost: portfolioBoost,
-            maxSeniorityLevel: maxSeniorityLevel
+            maxSeniorityLevel: maxSeniorityLevel,
+            homeCity: homeCity,
+            homeState: homeState,
+            nearbyPenalty: nearbyPenalty,
+            regionalPenalty: regionalPenalty
         )
     }
 
@@ -128,6 +140,8 @@ struct SettingsView: View {
             scoreCutoff = w.cutoff
             convincingPenalty = w.convincing
             convincingBoost = w.boost
+            nearbyPenalty = w.nearby
+            regionalPenalty = w.regional
             relocationPenalty = w.relocation
             internationalPenalty = w.international
             experiencePenalty = w.experience
@@ -182,6 +196,8 @@ struct SettingsView: View {
                     ScoreSimulatorView(
                         convincingPenalty: convincingPenalty,
                         convincingBoost: convincingBoost,
+                        nearbyPenalty: nearbyPenalty,
+                        regionalPenalty: regionalPenalty,
                         relocationPenalty: relocationPenalty,
                         internationalPenalty: internationalPenalty,
                         experiencePenalty: experiencePenalty,
@@ -233,10 +249,25 @@ struct SettingsView: View {
                     Toggle("Remote Only", isOn: $requireRemote)
                         .onChange(of: requireRemote) { _, _ in debouncedSync() }
 
-                    if !requireRemote {
-                        TextField("Preferred Location", text: $locationPreference)
-                            .onSubmit { debouncedSync() }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Home Base")
+                            .font(.subheadline.weight(.semibold))
+                        HStack {
+                            Image(systemName: "house.fill")
+                                .foregroundStyle(.secondary)
+                            TextField("City", text: $homeCity)
+                                .onSubmit { debouncedSync() }
+                            Text(",")
+                                .foregroundStyle(.secondary)
+                            TextField("State", text: $homeState)
+                                .frame(width: 100)
+                                .onSubmit { debouncedSync() }
+                        }
+                        Text("Onsite jobs near \(homeCity) get little or no penalty")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
+                    .padding(.vertical, 4)
                 } header: {
                     Text("The Basics")
                 }
@@ -339,6 +370,16 @@ struct SettingsView: View {
                         Divider()
 
                         WeightSlider(
+                            label: "Nearby",
+                            detail: "Same state / ~1-2hr drive",
+                            value: $nearbyPenalty, range: -0.20...0.0, step: 0.01, onChange: debouncedSync
+                        )
+                        WeightSlider(
+                            label: "Regional",
+                            detail: "Neighboring state (OH, IN, WI, IL, MN)",
+                            value: $regionalPenalty, range: -0.30...0.0, step: 0.01, onChange: debouncedSync
+                        )
+                        WeightSlider(
                             label: "Relocation",
                             detail: "Requires moving to another US city",
                             value: $relocationPenalty, range: -0.40...0.0, step: 0.05, onChange: debouncedSync
@@ -399,6 +440,8 @@ struct SettingsView: View {
                         preferredRoles = defaults.preferredRoles
                         excludedKeywords = defaults.excludedKeywords
                         maxSeniorityLevel = defaults.maxSeniorityLevel
+                        homeCity = defaults.homeCity
+                        homeState = defaults.homeState
                         serverURL = "http://Gunnars-Brain-Extension.local:8443"
                         saveRolesToStorage()
                         saveKeywordsToStorage()
@@ -584,6 +627,8 @@ private struct WeightSlider: View {
 private struct ScoreSimulatorView: View {
     let convincingPenalty: Double
     let convincingBoost: Double
+    let nearbyPenalty: Double
+    let regionalPenalty: Double
     let relocationPenalty: Double
     let internationalPenalty: Double
     let experiencePenalty: Double
@@ -603,9 +648,12 @@ private struct ScoreSimulatorView: View {
             Scenario(emoji: "🎯", name: "AI startup — \"show us your apps\"",
                      baseScore: 0.85,
                      adjustments: ["portfolio": portfolioBoost, "builders": convincingBoost]),
-            Scenario(emoji: "💪", name: "Founding eng, remote, open stack",
+            Scenario(emoji: "📍", name: "Grand Rapids office, open stack",
                      baseScore: 0.78,
-                     adjustments: ["portfolio": portfolioBoost]),
+                     adjustments: ["portfolio": portfolioBoost, "nearby": nearbyPenalty]),
+            Scenario(emoji: "🚗", name: "Chicago hybrid, needs React",
+                     baseScore: 0.70,
+                     adjustments: ["convincing": convincingPenalty, "regional": regionalPenalty]),
             Scenario(emoji: "🤔", name: "Requires React + NYC office",
                      baseScore: 0.65,
                      adjustments: ["convincing": convincingPenalty, "relocation": relocationPenalty]),
@@ -675,6 +723,8 @@ private struct ScoreSimulatorView: View {
         .padding(.vertical, 4)
         .animation(.easeInOut(duration: 0.2), value: convincingPenalty)
         .animation(.easeInOut(duration: 0.2), value: convincingBoost)
+        .animation(.easeInOut(duration: 0.2), value: nearbyPenalty)
+        .animation(.easeInOut(duration: 0.2), value: regionalPenalty)
         .animation(.easeInOut(duration: 0.2), value: relocationPenalty)
         .animation(.easeInOut(duration: 0.2), value: internationalPenalty)
         .animation(.easeInOut(duration: 0.2), value: experiencePenalty)

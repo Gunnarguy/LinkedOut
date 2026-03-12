@@ -311,11 +311,16 @@ Below {score_cutoff} — REJECT:
 - Companies that would be put off by AI-generated code
 
 ### Location Adjustments
+The user lives in {home_city}, {home_state}. Apply graduated penalties based on distance:
 - Remote / Remote-first: no penalty
-- Bay Area (SF, Palo Alto, San Jose, Mountain View): -0.03
-- Hybrid Bay Area (2-3 days/week): -0.05
-- Other US cities requiring relocation: {relocation_penalty}
+- Same city or metro area ({home_city} area): no penalty
+- Same state or nearby metro (~1-2hr drive): {nearby_penalty}
+- Neighboring state (OH, IN, WI, IL, MN): {regional_penalty}
+- Other US city requiring full relocation: {relocation_penalty}
 - International: {international_penalty}
+
+When in doubt about a location, err toward the LOWER penalty. Do NOT over-penalize
+jobs that list both remote and an office location — if remote is an option, no penalty.
 
 ### "Convincing Required" Penalty
 This is the MOST IMPORTANT adjustment. If the role has hard requirements in a stack
@@ -545,10 +550,14 @@ async def score_job(
     system = system.replace("{score_cutoff}", f"{prefs.score_cutoff:.2f}")
     system = system.replace("{convincing_penalty}", f"{prefs.convincing_penalty:+.2f}")
     system = system.replace("{convincing_boost}", f"{prefs.convincing_boost:+.2f}")
+    system = system.replace("{nearby_penalty}", f"{prefs.nearby_penalty:+.2f}")
+    system = system.replace("{regional_penalty}", f"{prefs.regional_penalty:+.2f}")
     system = system.replace("{relocation_penalty}", f"{prefs.relocation_penalty:+.2f}")
     system = system.replace(
         "{international_penalty}", f"{prefs.international_penalty:+.2f}"
     )
+    system = system.replace("{home_city}", prefs.home_city)
+    system = system.replace("{home_state}", prefs.home_state)
     system = system.replace("{experience_penalty}", f"{prefs.experience_penalty:+.2f}")
     system = system.replace("{credential_penalty}", f"{prefs.credential_penalty:+.2f}")
     system = system.replace("{portfolio_boost}", f"{prefs.portfolio_boost:+.2f}")
