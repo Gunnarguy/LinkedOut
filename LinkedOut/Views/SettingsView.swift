@@ -14,13 +14,24 @@ struct SettingsView: View {
     @AppStorage("serverURL") private var serverURL: String = "http://Gunnars-Brain-Extension.local:8443"
     @AppStorage("preferredRolesJSON") private var preferredRolesJSON: String = "[]"
     @AppStorage("excludedKeywordsJSON") private var excludedKeywordsJSON: String = "[]"
+
+    // ── Scoring Weights ──
+    @AppStorage("scoreCutoff") private var scoreCutoff: Double = 0.35
+    @AppStorage("convincingPenalty") private var convincingPenalty: Double = -0.20
+    @AppStorage("convincingBoost") private var convincingBoost: Double = 0.10
+    @AppStorage("relocationPenalty") private var relocationPenalty: Double = -0.15
+    @AppStorage("internationalPenalty") private var internationalPenalty: Double = -0.25
+    @AppStorage("experiencePenalty") private var experiencePenalty: Double = -0.10
+    @AppStorage("credentialPenalty") private var credentialPenalty: Double = -0.15
+    @AppStorage("portfolioBoost") private var portfolioBoost: Double = 0.10
+    @AppStorage("maxSeniorityLevel") private var maxSeniorityLevel: String = "Mid"
+
     @State private var preferredRoles: [String] = []
     @State private var excludedKeywords: [String] = []
     @State private var newRole = ""
     @State private var newKeyword = ""
     @State private var syncStatus: SyncStatus = .idle
-    @State private var showingScoringDetail = false
-    @State private var showingHardFilters = false
+    @State private var pendingSyncTask: Task<Void, Never>?
 
     private enum SyncStatus { case idle, syncing, synced, failed(String) }
 
@@ -30,163 +41,203 @@ struct SettingsView: View {
             requireRemote: requireRemote,
             preferredRoles: preferredRoles,
             excludedKeywords: excludedKeywords,
-            locationPreference: locationPreference
+            locationPreference: locationPreference,
+            scoreCutoff: scoreCutoff,
+            convincingPenalty: convincingPenalty,
+            convincingBoost: convincingBoost,
+            relocationPenalty: relocationPenalty,
+            internationalPenalty: internationalPenalty,
+            experiencePenalty: experiencePenalty,
+            credentialPenalty: credentialPenalty,
+            portfolioBoost: portfolioBoost,
+            maxSeniorityLevel: maxSeniorityLevel
         )
     }
 
     var body: some View {
         NavigationStack {
             List {
-                // ── Scoring Brain Overview ──────────────────────────
+                // ── Live Score Simulator ────────────────────────────
                 Section {
-                    VStack(alignment: .leading, spacing: 16) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "brain.head.profile.fill")
-                                .font(.system(size: 28))
-                                .foregroundStyle(.purple)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("AI Scoring Engine")
-                                    .font(.headline)
-                                Text("Calibrated to your real profile")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
+                    ScoreSimulatorView(
+                        convincingPenalty: convincingPenalty,
+                        convincingBoost: convincingBoost,
+                        relocationPenalty: relocationPenalty,
+                        internationalPenalty: internationalPenalty,
+                        experiencePenalty: experiencePenalty,
+                        credentialPenalty: credentialPenalty,
+                        portfolioBoost: portfolioBoost,
+                        scoreCutoff: scoreCutoff
+                    )
+                } header: {
+                    Text("Live Score Preview")
+                } footer: {
+                    Text("See how your adjustments affect example job scenarios. Drag the sliders below to tune.")
+                }
 
-                        // Your identity card
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("THE ENGINE KNOWS YOU AS")
-                                .font(.caption2.weight(.bold))
-                                .foregroundStyle(.secondary)
-                                .tracking(1)
-
-                            Text("AI orchestrator — does NOT write code by hand. Ships products by directing LLMs to generate all code while handling architecture, product design, and systems thinking. 5 shipped products (4 App Store + LinkedOut). 382 commits/year. Working in healthcare ops at VA Palo Alto. Looking for companies that already want someone like this — no convincing required.")
-                                .font(.subheadline)
-                                .foregroundStyle(.primary.opacity(0.85))
+                // ── Score Cutoff ────────────────────────────────────
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Reject Below")
+                                .font(.headline)
+                            Spacer()
+                            Text("\(Int(scoreCutoff * 100))%")
+                                .font(.title3.weight(.bold).monospaced())
+                                .foregroundStyle(scoreCutoff < 0.30 ? .green : scoreCutoff < 0.50 ? .orange : .red)
                         }
-                        .padding(12)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        Slider(value: $scoreCutoff, in: 0.10...0.60, step: 0.05)
+                            .onChange(of: scoreCutoff) { _, _ in debouncedSync() }
+                        HStack {
+                            Text("More jobs").font(.caption2).foregroundStyle(.secondary)
+                            Spacer()
+                            Text("Higher quality").font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Quality Threshold")
+                } footer: {
+                    Text("Jobs scoring below this are auto-rejected. Lower = more volume, higher = pickier.")
+                }
+
+                // ── Convincing Penalty/Boost ────────────────────────
+                Section {
+                    WeightSlider(
+                        label: "Hard Stack Mismatch",
+                        detail: "Penalty when they require a stack you haven't used",
+                        value: $convincingPenalty,
+                        range: -0.40...0.0,
+                        step: 0.05,
+                        onChange: debouncedSync
+                    )
+                    WeightSlider(
+                        label: "Builders Welcome Boost",
+                        detail: "Bonus when they say \"show us what you've built\"",
+                        value: $convincingBoost,
+                        range: 0.0...0.25,
+                        step: 0.05,
+                        onChange: debouncedSync
+                    )
+                    WeightSlider(
+                        label: "Portfolio / Shipped Products",
+                        detail: "Bonus when they value shipped products over credentials",
+                        value: $portfolioBoost,
+                        range: 0.0...0.25,
+                        step: 0.05,
+                        onChange: debouncedSync
+                    )
+                } header: {
+                    Text("\"Convincing Required\" Weights")
+                } footer: {
+                    Text("The core question: would they already want you, or would you have to sell yourself?")
+                }
+
+                // ── Location Weights ────────────────────────────────
+                Section {
+                    WeightSlider(
+                        label: "Relocation (Other US City)",
+                        detail: "Penalty for jobs requiring relocation to NYC, Austin, etc.",
+                        value: $relocationPenalty,
+                        range: -0.40...0.0,
+                        step: 0.05,
+                        onChange: debouncedSync
+                    )
+                    WeightSlider(
+                        label: "International",
+                        detail: "Penalty for jobs in London, Berlin, etc.",
+                        value: $internationalPenalty,
+                        range: -0.50...0.0,
+                        step: 0.05,
+                        onChange: debouncedSync
+                    )
+                } header: {
+                    Text("Location Weights")
+                }
+
+                // ── Experience & Credentials ────────────────────────
+                Section {
+                    WeightSlider(
+                        label: "Experience Stretch",
+                        detail: "Penalty when they want 5+ years professional",
+                        value: $experiencePenalty,
+                        range: -0.30...0.0,
+                        step: 0.05,
+                        onChange: debouncedSync
+                    )
+                    WeightSlider(
+                        label: "Credential-Heavy Culture",
+                        detail: "Penalty for rigid HR, enterprise, FAANG-style hiring",
+                        value: $credentialPenalty,
+                        range: -0.30...0.0,
+                        step: 0.05,
+                        onChange: debouncedSync
+                    )
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Max Seniority Level")
+                            .font(.subheadline.weight(.semibold))
+                        Picker("", selection: $maxSeniorityLevel) {
+                            Text("Junior").tag("Junior")
+                            Text("Mid").tag("Mid")
+                            Text("Senior").tag("Senior")
+                            Text("Any").tag("Any")
+                        }
+                        .pickerStyle(.segmented)
+                        .onChange(of: maxSeniorityLevel) { _, _ in debouncedSync() }
                     }
                     .padding(.vertical, 4)
                 } header: {
-                    Text("Scoring Intelligence")
-                }
-
-                // ── Your Weapons ────────────────────────────────────
-                Section {
-                    StrengthRow(icon: "sparkles", color: .purple, title: "AI Orchestration",
-                                detail: "THE core skill — directs LLMs to ship complete products at extreme velocity")
-                    StrengthRow(icon: "hammer.fill", color: .orange, title: "RAG / Embeddings / Vector Search",
-                                detail: "OpenIntelligence, OpenCone, OpenAssistant — 3 production RAG systems")
-                    StrengthRow(icon: "shippingbox.fill", color: .green, title: "5 Shipped Products",
-                                detail: "4 App Store + LinkedOut (full-stack). Not tutorials — real products.")
-                    StrengthRow(icon: "link", color: .indigo, title: "MCP / Agent Tooling",
-                                detail: "OpenResponses — tool-use, multi-model, Computer Use")
-                    StrengthRow(icon: "brain", color: .pink, title: "Systems Thinking",
-                                detail: "Architecture, data flow, integration design — stack-agnostic")
-                    StrengthRow(icon: "cross.case.fill", color: .red, title: "Healthcare Domain",
-                                detail: "HIPAA, surgical workflows, medical devices, VA system")
-                } header: {
-                    Text("Your Weapons (score boosters)")
+                    Text("Experience & Credentials")
                 } footer: {
-                    Text("Companies that value these skills — especially AI orchestration and shipped products — score highest.")
+                    Text("Seniority filter: roles above your max level are auto-rejected in triage.")
                 }
 
-                // ── Hard Filters (instant reject) ───────────────────
+                // ── Salary ──────────────────────────────────────────
                 Section {
-                    HardFilterRow(icon: "xmark.shield.fill", text: "Senior / Staff / Lead / Principal / Director titles")
-                    HardFilterRow(icon: "xmark.shield.fill", text: "CS degree required (no equivalent accepted)")
-                    HardFilterRow(icon: "xmark.shield.fill", text: "7+ years professional SWE required")
-                    HardFilterRow(icon: "xmark.shield.fill", text: "5+ years required with no flexibility")
-                    HardFilterRow(icon: "xmark.shield.fill", text: "Non-tech roles (sales, marketing, HR, legal)")
-                } header: {
-                    Text("Hard Filters (instant reject)")
-                } footer: {
-                    Text("These never reach your queue. The AI bouncer kills them on sight — no exceptions.")
-                }
-
-                // ── Score Penalties (transparent) ───────────────────
-                Section {
-                    DisclosureGroup("Location Penalties") {
-                        PenaltyRow(label: "Remote / Remote-first", penalty: "None", color: .green)
-                        PenaltyRow(label: "Bay Area (SF, Palo Alto, SJ)", penalty: "−3%", color: .yellow)
-                        PenaltyRow(label: "Hybrid Bay Area", penalty: "−5%", color: .yellow)
-                        PenaltyRow(label: "Other US (NYC, Austin, Seattle…)", penalty: "−15%", color: .orange)
-                        PenaltyRow(label: "International (London, Berlin…)", penalty: "−25%", color: .red)
-                    }
-
-                    DisclosureGroup("\"Convincing Required\" Penalties") {
-                        PenaltyRow(label: "Company wants builders / portfolio-first", penalty: "+10%", color: .green)
-                        PenaltyRow(label: "Any modern framework / stack-agnostic", penalty: "+10%", color: .green)
-                        PenaltyRow(label: "Stack preferred but not required", penalty: "−5%", color: .yellow)
-                        PenaltyRow(label: "Hard stack req, no learner signal", penalty: "−15 to −25%", color: .red)
-                        PenaltyRow(label: "Enterprise / rigid HR / credential-heavy", penalty: "−15%", color: .red)
-                    }
-
-                    DisclosureGroup("Experience Reality Penalties") {
-                        PenaltyRow(label: "1-3 years or any experience", penalty: "None", color: .green)
-                        PenaltyRow(label: "3-5 years professional", penalty: "−5% + flagged", color: .yellow)
-                        PenaltyRow(label: "5+ years with flexibility", penalty: "−10% + flagged", color: .orange)
-                        PenaltyRow(label: "CS degree preferred", penalty: "−3% + flagged", color: .yellow)
-                        PenaltyRow(label: "CS degree or equivalent", penalty: "−5% + flagged", color: .yellow)
-                        PenaltyRow(label: "Elite hiring bar (FAANG, quant)", penalty: "−10%", color: .red)
-                    }
-                } header: {
-                    Text("Score Adjustments (fully transparent)")
-                } footer: {
-                    Text("Every score you see has these adjustments baked in. No hidden inflation — what you see is what you get.")
-                }
-
-                // ── Score Tiers Explained ───────────────────────────
-                Section {
-                    ScoreTierRow(range: "90-100", emoji: "🎯", label: "Dream Fit",
-                                 detail: "They already want someone like you. No convincing needed. ~3-5% of jobs.", color: .green)
-                    ScoreTierRow(range: "80-89", emoji: "💪", label: "Strong Fit",
-                                 detail: "Culture signals say they'd be excited by your profile. ~10% of jobs.", color: .blue)
-                    ScoreTierRow(range: "65-79", emoji: "👍", label: "Solid Option",
-                                 detail: "Interesting company, some alignment. Minor unknowns. ~15% of jobs.", color: .indigo)
-                    ScoreTierRow(range: "50-64", emoji: "🤔", label: "Stretch",
-                                 detail: "You'd need to do some convincing. ~15% of jobs.", color: .orange)
-                    ScoreTierRow(range: "35-49", emoji: "🎲", label: "Long Shot",
-                                 detail: "Significant convincing needed but compelling mission.", color: .red)
-                } header: {
-                    Text("What the scores mean")
-                } footer: {
-                    Text("Below 35 never reaches your queue. The key question: would they already want you, or would you have to convince them?");
-                }
-
-                // ── Editable Preferences ────────────────────────────
-                Section("Salary") {
                     VStack(alignment: .leading) {
-                        Text("Minimum: \(formattedSalary)")
-                            .font(.headline)
+                        HStack {
+                            Text("Minimum")
+                                .font(.subheadline)
+                            Spacer()
+                            Text(formattedSalary)
+                                .font(.headline.monospaced())
+                        }
                         Slider(
                             value: Binding(
                                 get: { Double(minSalary) },
                                 set: { minSalary = Int($0) }
                             ),
-                            in: 50_000...300_000,
+                            in: 0...300_000,
                             step: 5_000
                         )
+                        .onChange(of: minSalary) { _, _ in debouncedSync() }
                     }
+                } header: {
+                    Text("Salary")
                 }
 
-                Section("Location") {
+                // ── Location ────────────────────────────────────────
+                Section {
                     Toggle("Remote Only", isOn: $requireRemote)
+                        .onChange(of: requireRemote) { _, _ in debouncedSync() }
 
                     if !requireRemote {
                         TextField("Preferred Location", text: $locationPreference)
+                            .onSubmit { debouncedSync() }
                     }
+                } header: {
+                    Text("Location")
                 }
 
-                Section("Preferred Roles") {
+                // ── Preferred Roles ─────────────────────────────────
+                Section {
                     ForEach(preferredRoles, id: \.self) { role in
                         Text(role)
                     }
                     .onDelete { indexSet in
                         preferredRoles.remove(atOffsets: indexSet)
                         saveRolesToStorage()
+                        debouncedSync()
                     }
 
                     HStack {
@@ -196,14 +247,18 @@ struct SettingsView: View {
                             preferredRoles.append(newRole.trimmingCharacters(in: .whitespaces))
                             newRole = ""
                             saveRolesToStorage()
+                            debouncedSync()
                         } label: {
                             Image(systemName: "plus.circle.fill")
                         }
                         .disabled(newRole.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
+                } header: {
+                    Text("Preferred Roles")
                 }
 
-                Section("Excluded Keywords") {
+                // ── Excluded Keywords ───────────────────────────────
+                Section {
                     ForEach(excludedKeywords, id: \.self) { kw in
                         Text(kw)
                             .foregroundStyle(.red)
@@ -211,6 +266,7 @@ struct SettingsView: View {
                     .onDelete { indexSet in
                         excludedKeywords.remove(atOffsets: indexSet)
                         saveKeywordsToStorage()
+                        debouncedSync()
                     }
 
                     HStack {
@@ -220,31 +276,30 @@ struct SettingsView: View {
                             excludedKeywords.append(newKeyword.trimmingCharacters(in: .whitespaces))
                             newKeyword = ""
                             saveKeywordsToStorage()
+                            debouncedSync()
                         } label: {
                             Image(systemName: "plus.circle.fill")
                         }
                         .disabled(newKeyword.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
+                } header: {
+                    Text("Excluded Keywords")
                 }
 
-                // ── Sync & Backend ──────────────────────────────────
+                // ── Backend ─────────────────────────────────────────
                 Section {
-                    Button {
-                        Task { await syncPreferences() }
-                    } label: {
-                        HStack {
-                            Label(syncLabel, systemImage: syncIcon)
-                            if case .syncing = syncStatus {
-                                Spacer()
-                                ProgressView()
-                            }
+                    HStack {
+                        Label(syncLabel, systemImage: syncIcon)
+                            .foregroundStyle(syncColor)
+                        if case .syncing = syncStatus {
+                            Spacer()
+                            ProgressView()
                         }
                     }
-                    .disabled(isSyncing)
                 } header: {
-                    Text("Sync")
+                    Text("Sync Status")
                 } footer: {
-                    Text("Push your preferences to the backend. The AI scoring engine applies them on the next ingest cycle.")
+                    Text("Changes auto-sync to the backend. The scoring engine picks them up on the next ingest.")
                 }
 
                 Section("Backend") {
@@ -262,9 +317,19 @@ struct SettingsView: View {
                         locationPreference = defaults.locationPreference
                         preferredRoles = defaults.preferredRoles
                         excludedKeywords = defaults.excludedKeywords
+                        scoreCutoff = defaults.scoreCutoff
+                        convincingPenalty = defaults.convincingPenalty
+                        convincingBoost = defaults.convincingBoost
+                        relocationPenalty = defaults.relocationPenalty
+                        internationalPenalty = defaults.internationalPenalty
+                        experiencePenalty = defaults.experiencePenalty
+                        credentialPenalty = defaults.credentialPenalty
+                        portfolioBoost = defaults.portfolioBoost
+                        maxSeniorityLevel = defaults.maxSeniorityLevel
                         serverURL = "http://Gunnars-Brain-Extension.local:8443"
                         saveRolesToStorage()
                         saveKeywordsToStorage()
+                        debouncedSync()
                     }
                     .foregroundStyle(.red)
                 }
@@ -308,6 +373,17 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Debounced Auto-Sync
+
+    private func debouncedSync() {
+        pendingSyncTask?.cancel()
+        pendingSyncTask = Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            await syncPreferences()
+        }
+    }
+
     // MARK: - Sync Helpers
 
     private var isSyncing: Bool {
@@ -317,19 +393,28 @@ struct SettingsView: View {
 
     private var syncLabel: String {
         switch syncStatus {
-        case .idle: return "Sync Preferences"
+        case .idle: return "Ready"
         case .syncing: return "Syncing..."
-        case .synced: return "Synced!"
+        case .synced: return "Synced"
         case .failed(let msg): return "Failed: \(msg)"
         }
     }
 
     private var syncIcon: String {
         switch syncStatus {
-        case .idle: return "arrow.triangle.2.circlepath"
+        case .idle: return "checkmark.circle"
         case .syncing: return "arrow.triangle.2.circlepath"
         case .synced: return "checkmark.circle.fill"
         case .failed: return "exclamationmark.triangle"
+        }
+    }
+
+    private var syncColor: Color {
+        switch syncStatus {
+        case .idle: return .secondary
+        case .syncing: return .blue
+        case .synced: return .green
+        case .failed: return .red
         }
     }
 
@@ -352,6 +437,155 @@ struct SettingsView: View {
         fmt.numberStyle = .currency
         fmt.maximumFractionDigits = 0
         return fmt.string(from: NSNumber(value: minSalary)) ?? "$\(minSalary)"
+    }
+}
+
+// MARK: - Weight Slider
+
+private struct WeightSlider: View {
+    let label: String
+    let detail: String
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let step: Double
+    let onChange: () -> Void
+
+    private var displayValue: String {
+        let pct = Int(value * 100)
+        if pct > 0 { return "+\(pct)%" }
+        if pct < 0 { return "\(pct)%" }
+        return "0%"
+    }
+
+    private var valueColor: Color {
+        if value > 0.01 { return .green }
+        if value < -0.01 { return .red }
+        return .secondary
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(label)
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Text(displayValue)
+                    .font(.callout.weight(.bold).monospaced())
+                    .foregroundStyle(valueColor)
+            }
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Slider(value: $value, in: range, step: step)
+                .onChange(of: value) { _, _ in onChange() }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Live Score Simulator
+
+private struct ScoreSimulatorView: View {
+    let convincingPenalty: Double
+    let convincingBoost: Double
+    let relocationPenalty: Double
+    let internationalPenalty: Double
+    let experiencePenalty: Double
+    let credentialPenalty: Double
+    let portfolioBoost: Double
+    let scoreCutoff: Double
+
+    private struct Scenario {
+        let emoji: String
+        let name: String
+        let baseScore: Double
+        let adjustments: [String: Double]
+    }
+
+    private var scenarios: [Scenario] {
+        [
+            Scenario(emoji: "🎯", name: "Dream: AI startup, 'show us your apps'",
+                     baseScore: 0.85,
+                     adjustments: ["portfolio": portfolioBoost, "builders": convincingBoost]),
+            Scenario(emoji: "💪", name: "Good: Founding eng, remote, no stack req",
+                     baseScore: 0.78,
+                     adjustments: ["portfolio": portfolioBoost]),
+            Scenario(emoji: "🤔", name: "Stretch: Requires React, NYC office",
+                     baseScore: 0.65,
+                     adjustments: ["convincing": convincingPenalty, "relocation": relocationPenalty]),
+            Scenario(emoji: "⚠️", name: "Risky: Enterprise, 5yr req, Berlin",
+                     baseScore: 0.55,
+                     adjustments: ["credential": credentialPenalty, "experience": experiencePenalty, "international": internationalPenalty]),
+        ]
+    }
+
+    private func finalScore(_ scenario: Scenario) -> Double {
+        let adjustmentSum = scenario.adjustments.values.reduce(0, +)
+        return min(1.0, max(0.0, scenario.baseScore + adjustmentSum))
+    }
+
+    private func scoreColor(_ score: Double) -> Color {
+        if score >= 0.90 { return .green }
+        if score >= 0.80 { return .blue }
+        if score >= 0.65 { return .indigo }
+        if score >= 0.50 { return .orange }
+        return .red
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(Array(scenarios.enumerated()), id: \.offset) { _, scenario in
+                let score = finalScore(scenario)
+                let rejected = score < scoreCutoff
+                HStack(spacing: 8) {
+                    Text(scenario.emoji)
+                        .font(.title3)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(scenario.name)
+                            .font(.caption)
+                            .foregroundStyle(rejected ? .secondary : .primary)
+                            .strikethrough(rejected)
+                        HStack(spacing: 4) {
+                            Text("\(Int(scenario.baseScore * 100))")
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(.secondary)
+                            Image(systemName: "arrow.right")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text("\(Int(score * 100))")
+                                .font(.caption.weight(.bold).monospaced())
+                                .foregroundStyle(rejected ? .red : scoreColor(score))
+                            if rejected {
+                                Text("REJECTED")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(.red)
+                            }
+                        }
+                    }
+                    Spacer()
+                    // Mini score bar
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(Color.gray.opacity(0.15))
+                            Capsule()
+                                .fill(rejected ? .red.opacity(0.4) : scoreColor(score))
+                                .frame(width: max(0, geo.size.width * score))
+                        }
+                    }
+                    .frame(width: 60, height: 8)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+        .animation(.easeInOut(duration: 0.2), value: convincingPenalty)
+        .animation(.easeInOut(duration: 0.2), value: convincingBoost)
+        .animation(.easeInOut(duration: 0.2), value: relocationPenalty)
+        .animation(.easeInOut(duration: 0.2), value: internationalPenalty)
+        .animation(.easeInOut(duration: 0.2), value: experiencePenalty)
+        .animation(.easeInOut(duration: 0.2), value: credentialPenalty)
+        .animation(.easeInOut(duration: 0.2), value: portfolioBoost)
+        .animation(.easeInOut(duration: 0.2), value: scoreCutoff)
     }
 }
 

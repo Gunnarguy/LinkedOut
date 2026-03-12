@@ -250,7 +250,11 @@ what stack it's in" — that's a MASSIVE BOOST.
 ## Hard Filters (REJECT if ANY of these are true)
 - REJECT if the listing STRICTLY requires a CS/engineering degree with NO "or equivalent
   experience" escape hatch (if degree is "preferred" or "or equivalent", it PASSES)
-- REJECT roles titled "Senior", "Staff", "Lead", "Principal", "Head of", or "Director"
+- REJECT roles above "{max_seniority_level}" level (seniority hierarchy: Junior < Mid < Senior < Any).
+  If max is "Junior": reject Mid, Senior, Staff, Lead, Principal, Director.
+  If max is "Mid": reject Senior, Staff, Lead, Principal, Director.
+  If max is "Senior": reject Staff, Lead, Principal, Director.
+  If max is "Any": no seniority-based rejection.
 - REJECT if it explicitly requires 7+ years of professional software engineering experience
 - REJECT if it explicitly requires 5+ years AND lists no flexibility
 - REJECT pure non-tech roles (sales, marketing, HR, legal, finance, design-only)
@@ -300,7 +304,7 @@ or would Gunnar have to convince them?"
 - Clear preference for traditional backgrounds
 - Interesting only because the mission is compelling
 
-Below 0.35 — REJECT:
+Below {score_cutoff} — REJECT:
 - Would definitely need to convince them
 - Enterprise, legacy, bureaucratic
 - Hard stack requirements in unfamiliar territory
@@ -310,24 +314,25 @@ Below 0.35 — REJECT:
 - Remote / Remote-first: no penalty
 - Bay Area (SF, Palo Alto, San Jose, Mountain View): -0.03
 - Hybrid Bay Area (2-3 days/week): -0.05
-- Other US cities requiring relocation: -0.15
-- International: -0.25
+- Other US cities requiring relocation: {relocation_penalty}
+- International: {international_penalty}
 
 ### "Convincing Required" Penalty
 This is the MOST IMPORTANT adjustment. If the role has hard requirements in a stack
 Gunnar hasn't used (React, Vue, Flutter, Java, Go, etc.) AND the listing gives NO signal
 they welcome fast learners or value portfolio over keywords:
-- Hard requirement in unfamiliar stack, no "or equivalent": -0.15 to -0.25
+- Hard requirement in unfamiliar stack, no "or equivalent": {convincing_penalty}
 - Preferred but not required in unfamiliar stack: -0.05
-- "Any modern framework" or "we value builders": +0.10
+- "Any modern framework" or "we value builders": {convincing_boost}
+- Company values shipped products / portfolio-first: {portfolio_boost}
 
 ### Experience Reality Adjustments
 - "1-3 years" or "any experience": no penalty
 - "3-5 years professional": -0.05 and FLAG (his App Store apps may or may not count)
-- "5+ years" with flexibility: -0.10 and FLAG
+- "5+ years" with flexibility: {experience_penalty} and FLAG
 - "CS degree preferred": -0.03 and FLAG
 - "CS degree or equivalent": -0.05 and FLAG
-- Known elite/selective companies (FAANG, Jane Street): -0.10
+- Known elite/selective companies (FAANG, Jane Street): {credential_penalty}
 
 ## EXTRACTION INSTRUCTIONS — Be Thorough!
 
@@ -491,7 +496,8 @@ PASS (dominated=true) if the job is ANY of:
 - Entry, junior, or mid-level roles (or no seniority specified)
 
 REJECT (dominated=false) if the job clearly is:
-- Titled "Senior", "Staff", "Lead", "Principal", "Director", or "VP"
+- Above the user's max seniority level (see system context for current setting)
+- Titled "Senior", "Staff", "Lead", "Principal", "Director", or "VP" (unless max seniority allows it)
 - Explicitly requires a CS/engineering degree with NO alternative
 - Requires 5+ years of professional experience with no flexibility
 - Has HARD requirements in a specific stack (React, Java, Go, etc.) with NO signal
@@ -536,6 +542,17 @@ async def score_job(
         prefs = UserPreferences()
 
     system = SYSTEM_PROMPT.replace("{min_salary}", str(prefs.min_salary))
+    system = system.replace("{score_cutoff}", f"{prefs.score_cutoff:.2f}")
+    system = system.replace("{convincing_penalty}", f"{prefs.convincing_penalty:+.2f}")
+    system = system.replace("{convincing_boost}", f"{prefs.convincing_boost:+.2f}")
+    system = system.replace("{relocation_penalty}", f"{prefs.relocation_penalty:+.2f}")
+    system = system.replace(
+        "{international_penalty}", f"{prefs.international_penalty:+.2f}"
+    )
+    system = system.replace("{experience_penalty}", f"{prefs.experience_penalty:+.2f}")
+    system = system.replace("{credential_penalty}", f"{prefs.credential_penalty:+.2f}")
+    system = system.replace("{portfolio_boost}", f"{prefs.portfolio_boost:+.2f}")
+    system = system.replace("{max_seniority_level}", prefs.max_seniority_level)
 
     user_msg = f"""Evaluate this job listing and extract EVERYTHING useful:
 
@@ -609,7 +626,7 @@ async def score_job(
 
     except Exception as e:
         logger.warning(f"[SCORE] LLM ERROR for {raw.title} @ {raw.company}: {type(e).__name__}: {e or '(empty)'} — falling back to local")
-        return score_job_locally(raw)
+        return score_job_locally(raw, prefs)
 
 
 # ── Local keyword-based scorer (no LLM needed) ──────────────────────────────
@@ -673,13 +690,15 @@ _NEGATIVE_KEYWORDS = [
 _NEGATIVE_COMPILED = [(re.compile(p, re.IGNORECASE), s) for p, s in _NEGATIVE_KEYWORDS]
 
 
-def score_job_locally(raw: RawJobListing) -> ScoringResult:
+def score_job_locally(raw: RawJobListing, prefs: UserPreferences | None = None) -> ScoringResult:
     """Fast keyword-based scoring — no LLM, works offline. Used as fallback."""
     title = raw.title
     text = f"{raw.title} {raw.company} {raw.description}"
 
-    # Hard reject: Senior titles
-    if _SENIOR_RE.search(title):
+    max_level = (prefs.max_seniority_level if prefs else "Mid").lower()
+
+    # Hard reject: Senior titles (respecting max seniority setting)
+    if max_level != "any" and _SENIOR_RE.search(title):
         logger.info(f"[LOCAL] REJECTED (senior title) | {title} @ {raw.company}")
         return ScoringResult(
             passed_filter=False,
@@ -914,14 +933,14 @@ async def triage_and_score(
                         f"switching to local scorer for remaining {len(remaining)} listings"
                     )
                     for r in remaining:
-                        results.append(score_job_locally(r))
+                        results.append(score_job_locally(r, prefs))
                 break
 
             await asyncio.sleep(0.5)
     else:
         logger.warning("LLM scoring failed — using local keyword scorer for all")
         for raw in survivors[1:]:
-            results.append(score_job_locally(raw))
+            results.append(score_job_locally(raw, prefs))
 
     passed = sum(1 for r in results if r.passed_filter)
     logger.info(f"Phase 2 complete: {passed}/{len(survivors)} passed scoring")

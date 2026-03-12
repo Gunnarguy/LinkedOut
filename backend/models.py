@@ -160,6 +160,17 @@ class UserPreferences(BaseModel):
     )
     location_preference: str = "Remote"
 
+    # ── Scoring Weights (adjustable from app) ──
+    score_cutoff: float = 0.35
+    convincing_penalty: float = -0.20
+    convincing_boost: float = 0.10
+    relocation_penalty: float = -0.15
+    international_penalty: float = -0.25
+    experience_penalty: float = -0.10
+    credential_penalty: float = -0.15
+    portfolio_boost: float = 0.10
+    max_seniority_level: str = "Mid"
+
 
 # ── Batch / Pipeline ────────────────────────────────────────────────────────
 
