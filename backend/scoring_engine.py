@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from openai import AsyncOpenAI
 
 from config import settings
+from location_mapper import classify_location, TIER_LABELS
 from models import JobPayload, RawJobListing, ScoringResult, UserPreferences
 
 logger = logging.getLogger(__name__)
@@ -563,11 +564,18 @@ async def score_job(
     system = system.replace("{portfolio_boost}", f"{prefs.portfolio_boost:+.2f}")
     system = system.replace("{max_seniority_level}", prefs.max_seniority_level)
 
+    # Classify location tier and inject into prompt
+    loc_tier = classify_location(
+        raw.location or "", prefs.home_city, prefs.home_state, raw.is_remote
+    )
+    tier_label = TIER_LABELS.get(loc_tier, "unknown")
+
     user_msg = f"""Evaluate this job listing and extract EVERYTHING useful:
 
 **Title:** {raw.title}
 **Company:** {raw.company}
 **Location:** {raw.location}
+**Location Tier:** {tier_label} (tier {loc_tier} — use the matching penalty from the location adjustments above)
 **Remote:** {raw.is_remote if raw.is_remote is not None else "Unknown"}
 **Salary info:** {raw.salary_text or "Not specified"}
 **URL:** {raw.url}
@@ -733,8 +741,26 @@ def score_job_locally(raw: RawJobListing, prefs: UserPreferences | None = None) 
         if pattern.search(text):
             score += penalty  # penalty is negative
 
+    # ── Location penalty (graduated tiers) ──
+    loc_tier = classify_location(
+        raw.location or "",
+        prefs.home_city if prefs else "Kalamazoo",
+        prefs.home_state if prefs else "Michigan",
+        raw.is_remote,
+    )
+    if loc_tier == 1:
+        score += prefs.nearby_penalty if prefs else -0.03
+    elif loc_tier == 2:
+        score += prefs.regional_penalty if prefs else -0.08
+    elif loc_tier == 3:
+        score += prefs.relocation_penalty if prefs else -0.15
+    elif loc_tier == 4:
+        score += prefs.international_penalty if prefs else -0.25
+
     score = max(0.05, min(1.0, score))
-    logger.info(f"[LOCAL] PASS score={score:.2f} | {title} @ {raw.company}")
+    logger.info(
+        f"[LOCAL] PASS score={score:.2f} tier={loc_tier} | {title} @ {raw.company}"
+    )
 
     # Extract basic info
     tech_stack = []

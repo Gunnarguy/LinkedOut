@@ -116,19 +116,19 @@ struct SettingsView: View {
             preferredRoles: preferredRoles,
             excludedKeywords: excludedKeywords,
             locationPreference: locationPreference,
+            homeCity: homeCity,
+            homeState: homeState,
             scoreCutoff: scoreCutoff,
             convincingPenalty: convincingPenalty,
             convincingBoost: convincingBoost,
+            nearbyPenalty: nearbyPenalty,
+            regionalPenalty: regionalPenalty,
             relocationPenalty: relocationPenalty,
             internationalPenalty: internationalPenalty,
             experiencePenalty: experiencePenalty,
             credentialPenalty: credentialPenalty,
             portfolioBoost: portfolioBoost,
-            maxSeniorityLevel: maxSeniorityLevel,
-            homeCity: homeCity,
-            homeState: homeState,
-            nearbyPenalty: nearbyPenalty,
-            regionalPenalty: regionalPenalty
+            maxSeniorityLevel: maxSeniorityLevel
         )
     }
 
