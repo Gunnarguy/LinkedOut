@@ -189,13 +189,30 @@ async def _periodic_ingest(interval_hours: int = 6):
         await asyncio.sleep(interval_hours * 3600)
 
 
+async def _keep_alive(interval_minutes: int = 10):
+    """Self-ping to prevent Render free tier from sleeping."""
+    import httpx
+
+    url = f"http://localhost:{settings.port}/health"
+    while True:
+        await asyncio.sleep(interval_minutes * 60)
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                await client.get(url)
+            logger.debug("Keep-alive ping OK")
+        except Exception:
+            pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: kick off initial job ingest. Shutdown: cancel background task."""
+    """Startup: kick off initial job ingest + keep-alive. Shutdown: cancel tasks."""
     global _ingest_task
     logger.info("LinkedOut engine starting — scheduling initial job ingest...")
     _ingest_task = asyncio.create_task(_periodic_ingest())
+    _keepalive_task = asyncio.create_task(_keep_alive())
     yield
+    _keepalive_task.cancel()
     if _ingest_task:
         _ingest_task.cancel()
         try:
