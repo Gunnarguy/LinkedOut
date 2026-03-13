@@ -52,8 +52,8 @@ struct ProfileView: View {
                                     .foregroundStyle(.secondary)
                             }
 
-                            if !profile.vanityName.isEmpty {
-                                Link(destination: URL(string: profile.profileUrl)!) {
+                            if !profile.vanityName.isEmpty, let url = URL(string: profile.profileUrl) {
+                                Link(destination: url) {
                                     Label("View LinkedIn Profile", systemImage: "arrow.up.right.square")
                                         .font(.subheadline)
                                 }

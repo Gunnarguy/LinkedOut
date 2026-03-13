@@ -184,8 +184,8 @@ struct JobDetailView: View {
 
             // Links row
             HStack(spacing: 16) {
-                if !job.sourceUrl.isEmpty {
-                    Link(destination: URL(string: job.sourceUrl) ?? URL(string: "https://linkedin.com")!) {
+                if !job.sourceUrl.isEmpty, let url = URL(string: job.sourceUrl) {
+                    Link(destination: url) {
                         Label("View Listing", systemImage: "arrow.up.right.square")
                             .font(.subheadline)
                     }
