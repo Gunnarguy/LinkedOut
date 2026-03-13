@@ -404,7 +404,7 @@ async def triage_job(raw: RawJobListing, prefs: UserPreferences | None = None) -
 
     try:
         content = await _call_llm(triage_sys, user_msg, use_flash=True)
-        data = json.loads(content)
+        data: dict = json.loads(content)
         if isinstance(data, list) and len(data) > 0:
             data = data[0]
         passed = data.get("dominated", False)
@@ -470,7 +470,7 @@ async def score_job(
 
     try:
         content = await _call_llm(system, user_msg, use_flash=True)
-        data = json.loads(content)
+        data: dict = json.loads(content)
 
         # Gemini sometimes wraps the response in an array
         if isinstance(data, list) and len(data) > 0:

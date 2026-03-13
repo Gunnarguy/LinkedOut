@@ -112,7 +112,7 @@ class JobStore:
         cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
         to_remove = []
         for jid, job in self._pending.items():
-            if job.posted_at and job.posted_at < cutoff:
+            if not job.posted_at or job.posted_at < cutoff:
                 to_remove.append(jid)
         for jid in to_remove:
             self._pending.pop(jid)

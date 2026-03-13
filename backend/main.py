@@ -462,6 +462,7 @@ async def ingest_refresh():
 
     async def _do_manual_ingest():
         global _last_ingest_result
+        store.expire_old_jobs(max_age_days=14)
         _last_ingest_result = await _run_ingest_cycle()
 
     _manual_ingest_task = asyncio.create_task(_do_manual_ingest())
