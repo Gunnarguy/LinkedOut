@@ -236,10 +236,10 @@ ACTUALLY SAYS, or am I inferring enthusiasm that isn't there?"
 
 ### Score Adjustments (apply on top of base assessment)
 
-**Location** (user lives in {home_city}, {home_state}):
+**Location** (user's acceptable locations: {preferred_locations}):
 - Remote / remote-first: no penalty
-- Same city/metro: no penalty
-- Nearby (~1-2hr): {nearby_penalty}
+- Job in one of user's preferred cities/states: no penalty
+- Nearby (~1-2hr from any preferred location): {nearby_penalty}
 - Neighboring state: {regional_penalty}
 - Full US relocation: {relocation_penalty}
 - International: {international_penalty}
@@ -365,7 +365,7 @@ The goal is a ~40% pass rate — most jobs should NOT make it through.
 Candidate: High-agency product engineer. Orchestrates AI to generate all code.
 Shipped 5 products (4 on App Store). Swift/iOS, Python, RAG, vector DBs.
 NO CS degree, no professional SWE experience. Healthcare ops day job (Stryker/VA).
-Home: {home_city}, {home_state}. Wants 100% remote.
+Home: {preferred_locations}. Wants 100% remote.
 
 ## REJECT (dominated=false) if ANY are true:
 - Requires on-site or hybrid attendance (must be 100% remote or highly autonomous)
@@ -403,8 +403,12 @@ async def triage_job(raw: RawJobListing, prefs: UserPreferences | None = None) -
     """Fast triage with Flash model. Returns True if worth full scoring."""
     if prefs is None:
         prefs = UserPreferences()
-    triage_sys = TRIAGE_PROMPT.replace("{home_city}", prefs.home_city)
-    triage_sys = triage_sys.replace("{home_state}", prefs.home_state)
+    locations_formatted = (
+        ", ".join(prefs.preferred_locations)
+        if prefs.preferred_locations
+        else "Kalamazoo, Michigan"
+    )
+    triage_sys = TRIAGE_PROMPT.replace("{preferred_locations}", locations_formatted)
     user_msg = f"Title: {raw.title}\nCompany: {raw.company}\nLocation: {raw.location}\nRemote: {raw.is_remote}\n\nDescription (first 1500 chars):\n{raw.description[:1500]}"
 
     try:
@@ -429,6 +433,12 @@ async def score_job(
     if prefs is None:
         prefs = UserPreferences()
 
+    locations_formatted = (
+        ", ".join(prefs.preferred_locations)
+        if prefs.preferred_locations
+        else "Kalamazoo, Michigan"
+    )
+
     system = SYSTEM_PROMPT.replace("{min_salary}", str(prefs.min_salary))
     system = system.replace("{score_cutoff}", f"{prefs.score_cutoff:.2f}")
     system = system.replace("{convincing_penalty}", f"{prefs.convincing_penalty:+.2f}")
@@ -439,8 +449,7 @@ async def score_job(
     system = system.replace(
         "{international_penalty}", f"{prefs.international_penalty:+.2f}"
     )
-    system = system.replace("{home_city}", prefs.home_city)
-    system = system.replace("{home_state}", prefs.home_state)
+    system = system.replace("{preferred_locations}", locations_formatted)
     system = system.replace("{experience_penalty}", f"{prefs.experience_penalty:+.2f}")
     system = system.replace("{credential_penalty}", f"{prefs.credential_penalty:+.2f}")
     system = system.replace("{portfolio_boost}", f"{prefs.portfolio_boost:+.2f}")
@@ -448,7 +457,11 @@ async def score_job(
 
     # Classify location tier and inject into prompt
     loc_tier = classify_location(
-        raw.location or "", prefs.home_city, prefs.home_state, raw.is_remote
+        raw.location or "",
+        prefs.home_city,
+        prefs.home_state,
+        raw.is_remote,
+        preferred_locations=prefs.preferred_locations,
     )
     tier_label = TIER_LABELS.get(loc_tier, "unknown")
 
@@ -641,6 +654,7 @@ def score_job_locally(raw: RawJobListing, prefs: UserPreferences | None = None) 
         prefs.home_city if prefs else "Kalamazoo",
         prefs.home_state if prefs else "Michigan",
         raw.is_remote,
+        preferred_locations=prefs.preferred_locations if prefs else None,
     )
     if loc_tier == 1:
         score += prefs.nearby_penalty if prefs else -0.03

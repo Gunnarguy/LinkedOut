@@ -126,9 +126,136 @@ _MI_NEARBY: dict[str, list[str]] = {
     "Traverse City": ["Saginaw", "Cadillac"],
 }
 
-# Neighboring states to Michigan
-_NEIGHBORING_STATES = {
-    "michigan": {"ohio", "indiana", "wisconsin", "illinois", "minnesota"},
+# Neighboring states (geographically adjacent)
+_NEIGHBORING_STATES: dict[str, set[str]] = {
+    "alabama": {"mississippi", "tennessee", "georgia", "florida"},
+    "arizona": {"california", "nevada", "utah", "colorado", "new mexico"},
+    "arkansas": {
+        "missouri",
+        "tennessee",
+        "mississippi",
+        "louisiana",
+        "texas",
+        "oklahoma",
+    },
+    "california": {"oregon", "nevada", "arizona"},
+    "colorado": {
+        "wyoming",
+        "nebraska",
+        "kansas",
+        "oklahoma",
+        "new mexico",
+        "arizona",
+        "utah",
+    },
+    "connecticut": {"new york", "massachusetts", "rhode island"},
+    "delaware": {"maryland", "pennsylvania", "new jersey"},
+    "florida": {"georgia", "alabama"},
+    "georgia": {"florida", "alabama", "tennessee", "north carolina", "south carolina"},
+    "idaho": {"montana", "wyoming", "utah", "nevada", "oregon", "washington"},
+    "illinois": {"indiana", "kentucky", "missouri", "iowa", "wisconsin"},
+    "indiana": {"michigan", "ohio", "kentucky", "illinois"},
+    "iowa": {
+        "minnesota",
+        "wisconsin",
+        "illinois",
+        "missouri",
+        "nebraska",
+        "south dakota",
+    },
+    "kansas": {"nebraska", "missouri", "oklahoma", "colorado"},
+    "kentucky": {
+        "indiana",
+        "ohio",
+        "west virginia",
+        "virginia",
+        "tennessee",
+        "missouri",
+        "illinois",
+    },
+    "louisiana": {"texas", "arkansas", "mississippi"},
+    "maine": {"new hampshire"},
+    "maryland": {"pennsylvania", "delaware", "west virginia", "virginia"},
+    "massachusetts": {
+        "rhode island",
+        "connecticut",
+        "new york",
+        "vermont",
+        "new hampshire",
+    },
+    "michigan": {"ohio", "indiana", "wisconsin"},
+    "minnesota": {"wisconsin", "iowa", "south dakota", "north dakota"},
+    "mississippi": {"louisiana", "arkansas", "tennessee", "alabama"},
+    "missouri": {
+        "iowa",
+        "illinois",
+        "kentucky",
+        "tennessee",
+        "arkansas",
+        "oklahoma",
+        "kansas",
+        "nebraska",
+    },
+    "montana": {"north dakota", "south dakota", "wyoming", "idaho"},
+    "nebraska": {"south dakota", "iowa", "missouri", "kansas", "colorado", "wyoming"},
+    "nevada": {"oregon", "idaho", "utah", "arizona", "california"},
+    "new hampshire": {"maine", "vermont", "massachusetts"},
+    "new jersey": {"new york", "pennsylvania", "delaware"},
+    "new mexico": {"arizona", "utah", "colorado", "oklahoma", "texas"},
+    "new york": {
+        "vermont",
+        "massachusetts",
+        "connecticut",
+        "new jersey",
+        "pennsylvania",
+    },
+    "north carolina": {"virginia", "tennessee", "georgia", "south carolina"},
+    "north dakota": {"minnesota", "south dakota", "montana"},
+    "ohio": {"michigan", "indiana", "kentucky", "west virginia", "pennsylvania"},
+    "oklahoma": {"kansas", "missouri", "arkansas", "texas", "new mexico", "colorado"},
+    "oregon": {"washington", "idaho", "nevada", "california"},
+    "pennsylvania": {
+        "new york",
+        "new jersey",
+        "delaware",
+        "maryland",
+        "west virginia",
+        "ohio",
+    },
+    "rhode island": {"connecticut", "massachusetts"},
+    "south carolina": {"north carolina", "georgia"},
+    "south dakota": {
+        "north dakota",
+        "minnesota",
+        "iowa",
+        "nebraska",
+        "wyoming",
+        "montana",
+    },
+    "tennessee": {
+        "kentucky",
+        "virginia",
+        "north carolina",
+        "georgia",
+        "alabama",
+        "mississippi",
+        "arkansas",
+        "missouri",
+    },
+    "texas": {"new mexico", "oklahoma", "arkansas", "louisiana"},
+    "utah": {"idaho", "wyoming", "colorado", "new mexico", "arizona", "nevada"},
+    "vermont": {"new hampshire", "massachusetts", "new york"},
+    "virginia": {
+        "maryland",
+        "west virginia",
+        "kentucky",
+        "tennessee",
+        "north carolina",
+    },
+    "washington": {"oregon", "idaho"},
+    "west virginia": {"ohio", "pennsylvania", "maryland", "virginia", "kentucky"},
+    "wisconsin": {"michigan", "minnesota", "iowa", "illinois"},
+    "wyoming": {"montana", "south dakota", "nebraska", "colorado", "utah", "idaho"},
 }
 
 # ── US States list (for detecting domestic vs international) ────────────────
@@ -365,17 +492,75 @@ def _find_metro(city_text: str, home_state: str = "michigan") -> str | None:
     return None
 
 
+def _classify_single(
+    job_location_norm: str,
+    job_state: str | None,
+    home_city: str,
+    home_state: str,
+) -> int:
+    """Classify a job location relative to a single preferred location."""
+    home_state_lower = home_state.lower()
+    home_city_lower = _normalize(home_city)
+
+    # Direct city name match → home
+    if home_city_lower and home_city_lower in job_location_norm:
+        return 0
+
+    # Try to find the metro within home state (Michigan has detailed data)
+    home_metro = _find_metro(home_city, home_state_lower)
+    job_metro = (
+        _find_metro(job_location_norm, home_state_lower)
+        if home_state_lower == "michigan"
+        else None
+    )
+
+    # If we're in the same metro → home
+    if job_metro and home_metro and job_metro == home_metro:
+        return 0
+
+    # If we're in a nearby metro within the same state → nearby
+    if job_metro and home_metro:
+        nearby_list = _MI_NEARBY.get(home_metro, [])
+        if job_metro in nearby_list:
+            return 1
+
+    # If it's in the home state → nearby
+    if job_state == home_state_lower:
+        return 1
+
+    # Neighboring states → regional
+    neighbors = _NEIGHBORING_STATES.get(home_state_lower, set())
+    if job_state and job_state in neighbors:
+        return 2
+
+    # If it's a US state we recognized → far_us
+    if job_state:
+        return 3
+
+    # Check for known US tech hubs
+    for hub in _US_TECH_HUBS:
+        if hub in job_location_norm:
+            return 3
+
+    # If we can't tell, assume far US
+    return 3
+
+
 def classify_location(
     job_location: str,
     home_city: str = "Kalamazoo",
     home_state: str = "Michigan",
     is_remote: bool | None = None,
+    preferred_locations: list[str] | None = None,
 ) -> int:
     """
-    Classify a job's location into a tier relative to the user's home.
+    Classify a job's location into a tier relative to the user's preferred locations.
+
+    If preferred_locations is provided, checks against ALL of them and returns
+    the best (lowest) tier. Falls back to home_city/home_state for backward compat.
 
     Returns:
-        0 = home (same metro)
+        0 = home (same metro / preferred city)
         1 = nearby (same state, neighboring metro)
         2 = regional (neighboring state)
         3 = far_us (rest of US)
@@ -400,46 +585,32 @@ def classify_location(
         if signal in norm:
             return 4
 
-    # Try to find the state
+    # Pre-compute job state once
     job_state = _extract_state(norm)
-    home_state_lower = home_state.lower()
 
-    # Try to find the metro within home state
-    home_metro = _find_metro(home_city, home_state_lower)
-    job_metro = (
-        _find_metro(norm, home_state_lower) if home_state_lower == "michigan" else None
-    )
+    # Build list of (city, state) pairs to check against
+    locations_to_check: list[tuple[str, str]] = []
+    if preferred_locations:
+        for loc in preferred_locations:
+            parts = loc.split(",", 1)
+            city = parts[0].strip()
+            state = parts[1].strip() if len(parts) > 1 else ""
+            if city or state:
+                locations_to_check.append((city, state))
 
-    # If we're in the same metro → home
-    if job_metro and home_metro and job_metro == home_metro:
-        return 0
+    # Fallback to single home_city/home_state
+    if not locations_to_check:
+        locations_to_check.append((home_city, home_state))
 
-    # If we're in a nearby metro within the same state → nearby
-    if job_metro and home_metro:
-        nearby_list = _MI_NEARBY.get(home_metro, [])
-        if job_metro in nearby_list:
-            return 1
+    # Check against all preferred locations, return best tier
+    best_tier = 4
+    for city, state in locations_to_check:
+        tier = _classify_single(norm, job_state, city, state)
+        best_tier = min(best_tier, tier)
+        if best_tier == 0:
+            break  # Can't do better than home
 
-    # If its in the home state (even if we didn't match a city) → nearby
-    if job_state == home_state_lower:
-        return 1
-
-    # Neighboring states → regional
-    neighbors = _NEIGHBORING_STATES.get(home_state_lower, set())
-    if job_state and job_state in neighbors:
-        return 2
-
-    # If it's a US state we recognized → far_us
-    if job_state:
-        return 3
-
-    # Check for known US tech hubs
-    for hub in _US_TECH_HUBS:
-        if hub in norm:
-            return 3
-
-    # If we can't tell, assume far US (don't over-penalize as international)
-    return 3
+    return best_tier
 
 
 # Tier labels for the scoring prompt

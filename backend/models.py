@@ -164,8 +164,25 @@ class UserPreferences(BaseModel):
         ]
     )
     location_preference: str = "Remote"
-    home_city: str = "Kalamazoo"
-    home_state: str = "Michigan"
+    preferred_locations: list[str] = Field(
+        default_factory=lambda: ["Kalamazoo, Michigan"]
+    )
+
+    @property
+    def home_city(self) -> str:
+        """Primary city for backward compat."""
+        if self.preferred_locations:
+            parts = self.preferred_locations[0].split(",", 1)
+            return parts[0].strip()
+        return "Kalamazoo"
+
+    @property
+    def home_state(self) -> str:
+        """Primary state for backward compat."""
+        if self.preferred_locations:
+            parts = self.preferred_locations[0].split(",", 1)
+            return parts[1].strip() if len(parts) > 1 else ""
+        return "Michigan"
 
     # ── Scoring Weights (adjustable from app) ──
     score_cutoff: float = 0.35

@@ -13,8 +13,7 @@ struct UserPreferences: Codable {
     var preferredRoles: [String]
     var excludedKeywords: [String]
     var locationPreference: String
-    var homeCity: String
-    var homeState: String
+    var preferredLocations: [String]
 
     // ── Scoring Weights (adjustable) ──
     var scoreCutoff: Double
@@ -35,8 +34,7 @@ struct UserPreferences: Codable {
         case preferredRoles = "preferred_roles"
         case excludedKeywords = "excluded_keywords"
         case locationPreference = "location_preference"
-        case homeCity = "home_city"
-        case homeState = "home_state"
+        case preferredLocations = "preferred_locations"
         case scoreCutoff = "score_cutoff"
         case convincingPenalty = "convincing_penalty"
         case convincingBoost = "convincing_boost"
@@ -72,8 +70,7 @@ struct UserPreferences: Codable {
             "SRE"
         ],
         locationPreference: "Remote",
-        homeCity: "Kalamazoo",
-        homeState: "Michigan",
+        preferredLocations: ["Kalamazoo, Michigan"],
         scoreCutoff: 0.35,
         convincingPenalty: -0.20,
         convincingBoost: 0.10,

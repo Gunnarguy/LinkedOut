@@ -63,8 +63,7 @@ struct SettingsView: View {
     @AppStorage("serverURL") private var serverURL: String = "http://Gunnars-Brain-Extension.local:8443"
     @AppStorage("preferredRolesJSON") private var preferredRolesJSON: String = "[]"
     @AppStorage("excludedKeywordsJSON") private var excludedKeywordsJSON: String = "[]"
-    @AppStorage("homeCity") private var homeCity: String = "Kalamazoo"
-    @AppStorage("homeState") private var homeState: String = "Michigan"
+    @AppStorage("preferredLocationsJSON") private var preferredLocationsJSON: String = "[\"Kalamazoo, Michigan\"]"
 
     // ── Scoring Weights ──
     @AppStorage("scoreCutoff") private var scoreCutoff: Double = 0.35
@@ -80,9 +79,12 @@ struct SettingsView: View {
     @AppStorage("maxSeniorityLevel") private var maxSeniorityLevel: String = "Mid"
 
     @State private var preferredRoles: [String] = []
+    @State private var preferredLocations: [String] = ["Kalamazoo, Michigan"]
     @State private var excludedKeywords: [String] = []
     @State private var newRole = ""
     @State private var newKeyword = ""
+    @State private var newLocationCity = ""
+    @State private var newLocationState = ""
     @State private var syncStatus: SyncStatus = .idle
     @State private var pendingSyncTask: Task<Void, Never>?
     @State private var showAdvanced = false
@@ -116,8 +118,7 @@ struct SettingsView: View {
             preferredRoles: preferredRoles,
             excludedKeywords: excludedKeywords,
             locationPreference: locationPreference,
-            homeCity: homeCity,
-            homeState: homeState,
+            preferredLocations: preferredLocations,
             scoreCutoff: scoreCutoff,
             convincingPenalty: convincingPenalty,
             convincingBoost: convincingBoost,
@@ -248,28 +249,50 @@ struct SettingsView: View {
 
                     Toggle("Remote Only", isOn: $requireRemote)
                         .onChange(of: requireRemote) { _, _ in debouncedSync() }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Your Location")
-                            .font(.subheadline.weight(.semibold))
-                        HStack {
-                            Image(systemName: "location.fill")
-                                .foregroundStyle(.blue)
-                            TextField("City", text: $homeCity)
-                                .onSubmit { debouncedSync() }
-                            Text(",")
-                                .foregroundStyle(.secondary)
-                            TextField("State", text: $homeState)
-                                .frame(width: 100)
-                                .onSubmit { debouncedSync() }
-                        }
-                        Text("Used to calculate commute distance for on-site roles")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 4)
                 } header: {
                     Text("The Basics")
+                }
+
+                // ── Acceptable Locations ────────────────────────────
+                Section {
+                    ForEach(preferredLocations, id: \.self) { location in
+                        HStack {
+                            Image(systemName: "mappin.circle.fill")
+                                .foregroundStyle(.blue)
+                            Text(location)
+                        }
+                    }
+                    .onDelete { indexSet in
+                        preferredLocations.remove(atOffsets: indexSet)
+                        saveLocationsToStorage()
+                        debouncedSync()
+                    }
+
+                    HStack(spacing: 6) {
+                        TextField("City", text: $newLocationCity)
+                        Text(",").foregroundStyle(.secondary)
+                        TextField("State", text: $newLocationState)
+                            .frame(width: 100)
+                        Button {
+                            let city = newLocationCity.trimmingCharacters(in: .whitespaces)
+                            let state = newLocationState.trimmingCharacters(in: .whitespaces)
+                            guard !city.isEmpty || !state.isEmpty else { return }
+                            let entry = state.isEmpty ? city : "\(city), \(state)"
+                            preferredLocations.append(entry)
+                            newLocationCity = ""
+                            newLocationState = ""
+                            saveLocationsToStorage()
+                            debouncedSync()
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                        }
+                        .disabled(newLocationCity.trimmingCharacters(in: .whitespaces).isEmpty
+                                  && newLocationState.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                } header: {
+                    Text("Acceptable Locations")
+                } footer: {
+                    Text("Cities and states you'd be willing to work in. Jobs in these areas won't be penalized for distance.")
                 }
 
                 // ── Roles & Keywords ────────────────────────────────
@@ -440,11 +463,11 @@ struct SettingsView: View {
                         preferredRoles = defaults.preferredRoles
                         excludedKeywords = defaults.excludedKeywords
                         maxSeniorityLevel = defaults.maxSeniorityLevel
-                        homeCity = defaults.homeCity
-                        homeState = defaults.homeState
+                        preferredLocations = defaults.preferredLocations
                         serverURL = "http://Gunnars-Brain-Extension.local:8443"
                         saveRolesToStorage()
                         saveKeywordsToStorage()
+                        saveLocationsToStorage()
                         debouncedSync()
                     }
                     .foregroundStyle(.red)
@@ -475,6 +498,15 @@ struct SettingsView: View {
             excludedKeywords = UserPreferences.default.excludedKeywords
             saveKeywordsToStorage()
         }
+
+        if let data = preferredLocationsJSON.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode([String].self, from: data),
+           !decoded.isEmpty {
+            preferredLocations = decoded
+        } else {
+            preferredLocations = UserPreferences.default.preferredLocations
+            saveLocationsToStorage()
+        }
     }
 
     private func saveRolesToStorage() {
@@ -486,6 +518,12 @@ struct SettingsView: View {
     private func saveKeywordsToStorage() {
         if let data = try? JSONEncoder().encode(excludedKeywords) {
             excludedKeywordsJSON = String(data: data, encoding: .utf8) ?? "[]"
+        }
+    }
+
+    private func saveLocationsToStorage() {
+        if let data = try? JSONEncoder().encode(preferredLocations) {
+            preferredLocationsJSON = String(data: data, encoding: .utf8) ?? "[\"Kalamazoo, Michigan\"]"
         }
     }
 
