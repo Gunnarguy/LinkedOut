@@ -51,6 +51,11 @@ class JobPayload(BaseModel):
         default_factory=list
     )  # Honest warnings about why this role might reject the user
 
+    # ── Why Matrix (structured factual assessment) ───────────────────────
+    logic_fit: str = ""  # How the role maps to what Gunnar actually does
+    domain_leverage: str = ""  # Where he has an unfair advantage
+    risk_reward: str = ""  # Realistic friction and upside
+
     # ── User-Managed Fields (not from LLM) ───────────────────────────────
     notes: str = ""  # User's personal notes
     application_status: str = (
@@ -133,7 +138,7 @@ class AuthStatusResponse(BaseModel):
 
 
 class UserPreferences(BaseModel):
-    min_salary: int = 50000
+    min_salary: int = 90000
     require_remote: bool = False
     preferred_roles: list[str] = Field(
         default_factory=lambda: [

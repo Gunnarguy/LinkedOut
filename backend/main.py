@@ -182,8 +182,9 @@ async def _run_ingest_cycle():
 
 
 async def _periodic_ingest(interval_hours: int = 6):
-    """Run ingest cycle on a schedule."""
+    """Run ingest cycle on a schedule. Also expires stale jobs."""
     while True:
+        store.expire_old_jobs(max_age_days=14)
         await _run_ingest_cycle()
         logger.info(f"Next ingest in {interval_hours} hours")
         await asyncio.sleep(interval_hours * 3600)

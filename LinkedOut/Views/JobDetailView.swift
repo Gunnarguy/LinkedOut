@@ -239,9 +239,39 @@ struct JobDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if let why = job.whyInteresting, !why.isEmpty {
+            // Why Matrix — structured factual assessment
+            if let logic = job.logicFit, !logic.isEmpty {
+                whyMatrixCard(
+                    title: "Logic Fit",
+                    icon: "arrow.triangle.branch",
+                    color: .blue,
+                    text: logic
+                )
+            }
+
+            if let domain = job.domainLeverage, !domain.isEmpty {
+                whyMatrixCard(
+                    title: "Domain Leverage",
+                    icon: "star.fill",
+                    color: .purple,
+                    text: domain
+                )
+            }
+
+            if let risk = job.riskReward, !risk.isEmpty {
+                whyMatrixCard(
+                    title: "Risk / Reward",
+                    icon: "arrow.up.arrow.down",
+                    color: .orange,
+                    text: risk
+                )
+            }
+
+            // Fallback: show legacy why_interesting if no Why Matrix
+            if job.logicFit == nil || (job.logicFit ?? "").isEmpty,
+               let why = job.whyInteresting, !why.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Why This Is Interesting For You")
+                    Text("Why This Is Interesting")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.green)
                     Text(why)
@@ -254,6 +284,21 @@ struct JobDetailView: View {
             }
         }
         .padding(20)
+    }
+
+    private func whyMatrixCard(title: String, icon: String, color: Color, text: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(title, systemImage: icon)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(color)
+            Text(text)
+                .font(.body)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(color.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: - AI Pitch

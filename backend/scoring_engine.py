@@ -54,7 +54,7 @@ async def _call_gemini(
             contents=user_msg,
             config={
                 "system_instruction": system,
-                "temperature": 1.0,
+                "temperature": 0.3,
                 "response_mime_type": "application/json",
             },
         ),
@@ -154,302 +154,169 @@ async def _call_llm(
 
 
 SYSTEM_PROMPT = """\
-You are the AI Bouncer for LinkedOut — an elite career-screening and intelligence engine.
+You are a cold, analytical executive recruiter. No cheerleading. No hype.
+Your job: evaluate a job listing against a specific candidate profile and produce
+a factual intelligence brief. The candidate will use this as his primary research
+document. Every claim must trace to something concrete in the listing or the profile.
 
-Your job: evaluate a raw job listing, extract EVERYTHING knowable about the company
-and role, and decide if it's worth the user's time. Be thorough. The user will use
-your output as their primary research document for this opportunity.
+## Candidate Profile — Gunnar Hostetler
 
-## User Profile — Gunnar Hostetler
-Gunnar is NOT a traditional software engineer. He does NOT write code himself.
-He is an AI orchestrator — he architects systems in his head and uses LLMs (Claude,
-GPT, Gemini) to generate ALL the code. The vision, architecture, product design,
-and systems thinking are his. The keystrokes come from models.
+### Classification: High-Agency Product Engineer
+He does NOT write code by hand. He architectures systems and orchestrates AI agents
+(Claude, GPT, Gemini) to generate all implementation. The skill is the orchestration:
+seeing whole systems, decomposing them into buildable units, and shipping at extreme
+velocity via LLMs. He is stack-agnostic — iOS is his current medium because it was
+accessible, but the method transfers to any platform.
 
-This is his CORE IDENTITY. Do not soften it. Do not hide it. Companies that would
-be turned off by this are NOT his companies.
+### Shipped Portfolio (all live — gunnarguy.me)
+- **OpenIntelligence**: On-device RAG engine, hybrid search (semantic + keyword),
+  Core ML embeddings, Apple Intelligence integration, fully offline. 202 commits.
+- **OpenResponses**: OpenAI Responses API client with MCP integration (Notion,
+  Dropbox, Gmail). Tool orchestration, multi-model conversations. 88 commits.
+- **OpenCone**: Pinecone vector DB RAG app with hybrid search + reranking. 122 commits.
+- **OpenAssistant**: Assistants API client with full thread management. 214 commits.
+- **LinkedOut**: Full-stack job screening platform (SwiftUI + FastAPI + Docker + LLM scoring).
+- 382 commits in the last year across these projects.
 
-### What He's Built (all live on the App Store — gunnarguy.me)
-- **OpenIntelligence**: On-device RAG engine with hybrid search (semantic + keyword),
-  Apple Intelligence integration, Core ML embeddings, runs fully offline in airplane mode.
-  202 commits. His most technically complex app.
-- **OpenResponses**: iOS client for OpenAI's Responses API with MCP (Model Context Protocol)
-  integration — connects to Notion, Dropbox, Gmail. Supports Computer Use, tool orchestration,
-  and multi-model conversations. 88 commits.
-- **OpenCone**: RAG application using Pinecone vector database + OpenAI embeddings.
-  Hybrid search with reranking. 122 commits.
-- **OpenAssistant**: Legacy Assistants API client with full thread management. 214 commits.
-- **LinkedOut**: This app. A full-stack job screening platform (SwiftUI + FastAPI + Docker + LLM scoring).
-- **382 commits in the last year** across these projects.
-
-### How He Works
-- He does NOT write code by hand. He orchestrates AI to build everything.
-- He thinks at the SYSTEMS level — architecture, data flow, integration design, product vision
-- His medium happens to be iOS right now only because it was the first platform he could see
-  (it's in his hand every day), but he genuinely doesn't care about the stack
-- He's willing to learn ANY stack because getting into this field is what matters
-- The skill is the orchestration — seeing the whole system, breaking it into buildable pieces,
-  and using AI to ship each piece at extreme velocity
+### Technical Reality
+- **Strong in**: Swift/iOS, Python/FastAPI, RAG pipelines, vector databases, API
+  integrations, LLM orchestration, on-device ML, system architecture
+- **Has NOT used professionally**: React, Vue, Angular, Flutter, Java, Go, Rust,
+  C++, Ruby on Rails, .NET, Kubernetes at scale
+- **No CS degree. No professional software engineering experience.**
+- His App Store apps are real but would need to be argued as "equivalent experience"
+  at any company that lists years-of-experience requirements.
 
 ### Day Job
-Medical device specialist at VA Palo Alto Healthcare System (Stryker contractor).
-Supports Stanford Cardiothoracic and Vascular Surgery teams. Understands HIPAA,
-surgical workflows, clinical operations, and regulated environments.
+Medical device specialist at VA Palo Alto (Stryker contractor). Supports Stanford
+Cardiothoracic & Vascular Surgery. Deep HIPAA, surgical workflow, regulated-environment expertise.
 
-### What Makes Him Different
-- 5 shipped products (4 on App Store + this full-stack platform) — not toy projects
-- Deep understanding of RAG from building 3 separate RAG systems
-- Bridges AI/ML with polished consumer-grade UX
-- Healthcare domain expertise (HIPAA, surgical ops, medical devices)
-- Self-taught with extreme velocity — AI orchestration is his superpower
-- THE CODE COMES FROM MODELS. THE VISION IS HIS. Many companies are now actively
-  looking for exactly this skill — the ability to ship with AI as your engine.
+### What He Wants
+Companies where his portfolio ALREADY excites them. Not companies where he'd need to
+argue why his background qualifies. The test: if the hiring manager saw gunnarguy.me
+with 5 shipped products, would they say "get this person an interview" or "but where's
+the CS degree?" He wants the former ONLY.
 
-## THE GOLDEN RULE — What Kind of Companies Gunnar Wants
+## Hard Filters — REJECT immediately if ANY are true
+- Strictly requires CS/engineering degree with NO "or equivalent" escape hatch
+- Above "{max_seniority_level}" seniority (hierarchy: Junior < Mid < Senior < Any)
+- Requires 7+ years professional software engineering
+- Requires 5+ years with no flexibility language
+- Pure non-tech role (sales, marketing, HR, legal, finance, design-only)
+- Salary band explicitly entirely below ${min_salary}
+- Cultural red flags: "legacy codebase maintenance," "migrating monoliths," strict
+  "ticket-taking" with no architectural input
 
-Gunnar wants companies where he does NOT have to convince anyone he belongs. He wants
-companies that will ALREADY be excited by his profile. Specifically:
+## Score Calibration — READ THIS BEFORE SCORING
 
-### DREAM COMPANIES (score 0.90+):
-- Say things like "show us your apps" or "show us what you've built"
-- Explicitly welcome non-traditional backgrounds, self-taught, bootcamp grads, hobbyists
-- Value shipped products OVER degrees and resume keywords
-- Are looking for "blank canvas" people who learn fast and ship faster
-- Explicitly value or are looking for AI-native builders / AI orchestrators
-- Small teams (<50 people) where one person's output matters
-- Understand that the future of engineering involves AI-assisted development
-- Founding engineer / first engineer roles where they want a builder, not a credential
+Your scores MUST follow this distribution for the post-triage pool:
+- 0.85-1.0: **~5% of jobs.** The listing practically describes Gunnar already.
+  Company EXPLICITLY signals portfolio > credentials. Rare.
+- 0.70-0.84: **~15% of jobs.** Strong alignment, no hard convincing needed, but
+  maybe one minor concern (unknown stance on non-traditional, unlisted salary, etc.)
+- 0.55-0.69: **~30% of jobs.** Decent opportunity with real friction. Interesting
+  mission but unclear if they'd value his background. Or good signals but unfamiliar stack.
+- 0.40-0.54: **~30% of jobs.** Significant convincing would be required. Stack
+  mismatch, experience gap, or credential-heavy signals.
+- Below {score_cutoff}: **~20% of jobs.** Reject. Enterprise, legacy, rigid HR,
+  hard degree requirements, or he'd be arguing uphill the whole process.
 
-### GOOD COMPANIES (score 0.75-0.89):
-- Don't explicitly require a traditional background but don't explicitly welcome non-traditional either
-- Stack is learnable (he's willing to learn anything)
-- Interesting product/mission
-- Remote or Bay Area
-- Would likely be receptive to someone with shipped products even if the listing doesn't say so
+**Anchor at 0.55.** A typical post-triage job with an interesting mission, some AI
+relevance, but no explicit signal they welcome non-traditional builders = ~0.55.
+Adjust UP only for concrete evidence they'd want Gunnar specifically. Adjust DOWN
+for concrete friction (hard stack reqs, credential signals, convincing needed).
 
-### AVOID (score below 0.50 or REJECT):
-- Companies where he'd have to CONVINCE them his skills transfer
-- Roles that say "requires React/Vue experience" as a hard requirement — he'd have to
-  argue that Swift translates, which is exactly the kind of "convincing" he doesn't want to do
-- Large companies with rigid HR processes that filter on keywords
-- Roles where the hiring bar is about credentials, not portfolio
-- Companies that would be turned off by "I orchestrate AI to write my code"
-- Enterprise shops, bureaucratic orgs, FAANG hiring processes
-- Any role where the PRIMARY requirement is a stack he hasn't used AND the company
-  gives no signal they'd welcome a fast learner
+**The critical test for every score**: "Is this score based on something the listing
+ACTUALLY SAYS, or am I inferring enthusiasm that isn't there?"
 
-### KEY INSIGHT FOR SCORING:
-The difference between "requires React experience, but your SwiftUI skills show you
-can learn fast" (BAD — he's convincing) vs "we value builders who ship, any stack
-welcome" (GOOD — they already want him). Score the LATTER much higher.
+### Score Adjustments (apply on top of base assessment)
 
-If a listing says "requires X experience" for a stack Gunnar hasn't used, that's a
-PENALTY even if he could learn it, because he'd have to CONVINCE them. If a listing
-says "experience in ANY modern framework" or "we care about what you've built, not
-what stack it's in" — that's a MASSIVE BOOST.
-
-## Hard Filters (REJECT if ANY of these are true)
-- REJECT if the listing STRICTLY requires a CS/engineering degree with NO "or equivalent
-  experience" escape hatch (if degree is "preferred" or "or equivalent", it PASSES)
-- REJECT roles above "{max_seniority_level}" level (seniority hierarchy: Junior < Mid < Senior < Any).
-  If max is "Junior": reject Mid, Senior, Staff, Lead, Principal, Director.
-  If max is "Mid": reject Senior, Staff, Lead, Principal, Director.
-  If max is "Senior": reject Staff, Lead, Principal, Director.
-  If max is "Any": no seniority-based rejection.
-- REJECT if it explicitly requires 7+ years of professional software engineering experience
-- REJECT if it explicitly requires 5+ years AND lists no flexibility
-- REJECT pure non-tech roles (sales, marketing, HR, legal, finance, design-only)
-
-## CRITICAL: Honest Scoring — NO Inflation, EXTREME Selectivity
-
-You MUST be brutally honest AND extremely selective. Gunnar wants 5-10 great listings
-per day, not 50 mediocre ones. When in doubt, score LOWER.
-
-A 0.90+ should be RARE — reserved for roles where the company actively WANTS someone
-like Gunnar. Not just "he could do this job" but "they would be excited to get his application."
-
-DO NOT score highly just because a job mentions AI or startups. The question is always:
-"Would this company already want someone who orchestrates AI to build shipped products,
-or would Gunnar have to convince them?"
-
-### Score Tiers (AFTER applying adjustments)
-
-0.90–1.0 — DREAM FIT (should be ~3-5% of jobs):
-- Company explicitly welcomes non-traditional backgrounds OR values shipped products over pedigree
-- Remote or Bay Area
-- Small team, product-focused
-- Gunnar would NOT have to convince anyone — his portfolio speaks for itself
-- Role description could literally describe what Gunnar already does
-- Examples: "We don't care about your degree, show us what you've shipped"
-  "Founding AI engineer at a 5-person startup, must have shipped real products"
-  "Looking for someone who can build 0→1 with AI tools"
-
-0.80–0.89 — STRONG FIT (should be ~10% of jobs):
-- Strong product/mission alignment
-- No hard stack requirements that would need convincing
-- Company culture signals suggest they'd be open to a non-traditional builder
-- "AI Product Engineer" at a startup that values velocity over credentials
-
-0.65–0.79 — SOLID OPTION (should be ~15% of jobs):
-- Interesting company, some alignment
-- Minor concerns about whether they'd value his background
-- Stack is adjacent — wouldn't need to hard-sell, but not a perfect match either
-
-0.50–0.64 — STRETCH (should be ~15% of jobs):
-- He'd need to do some convincing
-- Stack mismatch but interesting mission
-- Larger company or more traditional hiring process
-
-0.35–0.49 — LONG SHOT:
-- Significant convincing needed
-- Clear preference for traditional backgrounds
-- Interesting only because the mission is compelling
-
-Below {score_cutoff} — REJECT:
-- Would definitely need to convince them
-- Enterprise, legacy, bureaucratic
-- Hard stack requirements in unfamiliar territory
-- Companies that would be put off by AI-generated code
-
-### Location Adjustments
-The user lives in {home_city}, {home_state}. Apply graduated penalties based on distance:
-- Remote / Remote-first: no penalty
-- Same city or metro area ({home_city} area): no penalty
-- Same state or nearby metro (~1-2hr drive): {nearby_penalty}
-- Neighboring state (OH, IN, WI, IL, MN): {regional_penalty}
-- Other US city requiring full relocation: {relocation_penalty}
+**Location** (user lives in {home_city}, {home_state}):
+- Remote / remote-first: no penalty
+- Same city/metro: no penalty
+- Nearby (~1-2hr): {nearby_penalty}
+- Neighboring state: {regional_penalty}
+- Full US relocation: {relocation_penalty}
 - International: {international_penalty}
 
-When in doubt about a location, err toward the LOWER penalty. Do NOT over-penalize
-jobs that list both remote and an office location — if remote is an option, no penalty.
-
-### "Convincing Required" Penalty
-This is the MOST IMPORTANT adjustment. If the role has hard requirements in a stack
-Gunnar hasn't used (React, Vue, Flutter, Java, Go, etc.) AND the listing gives NO signal
-they welcome fast learners or value portfolio over keywords:
-- Hard requirement in unfamiliar stack, no "or equivalent": {convincing_penalty}
+**Stack Friction** (THE decisive factor):
+- Hard requirement in stack he hasn't used, no "or equivalent": {convincing_penalty}
 - Preferred but not required in unfamiliar stack: -0.05
-- "Any modern framework" or "we value builders": {convincing_boost}
-- Company values shipped products / portfolio-first: {portfolio_boost}
+- "Any modern framework" / "we value builders": {convincing_boost}
+- Company explicitly values shipped products / portfolio-first: {portfolio_boost}
 
-### Experience Reality Adjustments
-- "1-3 years" or "any experience": no penalty
-- "3-5 years professional": -0.05 and FLAG (his App Store apps may or may not count)
-- "5+ years" with flexibility: {experience_penalty} and FLAG
-- "CS degree preferred": -0.03 and FLAG
-- "CS degree or equivalent": -0.05 and FLAG
-- Known elite/selective companies (FAANG, Jane Street): {credential_penalty}
+**Experience Reality**:
+- "1-3 years" or "any": no penalty
+- "3-5 years professional": -0.05 (his apps MAY count — FLAG it)
+- "5+ years" with flexibility: {experience_penalty} (FLAG)
+- "CS degree preferred": -0.03 (FLAG)
+- "CS degree or equivalent": -0.05 (FLAG)
+- Known elite/selective (FAANG, Jane Street): {credential_penalty}
 
-## EXTRACTION INSTRUCTIONS — Be Thorough!
+**Industry Multiplier**:
+- HealthTech / MedTech / Clinical AI: +0.08 (his Stryker/VA domain is a real differentiator)
+- Developer/AI tools: +0.05 (he's a power user of the exact category)
 
-### company_description
-Write 2-3 sentences about what this company ACTUALLY builds/does.
+## Output Instructions — Facts Only
 
-### company_size
-Extract: "1-10", "10-50", "50-200", "200-500", "500+", or "Unknown".
+### logic_fit
+2-3 sentences. How does this role's DAY-TO-DAY work map to what Gunnar actually does?
+Be specific: which of his projects demonstrates relevant experience? What's the gap?
+Example: "The role requires building RAG pipelines for enterprise search — directly
+aligned with OpenIntelligence and OpenCone. However, they specify 'production-scale
+distributed systems' which he hasn't operated at that level."
 
-### company_stage
-Infer: "Pre-seed", "Seed", "Series A", "Series B", "Series C+",
-"Public", "Bootstrapped", or "Unknown".
+### domain_leverage
+2-3 sentences. Where does Gunnar have an UNFAIR ADVANTAGE over a typical applicant?
+Consider: his healthcare/surgical ops background, his shipped-product velocity, his
+RAG expertise, his AI-native workflow. If there's no domain leverage, say so.
+Example: "His Stryker medical device background gives him direct credibility for
+their health-data compliance requirements that a typical SWE applicant wouldn't have."
 
-### company_url
-If the company website URL is mentioned or inferable, include it. Otherwise empty string.
+### risk_reward
+2-3 sentences. What's the realistic friction? Early-stage chaos? Unknown if they'd
+accept AI-generated code? Unfamiliar stack? Remote culture mismatch? Be honest about
+both the upside and the specific risk.
+Example: "High upside — 8-person team building exactly in his wheelhouse. Risk: they
+mention 'deep React experience' twice, which means his first conversation will be
+explaining why SwiftUI translates. That's the convincing he doesn't want to do."
 
-### requirements
-List KEY requirements (max 8). One concise line each. Only explicitly stated items.
-
-### nice_to_haves
-List "nice to have" qualifications. Maximum 5 items.
-
-### tech_stack
-Extract ALL technologies, frameworks, languages, tools, platforms mentioned.
-
-### why_interesting
-Write 2-3 sentences explaining why THIS opportunity is interesting FOR GUNNAR SPECIFICALLY.
-Reference his ACTUAL situation: AI orchestrator, shipped products, systems thinker,
-willing to learn any stack. Be honest about alignment. If the company gives signals
-they'd welcome his profile, highlight that specifically.
-CRITICAL: Reference the SPECIFIC company name, their actual product/mission, and
-concrete details from the listing. This must read as if written for this one job only.
-CRITICAL: Reference the SPECIFIC company name, their actual product/mission, and
-concrete details from the listing. This must read as if written for this one job only.
+### why_interesting (keep for backward compat)
+Same as logic_fit content — 2-3 factual sentences about alignment.
 
 ### red_flags
-List potential concerns (max 5). Watch especially for:
-- Hard stack requirements where he'd need to convince
-- Signals of a credential-heavy culture
-- Vague about what the product actually does
-- "Competitive salary" with no range
+List 1-5 concerns. EVERY job has at least one. If you can't find any, you're not
+looking hard enough. Watch for:
+- Hard stack requirements he'd need to argue around
+- Credential-heavy culture signals ("top-tier university," "years at FAANG")
+- Vague product description (what do they actually build?)
+- No salary range
 - Signs they want a traditional coder, not an AI-native builder
+- "Competitive salary" with zero specifics
+- Remote-but-not-really ("remote with quarterly onsites" vs "remote-first")
 
 ### dealbreaker_warnings
-BE BRUTALLY HONEST. List 0-3 specific reasons this role might reject Gunnar or
-waste his time. Frame them in terms of "convincing" — would he have to convince them?
-Examples:
-- "Requires React/Vue — you'd have to convince them your SwiftUI translates, which is
-  exactly the kind of selling you don't want to do"
-- "Large company with structured hiring — they'll likely filter on keywords before
-  seeing your portfolio"
-- "No signal they welcome non-traditional backgrounds — unknown if they'd value
-  AI orchestration"
-If the role genuinely has NO dealbreakers (company explicitly wants builders,
-portfolio-first, open to any background), return an EMPTY list [].
-
-### experience_level
-One of: "Entry", "Junior", "Mid", "Senior", "Staff", "Lead", "Any", or "Not specified".
-
-### job_type
-One of: "Full-time", "Part-time", "Contract", "Freelance", "Internship", or "Not specified".
-
-### benefits
-Extract ALL mentioned benefits/perks. Maximum 10 items.
-
-### apply_url
-Direct application link if different from source URL.
-
-### salary_floor / salary_max
-salary_floor = lower bound, salary_max = upper bound. 0 if not mentioned.
+0-3 brutally honest items. The question: "Would Gunnar need to CONVINCE them?"
+If yes, that's a dealbreaker. Most jobs should have at least one.
 
 ### ai_pitch_summary
-Write exactly 3 bullet points FROM THE PERSPECTIVE of why this company would want Gunnar.
-Not "here's how you could convince them" but "here's why they'd already be interested."
-
-CRITICAL: Every bullet MUST reference something SPECIFIC from THIS job listing —
-the company's actual product, their stated values, a specific technology they use,
-or a concrete detail from the description. NEVER write generic bullets that could
-apply to any startup. Each bullet must be unique to THIS company and THIS role.
-Do NOT reuse or paraphrase the example bullets below — they are ONLY to show format/tone.
-
-Example FORMAT (do not copy these — write completely new ones based on the listing):
-- "[Company]'s focus on [specific thing from listing] maps directly to [specific Gunnar experience]"
-- "The [specific requirement from listing] is literally what Gunnar built with [specific project]"
-- "[Company detail] signals they'd value his [specific relevant skill], not just check credential boxes"
-
-If the company wouldn't already be interested, say so honestly:
-- "You'd need to convince them [specific gap] — not your ideal situation"
+3 bullets of FACTUAL alignment between the listing and Gunnar's profile.
+Each bullet must cite something specific from the listing AND something specific
+from his portfolio. No generic startup praise. No "perfect fit" language.
+If alignment is weak, say so: "Limited direct overlap — his RAG experience is
+adjacent but the role primarily needs distributed systems expertise he hasn't
+demonstrated."
 
 ### fit_reasons
-Return a list of 2-4 short (5-8 word) reasons this role fits Gunnar.
-Each reason MUST reference something specific from THIS listing — the company name,
-their product, their hiring language, or a concrete detail. Never write generic reasons.
-Do NOT copy the examples below — they show format only:
-- "[Company] values demos over diplomas"
-- "[Their product] needs exactly his RAG experience"
-- "Posting says 'show us what you built'"
-- "10-person team = no credential gatekeeping"
+2-4 short factual reasons (5-8 words each). Must reference specific listing details.
 
 ### drafted_cover_letter
-Write a punchy 150-word cover letter FROM GUNNAR. Tone: confident builder who ships.
-IMPORTANT: Be honest about his approach. Don't hide that AI generates his code.
-Lead with the products. Reference gunnarguy.me. Example opening: "I've shipped 5
-products in the last year — 4 on the App Store and a full-stack job-screening
-platform — all built by orchestrating AI models to generate the code while I handle
-the architecture, product design, and systems thinking."
-Then connect specifically to what THIS company builds.
-Close with curiosity, not desperation.
+150 words, confident but honest. Lead with shipped products and gunnarguy.me.
+Be upfront about AI-orchestrated development. Connect to the specific company's
+product. Close with curiosity.
 
 ## Output Format
-Return ONLY valid JSON matching this schema:
+Return ONLY valid JSON:
 {{
   "passed_filter": true/false,
   "rejection_reason": "string (empty if passed)",
@@ -471,6 +338,9 @@ Return ONLY valid JSON matching this schema:
   "nice_to_haves": ["string"],
   "tech_stack": ["string"],
   "why_interesting": "string",
+  "logic_fit": "string",
+  "domain_leverage": "string",
+  "risk_reward": "string",
   "red_flags": ["string"],
   "apply_url": "string",
   "experience_level": "string",
@@ -483,50 +353,57 @@ Return ONLY valid JSON matching this schema:
 
 
 TRIAGE_PROMPT = """\
-You are a fast job-listing triage filter for Gunnar — an AI orchestrator (NOT a traditional
-coder) who has shipped 5 products (4 on App Store + a full-stack platform) by using LLMs
-to generate all code while he handles architecture and product vision. He works in healthcare
-ops by day. Based near Palo Alto, CA. He does NOT want jobs where he'd have to convince
-the company his skills transfer — he wants companies that already want someone like him.
+You are a fast job-listing triage filter. Be AGGRESSIVE about rejecting.
+The goal is a ~40% pass rate — most jobs should NOT make it through.
 
-PASS (dominated=true) if the job is ANY of:
-- Explicitly welcomes non-traditional backgrounds, self-taught, portfolio-first
-- AI/ML roles (especially RAG, embeddings, search, agents, LLM tooling)
-- Roles that value "show us what you've built" over credentials
-- Founding engineer / first engineer at small startups
-- Companies building AI developer tools, agent platforms, or AI-native products
-- iOS/mobile roles at AI-forward companies
-- Product engineer or generalist at startups (<50 people)
-- Healthcare AI or clinical technology
-- Any role explicitly seeking AI-native builders or mentioning AI-assisted development
-- Entry, junior, or mid-level roles (or no seniority specified)
+## Candidate snapshot
+Gunnar: High-agency product engineer. Orchestrates AI to generate all code.
+Shipped 5 products (4 on App Store). Swift/iOS, Python, RAG, vector DBs.
+NO CS degree, no professional SWE experience. Healthcare ops day job (Stryker/VA).
+Home: {home_city}, {home_state}. Wants 100% remote.
 
-REJECT (dominated=false) if the job clearly is:
-- Above the user's max seniority level (see system context for current setting)
-- Titled "Senior", "Staff", "Lead", "Principal", "Director", or "VP" (unless max seniority allows it)
-- Explicitly requires a CS/engineering degree with NO alternative
-- Requires 5+ years of professional experience with no flexibility
-- Has HARD requirements in a specific stack (React, Java, Go, etc.) with NO signal
-  they'd accept someone who learns fast or has a strong portfolio
-- Pure non-tech roles (sales, marketing, HR, legal, finance)
-- Large enterprise / bureaucratic companies with rigid hiring processes
-- Pure infrastructure / DevOps / SRE with no product surface
-- 100% unrelated to AI/ML, iOS, product engineering, or healthcare tech
-- Roles where a traditional coder with credentials would always win over a portfolio-first builder
+## REJECT (dominated=false) if ANY are true:
+- Requires on-site or hybrid attendance (must be 100% remote or highly autonomous)
+- Salary band explicitly entirely below $90,000
+- Senior, Staff, Lead, Principal, Director, VP title (unless max seniority allows)
+- Strictly requires CS/engineering degree with NO "or equivalent"
+- Requires 5+ years professional SWE experience with no flexibility
+- Hard requires a specific stack (React, Java, Go, C++, etc.) with NO signal they
+  accept portfolio or fast learners — he'd have to CONVINCE them
+- Pure non-tech (sales, marketing, HR, legal, finance, design-only)
+- Pure infra / DevOps / SRE with no product surface
+- Legacy codebase maintenance, monolith migration, ticket-taking roles
+- Large enterprise / bureaucratic companies with rigid keyword-filter hiring
+- Zero overlap with AI/ML, iOS, product engineering, or healthcare tech
 
-When in doubt, PASS. But be selective — goal is ~50% pass rate, not ~90%.
+## PASS (dominated=true) if:
+- AI/ML roles (RAG, embeddings, agents, LLM tooling, GenAI)
+- Founding / first engineer at startups (<50 people)
+- Explicitly welcomes non-traditional backgrounds or portfolio-first hiring
+- Product engineer or generalist at small companies
+- Healthcare AI / MedTech / clinical technology
+- Developer tools, AI platforms, developer experience roles
+- iOS/mobile at AI-forward companies
+- Mentions "rapid iteration," "zero-to-one," "autonomy," "AI-native"
+- Entry, junior, or mid-level (or unspecified seniority)
+
+When in doubt, REJECT. Better to miss a borderline job than waste his time.
 
 Return ONLY valid JSON:
 {{"dominated": true/false, "reason": "one sentence why"}}
 """
 
 
-async def triage_job(raw: RawJobListing) -> bool:
+async def triage_job(raw: RawJobListing, prefs: UserPreferences | None = None) -> bool:
     """Fast triage with Flash model. Returns True if worth full scoring."""
+    if prefs is None:
+        prefs = UserPreferences()
+    triage_sys = TRIAGE_PROMPT.replace("{home_city}", prefs.home_city)
+    triage_sys = triage_sys.replace("{home_state}", prefs.home_state)
     user_msg = f"Title: {raw.title}\nCompany: {raw.company}\nLocation: {raw.location}\nRemote: {raw.is_remote}\n\nDescription (first 1500 chars):\n{raw.description[:1500]}"
 
     try:
-        content = await _call_llm(TRIAGE_PROMPT, user_msg, use_flash=True)
+        content = await _call_llm(triage_sys, user_msg, use_flash=True)
         data = json.loads(content)
         if isinstance(data, list) and len(data) > 0:
             data = data[0]
@@ -607,12 +484,21 @@ async def score_job(
                 rejection_reason=reason,
             )
 
+        # Deflate score — LLMs over-score even with calibration instructions.
+        # Compress the 0.60-1.0 range by 15% toward 0.55 anchor.
+        raw_score = max(0.0, min(1.0, data.get("builder_score") or 0.0))
+        if raw_score > 0.55:
+            deflated = 0.55 + (raw_score - 0.55) * 0.78
+        else:
+            deflated = raw_score
+        final_score = round(max(0.0, min(1.0, deflated)), 2)
+
         job = JobPayload(
             company_name=data.get("company_name", raw.company),
             role_title=data.get("role_title", raw.title),
             salary_floor=data.get("salary_floor") or 0,
             is_remote=data.get("is_remote") or False,
-            builder_score=max(0.0, min(1.0, data.get("builder_score") or 0.0)),
+            builder_score=final_score,
             ai_pitch_summary=data.get("ai_pitch_summary", ""),
             drafted_cover_letter=data.get("drafted_cover_letter", ""),
             source_url=raw.url,
@@ -637,6 +523,9 @@ async def score_job(
             benefits=data.get("benefits", []),
             fit_reasons=data.get("fit_reasons", []),
             dealbreaker_warnings=data.get("dealbreaker_warnings", []),
+            logic_fit=data.get("logic_fit", ""),
+            domain_leverage=data.get("domain_leverage", ""),
+            risk_reward=data.get("risk_reward", ""),
         )
 
         return ScoringResult(passed_filter=True, job=job)
@@ -850,6 +739,9 @@ def score_job_locally(raw: RawJobListing, prefs: UserPreferences | None = None) 
         experience_level="Not specified",
         job_type="Not specified",
         benefits=[],
+        logic_fit="",
+        domain_leverage="",
+        risk_reward="",
     )
 
     return ScoringResult(passed_filter=True, job=job)
@@ -891,7 +783,7 @@ async def triage_and_score(
         for i in range(0, len(listings), batch_size):
             batch = listings[i : i + batch_size]
             batch_results = await asyncio.gather(
-                *(triage_job(raw) for raw in batch),
+                *(triage_job(raw, prefs) for raw in batch),
                 return_exceptions=True,
             )
             triage_results.extend(batch_results)

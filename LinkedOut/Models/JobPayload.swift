@@ -40,6 +40,11 @@ struct JobPayload: Codable, Identifiable, Hashable {
     var fitReasons: [String]?
     var dealbreakerWarnings: [String]?
 
+    // Why Matrix (structured factual assessment)
+    var logicFit: String?
+    var domainLeverage: String?
+    var riskReward: String?
+
     // User-managed fields
     var notes: String?
     var applicationStatus: String?
@@ -74,6 +79,9 @@ struct JobPayload: Codable, Identifiable, Hashable {
         case benefits
         case fitReasons = "fit_reasons"
         case dealbreakerWarnings = "dealbreaker_warnings"
+        case logicFit = "logic_fit"
+        case domainLeverage = "domain_leverage"
+        case riskReward = "risk_reward"
         case notes
         case applicationStatus = "application_status"
     }

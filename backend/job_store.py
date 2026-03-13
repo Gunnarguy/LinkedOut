@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 from models import JobAction, JobPayload
@@ -105,6 +106,20 @@ class JobStore:
         self._pending.clear()
         self._save()
         return count
+
+    def expire_old_jobs(self, max_age_days: int = 14) -> int:
+        """Remove pending jobs older than max_age_days. Returns count removed."""
+        cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+        to_remove = []
+        for jid, job in self._pending.items():
+            if job.posted_at and job.posted_at < cutoff:
+                to_remove.append(jid)
+        for jid in to_remove:
+            self._pending.pop(jid)
+        if to_remove:
+            self._save()
+            logger.info(f"Expired {len(to_remove)} jobs older than {max_age_days} days")
+        return len(to_remove)
 
     def purge_keyword_scored(self) -> int:
         """Remove jobs scored by local keyword matcher (bogus scores).
