@@ -24,6 +24,15 @@ struct JobDetailView: View {
 
     private enum ShareStatus { case idle, sharing, shared, failed }
 
+    private var detailFreshnessColor: Color {
+        guard let date = job.postedAt else { return .gray }
+        let hours = -date.timeIntervalSinceNow / 3600
+        if hours < 6 { return .green }
+        if hours < 24 { return .blue }
+        if hours < 72 { return .orange }
+        return .gray
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -155,6 +164,23 @@ struct JobDetailView: View {
             Text(job.companyName)
                 .font(.title2)
                 .foregroundStyle(.secondary)
+
+            // Posted date
+            if job.postedAt != nil {
+                HStack(spacing: 6) {
+                    Image(systemName: "clock")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Posted \(job.postedDateDisplay)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Text("·")
+                        .foregroundStyle(.secondary)
+                    Text(job.freshnessLabel)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(detailFreshnessColor)
+                }
+            }
 
             // Links row
             HStack(spacing: 16) {

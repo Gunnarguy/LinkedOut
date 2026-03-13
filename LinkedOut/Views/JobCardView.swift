@@ -122,6 +122,18 @@ struct JobCardView: View {
                     Label(job.location, systemImage: "mappin.circle")
                         .font(.subheadline.weight(.medium))
                 }
+
+                Spacer()
+
+                // Freshness indicator
+                HStack(spacing: 3) {
+                    Circle()
+                        .fill(freshnessColor)
+                        .frame(width: 6, height: 6)
+                    Text(job.freshnessLabel)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
@@ -224,5 +236,16 @@ struct JobCardView: View {
         .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 4)
         .contentShape(Rectangle())
         .onTapGesture { onTap?() }
+    }
+
+    // MARK: - Freshness Color
+
+    private var freshnessColor: Color {
+        guard let date = job.postedAt else { return .gray }
+        let hours = -date.timeIntervalSinceNow / 3600
+        if hours < 6 { return .green }        // brand new
+        if hours < 24 { return .blue }         // today
+        if hours < 72 { return .orange }       // last few days
+        return .gray                           // older
     }
 }

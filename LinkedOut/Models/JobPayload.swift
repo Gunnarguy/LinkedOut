@@ -139,6 +139,34 @@ struct JobPayload: Codable, Identifiable, Hashable {
         (companyStage ?? "").count > 1 ||
         !(techStack ?? []).isEmpty
     }
+
+    // MARK: - Date Helpers
+
+    /// Relative freshness label — "Just now", "2h ago", "3d ago", etc.
+    var freshnessLabel: String {
+        guard let date = postedAt else { return "Unknown" }
+        let seconds = -date.timeIntervalSinceNow
+        switch seconds {
+        case ..<60:          return "Just now"
+        case ..<3600:        return "\(Int(seconds / 60))m ago"
+        case ..<86400:       return "\(Int(seconds / 3600))h ago"
+        case ..<604800:      return "\(Int(seconds / 86400))d ago"
+        default:             return "\(Int(seconds / 604800))w ago"
+        }
+    }
+
+    /// Short formatted posting date — "Mar 13" or "Dec 5, 2025"
+    var postedDateDisplay: String {
+        guard let date = postedAt else { return "—" }
+        let cal = Calendar.current
+        let fmt = DateFormatter()
+        if cal.isDate(date, equalTo: .now, toGranularity: .year) {
+            fmt.dateFormat = "MMM d"
+        } else {
+            fmt.dateFormat = "MMM d, yyyy"
+        }
+        return fmt.string(from: date)
+    }
 }
 
 // MARK: - Action Models

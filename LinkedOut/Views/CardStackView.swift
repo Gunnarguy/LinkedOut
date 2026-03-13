@@ -10,6 +10,17 @@ import UIKit
 
 struct CardStackView: View {
     @EnvironmentObject var jobs: JobsViewModel
+    @State private var sortByNewest = false
+
+    /// Sorted view of pending jobs — either by score (default) or newest first
+    private var sortedPending: [JobPayload] {
+        if sortByNewest {
+            return jobs.pendingJobs.sorted {
+                ($0.postedAt ?? .distantPast) > ($1.postedAt ?? .distantPast)
+            }
+        }
+        return jobs.pendingJobs // already sorted by score from backend
+    }
 
     var body: some View {
         NavigationStack {
@@ -26,17 +37,29 @@ struct CardStackView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        haptic()
-                        Task { await jobs.ingestNewJobs() }
-                    } label: {
-                        if jobs.isIngesting {
-                            ProgressView()
-                        } else {
-                            Image(systemName: "sparkle.magnifyingglass")
+                    HStack(spacing: 12) {
+                        Button {
+                            haptic()
+                            Task { await jobs.ingestNewJobs() }
+                        } label: {
+                            if jobs.isIngesting {
+                                ProgressView()
+                            } else {
+                                Image(systemName: "sparkle.magnifyingglass")
+                            }
+                        }
+                        .disabled(jobs.isIngesting)
+
+                        // Sort toggle
+                        Button {
+                            withAnimation(.spring(response: 0.3)) {
+                                sortByNewest.toggle()
+                            }
+                        } label: {
+                            Image(systemName: sortByNewest ? "clock.fill" : "star.fill")
+                                .foregroundStyle(sortByNewest ? .orange : .blue)
                         }
                     }
-                    .disabled(jobs.isIngesting)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     if let stats = jobs.stats {
@@ -112,7 +135,7 @@ struct CardStackView: View {
         VStack(spacing: 0) {
             ZStack {
                 // Show up to 3 cards stacked
-                ForEach(Array(jobs.pendingJobs.prefix(3).enumerated().reversed()), id: \.element.id) { index, job in
+                ForEach(Array(sortedPending.prefix(3).enumerated().reversed()), id: \.element.id) { index, job in
                     let isTop = index == 0
 
                     JobCardView(job: job, isTopCard: isTop) {
@@ -127,7 +150,7 @@ struct CardStackView: View {
                         isTop ? .degrees(jobs.topCardRotation) : .zero
                     )
                     .scaleEffect(isTop ? 1.0 : 1.0 - CGFloat(index) * 0.04)
-                    .zIndex(Double(jobs.pendingJobs.count - index))
+                    .zIndex(Double(sortedPending.count - index))
                     .gesture(isTop ? swipeGesture : nil)
                     .allowsHitTesting(isTop)
                 }

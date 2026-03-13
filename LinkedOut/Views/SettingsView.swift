@@ -250,11 +250,11 @@ struct SettingsView: View {
                         .onChange(of: requireRemote) { _, _ in debouncedSync() }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Home Base")
+                        Text("Your Location")
                             .font(.subheadline.weight(.semibold))
                         HStack {
-                            Image(systemName: "house.fill")
-                                .foregroundStyle(.secondary)
+                            Image(systemName: "location.fill")
+                                .foregroundStyle(.blue)
                             TextField("City", text: $homeCity)
                                 .onSubmit { debouncedSync() }
                             Text(",")
@@ -263,7 +263,7 @@ struct SettingsView: View {
                                 .frame(width: 100)
                                 .onSubmit { debouncedSync() }
                         }
-                        Text("Onsite jobs near \(homeCity) get little or no penalty")
+                        Text("Used to calculate commute distance for on-site roles")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

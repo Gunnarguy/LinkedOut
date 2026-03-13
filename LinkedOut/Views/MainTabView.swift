@@ -19,6 +19,11 @@ struct MainTabView: View {
                     Label("Discover", systemImage: "rectangle.stack")
                 }
 
+            JobMapView()
+                .tabItem {
+                    Label("Map", systemImage: "map")
+                }
+
             AppliedJobsView()
                 .tabItem {
                     Label("Applied", systemImage: "checkmark.circle")

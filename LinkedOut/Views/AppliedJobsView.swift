@@ -164,6 +164,16 @@ struct JobListRow: View {
                             .font(.caption)
                             .foregroundStyle(.green)
                     }
+
+                    // Posted date
+                    HStack(spacing: 3) {
+                        Circle()
+                            .fill(rowFreshnessColor(job))
+                            .frame(width: 5, height: 5)
+                        Text(job.freshnessLabel)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -217,5 +227,14 @@ struct JobListRow: View {
         case "rejected": return .red
         default: return .secondary
         }
+    }
+
+    private func rowFreshnessColor(_ job: JobPayload) -> Color {
+        guard let date = job.postedAt else { return .gray }
+        let hours = -date.timeIntervalSinceNow / 3600
+        if hours < 6 { return .green }
+        if hours < 24 { return .blue }
+        if hours < 72 { return .orange }
+        return .gray
     }
 }
