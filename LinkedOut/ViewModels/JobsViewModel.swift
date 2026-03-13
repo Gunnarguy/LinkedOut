@@ -36,6 +36,36 @@ class JobsViewModel: ObservableObject {
     @Published var topCardOffset: CGSize = .zero
     @Published var topCardRotation: Double = 0
 
+    // MARK: - Disk Cache
+
+    private static let cacheDir: URL = {
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("LinkedOut", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
+    /// Load cached jobs from disk immediately (no network).
+    func loadCachedJobs() {
+        pendingJobs = Self.readCache("pending") ?? []
+        savedJobs = Self.readCache("saved") ?? []
+        if !pendingJobs.isEmpty {
+            print("[VM] loadCachedJobs — restored \(pendingJobs.count) pending, \(savedJobs.count) saved from cache")
+        }
+    }
+
+    private static func readCache(_ name: String) -> [JobPayload]? {
+        let file = cacheDir.appendingPathComponent("\(name).json")
+        guard let data = try? Data(contentsOf: file) else { return nil }
+        return try? JSONDecoder().decode([JobPayload].self, from: data)
+    }
+
+    private static func writeCache(_ name: String, jobs: [JobPayload]) {
+        let file = cacheDir.appendingPathComponent("\(name).json")
+        guard let data = try? JSONEncoder().encode(jobs) else { return }
+        try? data.write(to: file, options: .atomic)
+    }
+
     func loadPendingJobs() async {
         isLoading = true
         error = nil
@@ -44,6 +74,7 @@ class JobsViewModel: ObservableObject {
 
         do {
             pendingJobs = try await APIClient.shared.fetchPendingJobs()
+            Self.writeCache("pending", jobs: pendingJobs)
             print("[VM] loadPendingJobs — got \(pendingJobs.count) jobs")
             for (i, j) in pendingJobs.prefix(5).enumerated() {
                 print("[VM]   [\(i)] \(j.roleTitle) @ \(j.companyName) score=\(j.builderScore)")
@@ -68,6 +99,7 @@ class JobsViewModel: ObservableObject {
         print("[VM] loadSavedJobs — starting")
         do {
             savedJobs = try await APIClient.shared.fetchSavedJobs()
+            Self.writeCache("saved", jobs: savedJobs)
             print("[VM] loadSavedJobs — got \(savedJobs.count)")
         } catch {
             print("[VM] loadSavedJobs — ERROR (suppressed): \(error)")

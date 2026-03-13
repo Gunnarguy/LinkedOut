@@ -41,6 +41,12 @@ struct MainTabView: View {
                     Label("Settings", systemImage: "gearshape")
                 }
         }
+        .task {
+            // Run discovery once at launch
+            if let found = await ServerDiscovery.discover() {
+                serverURL = found
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 Task {

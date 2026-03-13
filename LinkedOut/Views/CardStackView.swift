@@ -50,6 +50,7 @@ struct CardStackView: View {
                 }
             }
             .task {
+                jobs.loadCachedJobs()   // instant — show cached cards while network loads
                 await jobs.loadPendingJobs()
                 await jobs.autoIngestIfNeeded()
             }

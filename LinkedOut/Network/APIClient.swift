@@ -48,8 +48,8 @@ actor APIClient {
 
     init() {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 60
-        config.timeoutIntervalForResource = 300
+        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 60
         self.session = URLSession(configuration: config)
 
         self.decoder = JSONDecoder()
@@ -239,6 +239,7 @@ actor APIClient {
                     // Try re-discovering the server on network failure
                     if attempt == 0 {
                         print("[API] 🔍 Re-discovering server after network error...")
+                        ServerDiscovery.invalidateCache()
                         if let found = await ServerDiscovery.discover() {
                             let current = UserDefaults.standard.string(forKey: "serverURL") ?? ""
                             if found != current {
