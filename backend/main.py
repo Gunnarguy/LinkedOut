@@ -108,8 +108,16 @@ async def _run_ingest_cycle():
             logger.info("[FETCH] No listings fetched from any source")
             return 0
 
-        # Dedup: skip URLs we've already scored
-        new_listings = [r for r in raw_listings if not store.is_url_seen(r.url)]
+        # Dedup: skip URLs we've already scored OR already in store
+        dedup_urls: set[str] = set()
+        new_listings: list[RawJobListing] = []
+        for r in raw_listings:
+            if r.url in dedup_urls:
+                continue
+            if store.is_url_seen(r.url) or store.has_url(r.url):
+                continue
+            dedup_urls.add(r.url)
+            new_listings.append(r)
         skipped = len(raw_listings) - len(new_listings)
         logger.info(f"[DEDUP] {len(new_listings)} new, {skipped} already-seen")
 

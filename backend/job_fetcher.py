@@ -395,6 +395,7 @@ async def fetch_all_sources() -> list[RawJobListing]:
 
     all_listings: list[RawJobListing] = []
     seen_titles: set[str] = set()
+    seen_urls: set[str] = set()
 
     for i, result in enumerate(results):
         source_names = ["Remotive", "Himalayas", "HN", "Jobicy", "RemoteOK"]
@@ -405,9 +406,13 @@ async def fetch_all_sources() -> list[RawJobListing]:
         listings: list[RawJobListing] = result
         logger.info(f"[FETCH] {name}: {len(listings)} raw listings")
         for listing in listings:
+            # Dedup by both URL and title+company
+            if listing.url in seen_urls:
+                continue
             dedup_key = f"{listing.company.lower()}:{listing.title.lower()}"
             if dedup_key not in seen_titles:
                 seen_titles.add(dedup_key)
+                seen_urls.add(listing.url)
                 all_listings.append(listing)
 
     total_elapsed = _time.monotonic() - t0
