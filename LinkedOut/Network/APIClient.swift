@@ -209,11 +209,15 @@ final class APIClient: @unchecked Sendable {
         return try decode(data, response: response)
     }
 
-    private func performRequest(_ request: URLRequest) async throws -> (Data, URLResponse) {
+    private func performRequest(_ originalRequest: URLRequest) async throws -> (Data, URLResponse) {
+        var request = originalRequest
         let method = request.httpMethod ?? "GET"
-        let url = request.url?.absoluteString ?? "?"
 
         for attempt in 0...maxRetries {
+            // Bail out immediately if the task was cancelled (e.g., ViewModel switched servers)
+            try Task.checkCancellation()
+
+            let url = request.url?.absoluteString ?? "?"
             let start = CFAbsoluteTimeGetCurrent()
             if attempt > 0 {
                 print("[API] 🔄 Retry \(attempt)/\(maxRetries) for \(method) \(url)")
@@ -235,6 +239,12 @@ final class APIClient: @unchecked Sendable {
                     }
                 }
                 return (data, response)
+            } catch is CancellationError {
+                print("[API] 🚫 CANCELLED \(method) \(url)")
+                throw CancellationError()
+            } catch let error as URLError where error.code == .cancelled {
+                print("[API] 🚫 CANCELLED \(method) \(url)")
+                throw CancellationError()
             } catch {
                 let elapsed = String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - start) * 1000)
                 print("[API] ❌ NETWORK ERROR \(method) \(url) — \(elapsed)ms — \(error.localizedDescription)")
@@ -249,6 +259,16 @@ final class APIClient: @unchecked Sendable {
                             if found != current {
                                 print("[API] 🔄 Server URL changed: \(current) → \(found)")
                                 UserDefaults.standard.set(found, forKey: "serverURL")
+                                // Rebuild request with the new server URL
+                                if !current.isEmpty,
+                                   let oldURL = request.url?.absoluteString,
+                                   let newURL = URL(string: oldURL.replacingOccurrences(of: current, with: found)) {
+                                    var rebuilt = URLRequest(url: newURL)
+                                    rebuilt.httpMethod = request.httpMethod
+                                    rebuilt.httpBody = request.httpBody
+                                    rebuilt.allHTTPHeaderFields = request.allHTTPHeaderFields
+                                    request = rebuilt
+                                }
                             }
                         }
                     }
