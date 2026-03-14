@@ -645,7 +645,7 @@ struct JobDetailView: View {
             HStack(spacing: 12) {
                 Button {
                     Task {
-                        await jobs.performAction(jobId: job.id, action: .reject)
+                        await jobs.performAction(job: job, action: .reject)
                         dismiss()
                     }
                 } label: {
@@ -659,7 +659,7 @@ struct JobDetailView: View {
 
                 Button {
                     Task {
-                        await jobs.performAction(jobId: job.id, action: .save)
+                        await jobs.performAction(job: job, action: .save)
                         dismiss()
                     }
                 } label: {
@@ -674,7 +674,7 @@ struct JobDetailView: View {
 
             Button {
                 Task {
-                    await jobs.performAction(jobId: job.id, action: .apply)
+                    await jobs.performAction(job: job, action: .apply)
                     dismiss()
                 }
             } label: {
