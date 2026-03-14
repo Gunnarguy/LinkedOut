@@ -75,12 +75,14 @@ struct IngestResponse: Codable {
 struct IngestStatusResponse: Codable {
     let taskRunning: Bool
     let manualRunning: Bool
+    let cycleActive: Bool?
     let lastIngestResult: Int?
     let store: StatsResponse
 
     enum CodingKeys: String, CodingKey {
         case taskRunning = "task_running"
         case manualRunning = "manual_running"
+        case cycleActive = "cycle_active"
         case lastIngestResult = "last_ingest_result"
         case store
     }

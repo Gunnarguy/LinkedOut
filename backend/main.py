@@ -62,6 +62,7 @@ logging.getLogger().addHandler(_ring_handler)
 _ingest_task: asyncio.Task | None = None
 _manual_ingest_task: asyncio.Task | None = None
 _last_ingest_result: int | None = None  # Result of last manual ingest
+_ingest_lock = asyncio.Lock()  # Serialize ingest cycles so manual + periodic don't race
 
 # User preferences — updated via API, used in ingest cycles
 _DATA_DIR = Path("/app/data") if Path("/app").exists() else Path("./data")
@@ -192,8 +193,9 @@ async def _run_ingest_cycle():
 async def _periodic_ingest(interval_hours: int = 6):
     """Run ingest cycle on a schedule. Also expires stale jobs."""
     while True:
-        store.expire_old_jobs(max_age_days=14)
-        await _run_ingest_cycle()
+        async with _ingest_lock:
+            store.expire_old_jobs(max_age_days=14)
+            result = await _run_ingest_cycle()
         logger.info(f"Next ingest in {interval_hours} hours")
         await asyncio.sleep(interval_hours * 3600)
 
@@ -456,6 +458,10 @@ async def ingest_refresh():
 
     Returns immediately so the client doesn't time out.
     Poll GET /api/ingest/status to check progress.
+
+    If a periodic ingest is already mid-cycle (holding the lock), the manual
+    task will wait for it instead of racing — so the client will see the
+    periodic ingest's results once the lock releases.
     """
     global _manual_ingest_task, _last_ingest_result
     if _manual_ingest_task is not None and not _manual_ingest_task.done():
@@ -470,8 +476,9 @@ async def ingest_refresh():
 
     async def _do_manual_ingest():
         global _last_ingest_result
-        store.expire_old_jobs(max_age_days=14)
-        _last_ingest_result = await _run_ingest_cycle()
+        async with _ingest_lock:
+            store.expire_old_jobs(max_age_days=14)
+            _last_ingest_result = await _run_ingest_cycle()
 
     _manual_ingest_task = asyncio.create_task(_do_manual_ingest())
     return {
@@ -490,6 +497,7 @@ async def ingest_status():
     return {
         "task_running": manual_running or periodic_running,
         "manual_running": manual_running,
+        "cycle_active": _ingest_lock.locked(),
         "last_ingest_result": _last_ingest_result,
         "store": store.stats,
     }

@@ -159,16 +159,17 @@ class JobsViewModel: ObservableObject {
             let kickoff = try await APIClient.shared.refreshIngest()
             print("[VM] ingestNewJobs — kickoff status=\(kickoff.status ?? "nil")")
 
-            // Poll for completion
+            // Poll for completion — use cycle_active to detect ongoing periodic ingest too
             ingestProgress = "Scanning & scoring with AI..."
             var pollCount = 0
-            let maxPolls = 120  // ~4 minutes max
+            let maxPolls = 300  // ~10 minutes max (ingest can take 5-10 min)
             while pollCount < maxPolls {
                 try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
                 pollCount += 1
 
                 let status = try await APIClient.shared.fetchIngestStatus()
-                if !status.manualRunning {
+                let stillActive = status.manualRunning || (status.cycleActive ?? false)
+                if !stillActive {
                     // Ingest finished
                     let ingested = status.lastIngestResult ?? 0
                     print("[VM] ingestNewJobs — done after \(pollCount) polls, ingested=\(ingested)")
@@ -176,7 +177,15 @@ class JobsViewModel: ObservableObject {
                     pendingJobs = try await APIClient.shared.fetchPendingJobs()
                     print("[VM] ingestNewJobs — pending queue now has \(pendingJobs.count) jobs")
                     await loadStats()
-                    if ingested == 0 {
+
+                    // Even if this manual ingest scored 0, the periodic ingest may have
+                    // queued jobs while we were waiting for the lock.
+                    if pendingJobs.isEmpty && status.store.pending > 0 {
+                        print("[VM] ingestNewJobs — store has \(status.store.pending) but fetch returned 0, retrying...")
+                        pendingJobs = try await APIClient.shared.fetchPendingJobs()
+                    }
+
+                    if ingested == 0 && pendingJobs.isEmpty {
                         print("[VM] ingestNewJobs — zero jobs ingested this round")
                         info = "No new jobs matched your profile this round — try again later"
                     }
