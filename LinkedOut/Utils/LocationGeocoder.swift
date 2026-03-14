@@ -2,11 +2,11 @@
 //  LocationGeocoder.swift
 //  LinkedOut
 //
-//  Geocode job location strings → coordinates for the map. Uses Apple CLGeocoder
-//  with a local cache so we don't re-geocode the same city repeatedly.
+//  Geocode job location strings → coordinates for the map. Uses MapKit
+//  MKGeocodingRequest with a local cache so we don't re-geocode the same city repeatedly.
 //
 
-import CoreLocation
+import MapKit
 import Foundation
 import Combine
 
@@ -25,7 +25,6 @@ final class LocationGeocoder: ObservableObject {
 
     // cache: "San Francisco, CA" → coordinate
     private var cache: [String: CLLocationCoordinate2D] = [:]
-    private let geocoder = CLGeocoder()
 
     /// Geocode a batch of jobs. Remote jobs get pinned to their HQ location
     /// (extracted from the location string) with a remote indicator.
@@ -77,10 +76,13 @@ final class LocationGeocoder: ObservableObject {
                 continue
             }
 
-            // Geocode (rate-limited by Apple — 1 request at a time)
+            // Geocode via MapKit
             do {
-                let placemarks = try await geocoder.geocodeAddressString(locationToGeocode)
-                if let coord = placemarks.first?.location?.coordinate {
+                guard let request = MKGeocodingRequest(addressString: locationToGeocode) else {
+                    continue
+                }
+                let mapItems = try await request.mapItems
+                if let coord = mapItems.first?.placemark.coordinate {
                     cache[locationToGeocode.lowercased()] = coord
                     results.append(GeoResult(
                         id: job.id,
