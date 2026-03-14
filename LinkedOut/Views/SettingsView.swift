@@ -88,6 +88,7 @@ struct SettingsView: View {
     @State private var syncStatus: SyncStatus = .idle
     @State private var pendingSyncTask: Task<Void, Never>?
     @State private var showAdvanced = false
+    @State private var showSaveToast = false
 
     private enum SyncStatus { case idle, syncing, synced, failed(String) }
 
@@ -474,7 +475,52 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    syncBadge
+                }
+            }
             .onAppear { loadFromStorage() }
+            .overlay(alignment: .top) {
+                if showSaveToast {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        Text("Saved & synced")
+                            .font(.subheadline.weight(.medium))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .padding(.top, 8)
+                }
+            }
+            .animation(.spring(response: 0.4), value: showSaveToast)
+        }
+    }
+
+    // MARK: - Toolbar Sync Badge
+
+    @ViewBuilder
+    private var syncBadge: some View {
+        switch syncStatus {
+        case .idle:
+            Image(systemName: "checkmark.icloud")
+                .foregroundStyle(.secondary)
+                .font(.body)
+        case .syncing:
+            ProgressView()
+                .controlSize(.small)
+        case .synced:
+            Image(systemName: "checkmark.icloud.fill")
+                .foregroundStyle(.green)
+                .font(.body)
+        case .failed:
+            Image(systemName: "exclamationmark.icloud.fill")
+                .foregroundStyle(.red)
+                .font(.body)
         }
     }
 
@@ -572,7 +618,10 @@ struct SettingsView: View {
         do {
             _ = try await APIClient.shared.syncPreferences(currentPreferences)
             syncStatus = .synced
-            try? await Task.sleep(for: .seconds(3))
+            showSaveToast = true
+            try? await Task.sleep(for: .seconds(2))
+            showSaveToast = false
+            try? await Task.sleep(for: .seconds(1))
             if case .synced = syncStatus { syncStatus = .idle }
         } catch {
             syncStatus = .failed(error.localizedDescription)
