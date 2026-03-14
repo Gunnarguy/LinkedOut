@@ -164,6 +164,11 @@ final class APIClient: @unchecked Sendable {
 
     // MARK: - Notion Sync
 
+    func configureNotion(token: String, databaseId: String) async throws -> NotionConfigureResponse {
+        let body = NotionConfigureRequest(token: token, databaseId: databaseId)
+        return try await post("/api/notion/configure", body: body)
+    }
+
     func fetchNotionStatus() async throws -> NotionStatusResponse {
         return try await get("/api/notion/status")
     }

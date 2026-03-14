@@ -5,8 +5,10 @@ Uses Notion API v2026-03-11 with the new data_source_id pattern.
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 
 import httpx
 
@@ -17,6 +19,10 @@ logger = logging.getLogger(__name__)
 
 NOTION_API = "https://api.notion.com"
 NOTION_VERSION = "2026-03-11"
+
+# Runtime config file (persists token+database_id without rebuilding Docker)
+_DATA_DIR = Path("/app/data") if Path("/app").exists() else Path("./data")
+_NOTION_CONFIG_FILE = _DATA_DIR / "notion_config.json"
 
 # ── Property name constants (Notion database column names) ───────────────────
 # These are the expected column names in the user's Notion database.
@@ -47,10 +53,40 @@ class NotionSync:
     """Async Notion client for bidirectional job sync."""
 
     def __init__(self) -> None:
-        self._token = settings.notion_token
-        self._database_id = settings.notion_database_id
+        self._token = ""
+        self._database_id = ""
         self._data_source_id: str | None = None
         self._db_properties: dict | None = None  # cached schema
+        self._load_config()
+
+    def _load_config(self) -> None:
+        """Load config from runtime file first, fall back to env vars."""
+        if _NOTION_CONFIG_FILE.exists():
+            try:
+                data = json.loads(_NOTION_CONFIG_FILE.read_text())
+                self._token = data.get("token", "")
+                self._database_id = data.get("database_id", "")
+                if self._token and self._database_id:
+                    logger.info("[NOTION] Loaded config from runtime file")
+                    return
+            except Exception:
+                logger.warning("[NOTION] Failed to read runtime config file")
+        # Fall back to env vars
+        self._token = settings.notion_token
+        self._database_id = settings.notion_database_id
+
+    def reconfigure(self, token: str, database_id: str) -> None:
+        """Update credentials at runtime and persist to file. No restart needed."""
+        self._token = token
+        self._database_id = database_id
+        self._data_source_id = None
+        self._db_properties = None
+        # Persist so it survives container restarts
+        _DATA_DIR.mkdir(parents=True, exist_ok=True)
+        _NOTION_CONFIG_FILE.write_text(
+            json.dumps({"token": token, "database_id": database_id})
+        )
+        logger.info("[NOTION] Reconfigured and saved to runtime config file")
 
     @property
     def configured(self) -> bool:

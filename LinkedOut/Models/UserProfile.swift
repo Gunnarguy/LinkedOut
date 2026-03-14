@@ -90,6 +90,32 @@ struct IngestStatusResponse: Codable {
 
 // MARK: - Notion Sync
 
+struct NotionConfigureRequest: Codable {
+    let token: String
+    let databaseId: String
+
+    enum CodingKeys: String, CodingKey {
+        case token
+        case databaseId = "database_id"
+    }
+}
+
+struct NotionConfigureResponse: Codable {
+    let status: String
+    let databaseId: String?
+    let schema: [String: String]?
+    let dataSourceId: String?
+    let propertyCount: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case databaseId = "database_id"
+        case schema
+        case dataSourceId = "data_source_id"
+        case propertyCount = "property_count"
+    }
+}
+
 struct NotionStatusResponse: Codable {
     let configured: Bool
     let syncRunning: Bool

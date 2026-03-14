@@ -539,6 +539,43 @@ _notion_sync_task: asyncio.Task | None = None
 _notion_sync_result: dict | None = None
 
 
+@app.post("/api/notion/configure")
+async def notion_configure(body: dict):
+    """Configure Notion integration at runtime (no Docker rebuild needed).
+
+    Accepts: {"token": "ntn_...", "database_id": "..."}
+    Validates the token by attempting to discover the database schema.
+    """
+    token = (body.get("token") or "").strip()
+    database_id = (body.get("database_id") or "").strip()
+
+    if not token:
+        raise HTTPException(status_code=400, detail="token is required")
+    if not database_id:
+        raise HTTPException(status_code=400, detail="database_id is required")
+
+    # Apply credentials
+    notion_sync.reconfigure(token, database_id)
+
+    # Validate by trying to discover the database
+    try:
+        schema = await notion_sync.discover_schema()
+        return {
+            "status": "connected",
+            "database_id": database_id,
+            "schema": schema,
+            "data_source_id": notion_sync._data_source_id,
+            "property_count": len(schema),
+        }
+    except Exception as e:
+        # Revert on failure
+        notion_sync.reconfigure("", "")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to connect: {e}. Check that the token is correct and the database is shared with the integration.",
+        )
+
+
 @app.get("/api/notion/status")
 async def notion_status():
     """Check Notion integration status and configuration."""

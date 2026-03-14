@@ -56,7 +56,7 @@ LinkedOut is a **"Tinder for jobs"** app: a FastAPI backend fetches listings fro
 - **Cross-reference**: `notion_page_id` field on `JobPayload` links LinkedOut jobs ↔ Notion pages; `LinkedOut ID` property on Notion pages enables reverse lookup
 - **Sync modes**: Full bidirectional (`/api/notion/sync`), push-only (`/api/notion/push`), pull-only (`/api/notion/pull`)
 - **Pull sync**: reads Notion status/notes changes and moves jobs between LinkedOut buckets accordingly
-- **Config**: `NOTION_TOKEN` + `NOTION_DATABASE_ID` in backend `.env`
+- **Config**: Runtime via `POST /api/notion/configure` from iOS Settings (saves to `data/notion_config.json`), or `NOTION_TOKEN` + `NOTION_DATABASE_ID` in `.env`
 
 ## Build & Deploy
 
@@ -105,6 +105,7 @@ curl http://localhost:8443/health
 - `GET /api/ingest/status` — ingest cycle progress
 - `GET/PUT /api/preferences` — user scoring preferences
 - `GET /api/notion/status` — Notion integration status + schema
+- `POST /api/notion/configure` — runtime Notion setup (token + database_id, no restart)
 - `POST /api/notion/sync` — bidirectional Notion sync (non-blocking)
 - `POST /api/notion/push` — push all jobs to Notion
 - `POST /api/notion/pull` — pull changes from Notion

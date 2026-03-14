@@ -90,6 +90,14 @@ struct SettingsView: View {
     @State private var showAdvanced = false
     @State private var showSaveToast = false
 
+    // ── Notion Configuration ──
+    @AppStorage("notionToken") private var notionToken: String = ""
+    @AppStorage("notionDatabaseId") private var notionDatabaseId: String = "28649a74d54f81d59822e8150b4c830a"
+    @State private var notionConnecting = false
+    @State private var notionConnected = false
+    @State private var notionError: String?
+    @State private var notionPropertyCount: Int = 0
+
     private enum SyncStatus { case idle, syncing, synced, failed(String) }
 
     // Detect which preset matches current weights (or .custom if none do)
@@ -454,6 +462,71 @@ struct SettingsView: View {
                     Text("Changes auto-sync. Scoring engine picks them up on next ingest.")
                 }
 
+                // ── Notion Integration ──────────────────────────────
+                Section {
+                    // Status indicator
+                    HStack {
+                        Image(systemName: notionConnected ? "checkmark.circle.fill" : "circle.dashed")
+                            .foregroundStyle(notionConnected ? .green : .secondary)
+                        Text(notionConnected ? "Connected (\(notionPropertyCount) properties)" : "Not connected")
+                            .font(.subheadline)
+                        Spacer()
+                        if notionConnecting {
+                            ProgressView().controlSize(.small)
+                        }
+                    }
+
+                    // Token field
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Integration Token")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        SecureField("ntn_...", text: $notionToken)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .font(.caption.monospaced())
+                    }
+
+                    // Database ID (pre-filled)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Database ID")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        TextField("28649a74...", text: $notionDatabaseId)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .font(.caption.monospaced())
+                    }
+
+                    // Error display
+                    if let error = notionError {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+
+                    // Connect button
+                    Button {
+                        Task { await connectNotion() }
+                    } label: {
+                        HStack {
+                            Image(systemName: notionConnected ? "arrow.triangle.2.circlepath" : "link")
+                            Text(notionConnected ? "Reconnect" : "Connect")
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .disabled(notionToken.trimmingCharacters(in: .whitespaces).isEmpty || notionConnecting)
+                } header: {
+                    HStack {
+                        Text("Notion")
+                        Spacer()
+                        Link("Get Token ↗", destination: URL(string: "https://www.notion.so/profile/integrations")!)
+                            .font(.caption)
+                    }
+                } footer: {
+                    Text("Create an integration at notion.so/profile/integrations, share your database with it, then paste the token here.")
+                }
+
                 Section {
                     Button("Reset to Defaults") {
                         apply(.balanced)
@@ -481,6 +554,7 @@ struct SettingsView: View {
                 }
             }
             .onAppear { loadFromStorage() }
+            .task { await checkNotionStatus() }
             .overlay(alignment: .top) {
                 if showSaveToast {
                     HStack(spacing: 6) {
@@ -627,6 +701,35 @@ struct SettingsView: View {
             syncStatus = .failed(error.localizedDescription)
             try? await Task.sleep(for: .seconds(5))
             syncStatus = .idle
+        }
+    }
+
+    // MARK: - Notion
+
+    private func connectNotion() async {
+        notionConnecting = true
+        notionError = nil
+        do {
+            let result = try await APIClient.shared.configureNotion(
+                token: notionToken.trimmingCharacters(in: .whitespaces),
+                databaseId: notionDatabaseId.trimmingCharacters(in: .whitespaces)
+            )
+            notionConnected = result.status == "connected"
+            notionPropertyCount = result.propertyCount ?? 0
+        } catch {
+            notionConnected = false
+            notionError = error.localizedDescription
+        }
+        notionConnecting = false
+    }
+
+    private func checkNotionStatus() async {
+        do {
+            let status = try await APIClient.shared.fetchNotionStatus()
+            notionConnected = status.configured
+            notionPropertyCount = status.schema?.count ?? 0
+        } catch {
+            notionConnected = false
         }
     }
 
