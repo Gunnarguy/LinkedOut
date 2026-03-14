@@ -82,7 +82,7 @@ final class LocationGeocoder: ObservableObject {
                     continue
                 }
                 let mapItems = try await request.mapItems
-                if let coord = mapItems.first?.location?.coordinate {
+                if let coord = mapItems.first?.location.coordinate {
                     cache[locationToGeocode.lowercased()] = coord
                     results.append(GeoResult(
                         id: job.id,
