@@ -33,32 +33,47 @@
 
 ## Table of Contents
 
-- [Features](#features)
-- [Architecture](#architecture)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Local Development (Docker)](#local-development-docker)
-  - [Deploy to Render](#deploy-to-render)
-  - [iOS App Setup](#ios-app-setup)
-- [Configuration](#configuration)
-  - [Environment Variables](#environment-variables)
-  - [Scoring Weights & Presets](#scoring-weights--presets)
-- [Scoring Engine](#scoring-engine)
-  - [Two-Tier Pipeline](#two-tier-pipeline)
-  - [The Why Matrix](#the-why-matrix)
-  - [Score Calibration](#score-calibration)
-  - [Penalties & Boosts](#penalties--boosts)
-  - [LLM Fallback Chain](#llm-fallback-chain)
-- [Job Sources](#job-sources)
-- [Location Intelligence](#location-intelligence)
-- [iOS App](#ios-app)
-  - [Tabs](#tabs)
-  - [Swipe Mechanics](#swipe-mechanics)
-  - [Server Discovery](#server-discovery)
-  - [Settings](#settings)
-- [API Reference](#api-reference)
-- [Data Models](#data-models)
-- [Project Structure](#project-structure)
+- [LinkedOut](#linkedout)
+  - [How It Works](#how-it-works)
+  - [Table of Contents](#table-of-contents)
+  - [Features](#features)
+  - [Architecture](#architecture)
+    - [Tech Stack](#tech-stack)
+  - [Getting Started](#getting-started)
+    - [Prerequisites](#prerequisites)
+    - [Local Development (Docker)](#local-development-docker)
+    - [Deploy to Render](#deploy-to-render)
+    - [iOS App Setup](#ios-app-setup)
+  - [Configuration](#configuration)
+    - [Environment Variables](#environment-variables)
+    - [Scoring Weights \& Presets](#scoring-weights--presets)
+  - [Scoring Engine](#scoring-engine)
+    - [Two-Tier Pipeline](#two-tier-pipeline)
+    - [The Why Matrix](#the-why-matrix)
+    - [Score Calibration](#score-calibration)
+    - [Penalties \& Boosts](#penalties--boosts)
+    - [LLM Fallback Chain](#llm-fallback-chain)
+  - [Job Sources](#job-sources)
+    - [Deduplication](#deduplication)
+  - [Location Intelligence](#location-intelligence)
+  - [iOS App](#ios-app)
+    - [Tabs](#tabs)
+    - [Swipe Mechanics](#swipe-mechanics)
+    - [Server Discovery](#server-discovery)
+    - [Settings](#settings)
+  - [API Reference](#api-reference)
+    - [Health](#health)
+    - [Authentication](#authentication)
+    - [Jobs](#jobs)
+    - [Scoring \& Ingestion](#scoring--ingestion)
+    - [Preferences](#preferences)
+    - [LinkedIn](#linkedin)
+    - [Development (debug mode only)](#development-debug-mode-only)
+  - [Data Models](#data-models)
+    - [JobPayload](#jobpayload)
+    - [UserPreferences](#userpreferences)
+  - [Project Structure](#project-structure)
+  - [License](#license)
 
 ---
 
@@ -111,15 +126,15 @@ LinkedOut/
 
 ### Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| **iOS App** | SwiftUI, iOS 17+, MapKit, WebKit, Combine |
-| **Backend** | FastAPI, Python 3.12, Pydantic v2, uvicorn |
-| **LLM Scoring** | Google Gemini (primary), OpenAI (fallback), local keyword scorer |
-| **Job APIs** | Remotive, Himalayas, HN Algolia, Jobicy, RemoteOK |
-| **Auth** | LinkedIn OAuth 2.0 |
-| **Storage** | JSON file-backed (job_store.json, seen_urls.json, user_prefs.json) |
-| **Deployment** | Docker on Render (free tier) |
+| Layer           | Technology                                                         |
+| --------------- | ------------------------------------------------------------------ |
+| **iOS App**     | SwiftUI, iOS 17+, MapKit, WebKit, Combine                          |
+| **Backend**     | FastAPI, Python 3.12, Pydantic v2, uvicorn                         |
+| **LLM Scoring** | Google Gemini (primary), OpenAI (fallback), local keyword scorer   |
+| **Job APIs**    | Remotive, Himalayas, HN Algolia, Jobicy, RemoteOK                  |
+| **Auth**        | LinkedIn OAuth 2.0                                                 |
+| **Storage**     | JSON file-backed (job_store.json, seen_urls.json, user_prefs.json) |
+| **Deployment**  | Docker on Render (free tier)                                       |
 
 ---
 
@@ -187,38 +202,38 @@ The backend runs on **port 8443** with job data persisted to `./data/`.
 
 Create `backend/.env` from the example template. All variables with defaults are optional.
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `LINKEDIN_CLIENT_ID` | For OAuth | `""` | LinkedIn app client ID |
-| `LINKEDIN_CLIENT_SECRET` | For OAuth | `""` | LinkedIn app secret |
-| `LINKEDIN_REDIRECT_URI` | For OAuth | Render callback URL | OAuth redirect URI |
-| `LLM_PROVIDER` | No | `gemini` | Primary LLM: `"gemini"` or `"openai"` |
-| `GEMINI_API_KEY` | For Gemini | `""` | Google Gemini API key |
-| `GEMINI_MODEL` | No | `gemini-3.1-pro-preview` | Full scoring model |
-| `GEMINI_FLASH_MODEL` | No | `gemini-3-flash-preview` | Triage (fast) model |
-| `OPENAI_API_KEY` | For OpenAI | `""` | OpenAI API key |
-| `OPENAI_MODEL` | No | `gpt-5.4` | OpenAI model name |
-| `SECRET_KEY` | No | Auto-generated | Token signing key |
-| `MIN_SALARY` | No | `90000` | Minimum salary filter |
-| `REQUIRE_REMOTE` | No | `true` | Remote-only filter |
-| `DEBUG` | No | `true` (local), `false` (Render) | Enable dev endpoints |
+| Variable                 | Required   | Default                          | Description                           |
+| ------------------------ | ---------- | -------------------------------- | ------------------------------------- |
+| `LINKEDIN_CLIENT_ID`     | For OAuth  | `""`                             | LinkedIn app client ID                |
+| `LINKEDIN_CLIENT_SECRET` | For OAuth  | `""`                             | LinkedIn app secret                   |
+| `LINKEDIN_REDIRECT_URI`  | For OAuth  | Render callback URL              | OAuth redirect URI                    |
+| `LLM_PROVIDER`           | No         | `gemini`                         | Primary LLM: `"gemini"` or `"openai"` |
+| `GEMINI_API_KEY`         | For Gemini | `""`                             | Google Gemini API key                 |
+| `GEMINI_MODEL`           | No         | `gemini-3.1-pro-preview`         | Full scoring model                    |
+| `GEMINI_FLASH_MODEL`     | No         | `gemini-3-flash-preview`         | Triage (fast) model                   |
+| `OPENAI_API_KEY`         | For OpenAI | `""`                             | OpenAI API key                        |
+| `OPENAI_MODEL`           | No         | `gpt-5.4`                        | OpenAI model name                     |
+| `SECRET_KEY`             | No         | Auto-generated                   | Token signing key                     |
+| `MIN_SALARY`             | No         | `90000`                          | Minimum salary filter                 |
+| `REQUIRE_REMOTE`         | No         | `true`                           | Remote-only filter                    |
+| `DEBUG`                  | No         | `true` (local), `false` (Render) | Enable dev endpoints                  |
 
 ### Scoring Weights & Presets
 
 Weights are configurable from the iOS Settings tab or via `PUT /api/preferences`. Three presets ship out of the box:
 
-| Weight | Relaxed 🌊 | Balanced ⚖️ | Strict 🎯 |
-|--------|-----------|-------------|-----------|
-| **Score cutoff** | 0.20 | 0.35 | 0.50 |
-| **Stack mismatch** | –0.10 | –0.20 | –0.35 |
-| **"Builders welcome" boost** | +0.15 | +0.10 | +0.05 |
-| **Portfolio-first boost** | +0.15 | +0.10 | +0.05 |
-| **Nearby penalty** | –0.01 | –0.03 | –0.05 |
-| **Regional penalty** | –0.03 | –0.08 | –0.15 |
-| **Relocation penalty** | –0.05 | –0.15 | –0.25 |
-| **International penalty** | –0.10 | –0.25 | –0.35 |
-| **Experience penalty** | –0.05 | –0.10 | –0.20 |
-| **Credential penalty** | –0.05 | –0.15 | –0.25 |
+| Weight                       | Relaxed 🌊 | Balanced ⚖️ | Strict 🎯 |
+| ---------------------------- | --------- | ---------- | -------- |
+| **Score cutoff**             | 0.20      | 0.35       | 0.50     |
+| **Stack mismatch**           | –0.10     | –0.20      | –0.35    |
+| **"Builders welcome" boost** | +0.15     | +0.10      | +0.05    |
+| **Portfolio-first boost**    | +0.15     | +0.10      | +0.05    |
+| **Nearby penalty**           | –0.01     | –0.03      | –0.05    |
+| **Regional penalty**         | –0.03     | –0.08      | –0.15    |
+| **Relocation penalty**       | –0.05     | –0.15      | –0.25    |
+| **International penalty**    | –0.10     | –0.25      | –0.35    |
+| **Experience penalty**       | –0.05     | –0.10      | –0.20    |
+| **Credential penalty**       | –0.05     | –0.15      | –0.25    |
 
 ---
 
@@ -236,24 +251,24 @@ Every raw listing goes through two stages:
 
 Every scored job gets four structured fields:
 
-| Field | Purpose | Length |
-|-------|---------|--------|
-| **`logic_fit`** | How the role's day-to-day maps to what you actually do | 2–3 sentences |
-| **`domain_leverage`** | Where you have an unfair advantage over typical applicants | 2–3 sentences |
-| **`risk_reward`** | Realistic friction and upside | 2–3 sentences |
-| **`red_flags`** | Every job has at least one. Hard requirements, vague products, credential signals | 1–5 bullets |
+| Field                 | Purpose                                                                           | Length        |
+| --------------------- | --------------------------------------------------------------------------------- | ------------- |
+| **`logic_fit`**       | How the role's day-to-day maps to what you actually do                            | 2–3 sentences |
+| **`domain_leverage`** | Where you have an unfair advantage over typical applicants                        | 2–3 sentences |
+| **`risk_reward`**     | Realistic friction and upside                                                     | 2–3 sentences |
+| **`red_flags`**       | Every job has at least one. Hard requirements, vague products, credential signals | 1–5 bullets   |
 
 ### Score Calibration
 
 Scores are calibrated to a realistic distribution, not inflated:
 
-| Range | % of Jobs | Meaning |
-|-------|-----------|---------|
-| **0.85–1.00** | ~5% | Listing practically describes you. Company explicitly values portfolio over credentials |
-| **0.70–0.84** | ~15% | Strong alignment, minimal convincing needed |
-| **0.55–0.69** | ~30% | Decent opportunity with real friction. Interesting but unclear fit |
-| **0.40–0.54** | ~30% | Significant convincing required. Stack or experience gaps |
-| **Below cutoff** | ~20% | Rejected. Enterprise, legacy, rigid HR, hard degree requirements |
+| Range            | % of Jobs | Meaning                                                                                 |
+| ---------------- | --------- | --------------------------------------------------------------------------------------- |
+| **0.85–1.00**    | ~5%       | Listing practically describes you. Company explicitly values portfolio over credentials |
+| **0.70–0.84**    | ~15%      | Strong alignment, minimal convincing needed                                             |
+| **0.55–0.69**    | ~30%      | Decent opportunity with real friction. Interesting but unclear fit                      |
+| **0.40–0.54**    | ~30%      | Significant convincing required. Stack or experience gaps                               |
+| **Below cutoff** | ~20%      | Rejected. Enterprise, legacy, rigid HR, hard degree requirements                        |
 
 **Anchor score: 0.55** — A job with interesting mission and AI relevance but no explicit portfolio signal.
 
@@ -264,6 +279,7 @@ Scores are calibrated to a realistic distribution, not inflated:
 Applied on top of the base LLM assessment:
 
 **Location** (relative to preferred locations):
+
 - Remote / in preferred city: +0
 - Nearby (same state, ~1–2hr drive): `nearby_penalty`
 - Regional (neighboring state): `regional_penalty`
@@ -271,16 +287,19 @@ Applied on top of the base LLM assessment:
 - International: `international_penalty`
 
 **Stack Friction** — the decisive factor:
+
 - Hard requirement in unfamiliar stack: `convincing_penalty`
 - "Any modern framework" / "we value builders": `convincing_boost`
 - Explicitly values shipped products / portfolio-first: `portfolio_boost`
 
 **Experience Reality**:
+
 - "1–3 years" or "any": +0
 - "5+ years" with flexibility: `experience_penalty`
 - Known elite/selective (FAANG, Jane Street): `credential_penalty`
 
 **Industry Multiplier**:
+
 - HealthTech / MedTech / Clinical AI: +0.08 (domain differentiator)
 - Developer/AI tools: +0.05
 
@@ -300,13 +319,13 @@ The local keyword fallback uses regex matching on tech stack, seniority, and ind
 
 Five remote job boards are fetched asynchronously and deduplicated:
 
-| Source | API | What It Provides | Queries |
-|--------|-----|-----------------|---------|
-| **Remotive** | `remotive.com/api/remote-jobs` | Remote-first jobs | 8 search queries (AI engineer, founding engineer, iOS engineer, etc.) |
-| **Himalayas** | `himalayas.app/jobs/api` | Remote-first jobs | 6 search queries |
-| **HN Who's Hiring** | `hn.algolia.com/api/v1` | Monthly hiring threads on Hacker News | Finds latest thread → fetches up to 300 comments → filters by AI/product/iOS keywords |
-| **Jobicy** | `jobicy.com/api/v2/remote-jobs` | Remote jobs by tag | 7 tags (ai, python, javascript, ios, react, devops, data-science) |
-| **RemoteOK** | `remoteok.com/api` | Remote jobs aggregator | Top 100 listings |
+| Source              | API                             | What It Provides                      | Queries                                                                               |
+| ------------------- | ------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------- |
+| **Remotive**        | `remotive.com/api/remote-jobs`  | Remote-first jobs                     | 8 search queries (AI engineer, founding engineer, iOS engineer, etc.)                 |
+| **Himalayas**       | `himalayas.app/jobs/api`        | Remote-first jobs                     | 6 search queries                                                                      |
+| **HN Who's Hiring** | `hn.algolia.com/api/v1`         | Monthly hiring threads on Hacker News | Finds latest thread → fetches up to 300 comments → filters by AI/product/iOS keywords |
+| **Jobicy**          | `jobicy.com/api/v2/remote-jobs` | Remote jobs by tag                    | 7 tags (ai, python, javascript, ios, react, devops, data-science)                     |
+| **RemoteOK**        | `remoteok.com/api`              | Remote jobs aggregator                | Top 100 listings                                                                      |
 
 ### Deduplication
 
@@ -322,13 +341,13 @@ Three layers prevent duplicate jobs:
 
 A 5-tier classification system scores job locations relative to your preferred locations:
 
-| Tier | Name | Example (from Kalamazoo, MI) | Default Penalty |
-|------|------|------------------------------|----------------|
-| **0** | Home | Remote, or job in Kalamazoo | +0 |
-| **1** | Nearby | Grand Rapids, Lansing, Detroit (same state) | –0.03 |
-| **2** | Regional | Ohio, Indiana, Wisconsin (neighboring states) | –0.08 |
-| **3** | Far US | California, Texas, etc. | –0.15 |
-| **4** | International | London, Berlin, Toronto, etc. | –0.25 |
+| Tier  | Name          | Example (from Kalamazoo, MI)                  | Default Penalty |
+| ----- | ------------- | --------------------------------------------- | --------------- |
+| **0** | Home          | Remote, or job in Kalamazoo                   | +0              |
+| **1** | Nearby        | Grand Rapids, Lansing, Detroit (same state)   | –0.03           |
+| **2** | Regional      | Ohio, Indiana, Wisconsin (neighboring states) | –0.08           |
+| **3** | Far US        | California, Texas, etc.                       | –0.15           |
+| **4** | International | London, Berlin, Toronto, etc.                 | –0.25           |
 
 All 50 US states have their neighbors mapped. The system includes Michigan-specific metro areas (Grand Rapids, Battle Creek, Lansing, Jackson, etc.) for fine-grained nearby detection.
 
@@ -342,25 +361,25 @@ All 50 US states have their neighbors mapped. The system includes Michigan-speci
 
 The app has 6 tabs:
 
-| Tab | View | Description |
-|-----|------|-------------|
-| **Discover** | `CardStackView` | Swipeable card stack of pending jobs, sorted by score or date |
-| **Map** | `JobMapView` | Apple Maps with all jobs pinned (green = on-site, blue = remote HQ) |
-| **Applied** | `AppliedJobsView` | Jobs you swiped right on, with status tracking |
-| **Saved** | `SavedJobsView` | Bookmarked jobs (swiped up) |
-| **Profile** | `ProfileView` | LinkedIn profile display |
-| **Settings** | `SettingsView` | Scoring weights, preferences, presets, server config |
+| Tab          | View              | Description                                                         |
+| ------------ | ----------------- | ------------------------------------------------------------------- |
+| **Discover** | `CardStackView`   | Swipeable card stack of pending jobs, sorted by score or date       |
+| **Map**      | `JobMapView`      | Apple Maps with all jobs pinned (green = on-site, blue = remote HQ) |
+| **Applied**  | `AppliedJobsView` | Jobs you swiped right on, with status tracking                      |
+| **Saved**    | `SavedJobsView`   | Bookmarked jobs (swiped up)                                         |
+| **Profile**  | `ProfileView`     | LinkedIn profile display                                            |
+| **Settings** | `SettingsView`    | Scoring weights, preferences, presets, server config                |
 
 ### Swipe Mechanics
 
 Tinder-style card gestures with physics-based animation:
 
-| Gesture | Threshold | Action |
-|---------|-----------|--------|
-| **Swipe right** | >120px horizontal | Apply |
-| **Swipe left** | >120px horizontal | Reject |
-| **Swipe up** | >120px vertical | Save |
-| **Release below threshold** | <120px | Snap back |
+| Gesture                     | Threshold         | Action    |
+| --------------------------- | ----------------- | --------- |
+| **Swipe right**             | >120px horizontal | Apply     |
+| **Swipe left**              | >120px horizontal | Reject    |
+| **Swipe up**                | >120px vertical   | Save      |
+| **Release below threshold** | <120px            | Snap back |
 
 - **Card rotation**: `atan(offset.width / 20)` degrees as you drag
 - **Animation**: `easeOut(duration: 0.3)` on release
@@ -399,58 +418,65 @@ All settings persist via `@AppStorage` (UserDefaults) and sync to the backend vi
 ## API Reference
 
 ### Health
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/health` | Server health + store stats |
+
+| Method | Path      | Description                 |
+| ------ | --------- | --------------------------- |
+| GET    | `/health` | Server health + store stats |
 
 ### Authentication
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/auth/login` | Get LinkedIn OAuth URL |
-| GET | `/auth/callback` | OAuth callback (redirects to app) |
-| POST | `/auth/token` | Exchange auth code for profile |
-| GET | `/auth/status/{person_id}` | Check session validity |
+
+| Method | Path                       | Description                       |
+| ------ | -------------------------- | --------------------------------- |
+| GET    | `/auth/login`              | Get LinkedIn OAuth URL            |
+| GET    | `/auth/callback`           | OAuth callback (redirects to app) |
+| POST   | `/auth/token`              | Exchange auth code for profile    |
+| GET    | `/auth/status/{person_id}` | Check session validity            |
 
 ### Jobs
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/jobs/pending` | Pending jobs (query: `limit`, `offset`) |
-| GET | `/api/jobs/{job_id}` | Single job by ID |
-| GET | `/api/jobs/applied` | All applied jobs |
-| GET | `/api/jobs/saved` | All saved jobs |
-| GET | `/api/jobs/stats` | Pipeline statistics |
-| POST | `/api/jobs/action` | Apply/reject/save a job |
-| POST | `/api/jobs/undo` | Undo last action |
-| PUT | `/api/jobs/{job_id}/notes` | Update job notes |
-| PUT | `/api/jobs/{job_id}/status` | Update application status |
+
+| Method | Path                        | Description                             |
+| ------ | --------------------------- | --------------------------------------- |
+| GET    | `/api/jobs/pending`         | Pending jobs (query: `limit`, `offset`) |
+| GET    | `/api/jobs/{job_id}`        | Single job by ID                        |
+| GET    | `/api/jobs/applied`         | All applied jobs                        |
+| GET    | `/api/jobs/saved`           | All saved jobs                          |
+| GET    | `/api/jobs/stats`           | Pipeline statistics                     |
+| POST   | `/api/jobs/action`          | Apply/reject/save a job                 |
+| POST   | `/api/jobs/undo`            | Undo last action                        |
+| PUT    | `/api/jobs/{job_id}/notes`  | Update job notes                        |
+| PUT    | `/api/jobs/{job_id}/status` | Update application status               |
 
 ### Scoring & Ingestion
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/score` | Score a single listing |
-| POST | `/api/score/batch` | Score a batch of listings |
-| POST | `/api/ingest/refresh` | Trigger background ingest |
-| GET | `/api/ingest/status` | Check ingest status |
+
+| Method | Path                  | Description               |
+| ------ | --------------------- | ------------------------- |
+| POST   | `/api/score`          | Score a single listing    |
+| POST   | `/api/score/batch`    | Score a batch of listings |
+| POST   | `/api/ingest/refresh` | Trigger background ingest |
+| GET    | `/api/ingest/status`  | Check ingest status       |
 
 ### Preferences
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/preferences` | Get current preferences |
-| PUT | `/api/preferences` | Update preferences |
+
+| Method | Path               | Description             |
+| ------ | ------------------ | ----------------------- |
+| GET    | `/api/preferences` | Get current preferences |
+| PUT    | `/api/preferences` | Update preferences      |
 
 ### LinkedIn
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/share` | Share job to LinkedIn (query: `person_id`, `job_id`) |
+
+| Method | Path         | Description                                          |
+| ------ | ------------ | ---------------------------------------------------- |
+| POST   | `/api/share` | Share job to LinkedIn (query: `person_id`, `job_id`) |
 
 ### Development (debug mode only)
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/dev/seed` | Seed 3 mock jobs |
-| POST | `/api/dev/reset-seen` | Clear seen URLs |
-| POST | `/api/dev/clear-pending` | Clear pending queue |
-| POST | `/api/dev/purge-keyword-scored` | Remove locally-scored jobs |
-| GET | `/api/dev/logs` | Recent log lines (query: `n`, default 100) |
+
+| Method | Path                            | Description                                |
+| ------ | ------------------------------- | ------------------------------------------ |
+| POST   | `/api/dev/seed`                 | Seed 3 mock jobs                           |
+| POST   | `/api/dev/reset-seen`           | Clear seen URLs                            |
+| POST   | `/api/dev/clear-pending`        | Clear pending queue                        |
+| POST   | `/api/dev/purge-keyword-scored` | Remove locally-scored jobs                 |
+| GET    | `/api/dev/logs`                 | Recent log lines (query: `n`, default 100) |
 
 ---
 
