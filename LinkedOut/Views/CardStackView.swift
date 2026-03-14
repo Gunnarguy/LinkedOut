@@ -177,6 +177,7 @@ struct CardStackView: View {
                 jobs.topCardRotation = Double(value.translation.width / 20)
             }
             .onEnded { value in
+                guard let topJob = sortedPending.first else { return }
                 let width = value.translation.width
                 let height = value.translation.height
 
@@ -188,7 +189,7 @@ struct CardStackView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                         jobs.topCardOffset = .zero
                         jobs.topCardRotation = 0
-                        Task { await jobs.swipeRight() }
+                        Task { await jobs.swipeRight(job: topJob) }
                     }
                 } else if width < -120 {
                     // Swipe left → Reject
@@ -198,7 +199,7 @@ struct CardStackView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                         jobs.topCardOffset = .zero
                         jobs.topCardRotation = 0
-                        Task { await jobs.swipeLeft() }
+                        Task { await jobs.swipeLeft(job: topJob) }
                     }
                 } else if height < -120 {
                     // Swipe up → Save
@@ -208,7 +209,7 @@ struct CardStackView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                         jobs.topCardOffset = .zero
                         jobs.topCardRotation = 0
-                        Task { await jobs.swipeUp() }
+                        Task { await jobs.swipeUp(job: topJob) }
                     }
                 } else {
                     jobs.resetCardPosition()
@@ -236,7 +237,9 @@ struct CardStackView: View {
             // Reject
             Button {
                 haptic()
-                Task { await jobs.swipeLeft() }
+                if let job = sortedPending.first {
+                    Task { await jobs.swipeLeft(job: job) }
+                }
             } label: {
                 Image(systemName: "xmark")
                     .font(.title2.weight(.bold))
@@ -245,11 +248,14 @@ struct CardStackView: View {
                     .background(.red.opacity(0.1))
                     .clipShape(Circle())
             }
+            .disabled(jobs.isProcessingAction)
 
             // Save
             Button {
                 haptic()
-                Task { await jobs.swipeUp() }
+                if let job = sortedPending.first {
+                    Task { await jobs.swipeUp(job: job) }
+                }
             } label: {
                 Image(systemName: "bookmark")
                     .font(.title3.weight(.bold))
@@ -258,11 +264,14 @@ struct CardStackView: View {
                     .background(.blue.opacity(0.1))
                     .clipShape(Circle())
             }
+            .disabled(jobs.isProcessingAction)
 
             // Apply
             Button {
                 haptic()
-                Task { await jobs.swipeRight() }
+                if let job = sortedPending.first {
+                    Task { await jobs.swipeRight(job: job) }
+                }
             } label: {
                 Image(systemName: "checkmark")
                     .font(.title2.weight(.bold))
@@ -271,6 +280,7 @@ struct CardStackView: View {
                     .background(.green.opacity(0.1))
                     .clipShape(Circle())
             }
+            .disabled(jobs.isProcessingAction)
         }
         .padding(.bottom, 8)
     }

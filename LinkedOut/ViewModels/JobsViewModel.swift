@@ -36,6 +36,9 @@ class JobsViewModel: ObservableObject {
     @Published var topCardOffset: CGSize = .zero
     @Published var topCardRotation: Double = 0
 
+    /// Prevents double-swipe race conditions
+    @Published var isProcessingAction = false
+
     // MARK: - Disk Cache
 
     private static let cacheDir: URL = {
@@ -212,37 +215,42 @@ class JobsViewModel: ObservableObject {
 
     // MARK: - Swipe Actions
 
-    func swipeRight() async {
-        guard let job = pendingJobs.first else { return }
+    func swipeRight(job: JobPayload) async {
+        guard !isProcessingAction else { return }
         // Show the "apply" prompt instead of silently moving to applied list
         jobToApply = job
     }
 
     /// Actually mark the job as applied after the user confirms or dismisses the apply prompt
     func confirmApply(job: JobPayload) async {
-        await performAction(jobId: job.id, action: .apply)
+        await performAction(job: job, action: .apply)
     }
 
-    func swipeLeft() async {
-        guard let job = pendingJobs.first else { return }
-        await performAction(jobId: job.id, action: .reject)
+    func swipeLeft(job: JobPayload) async {
+        guard !isProcessingAction else { return }
+        await performAction(job: job, action: .reject)
     }
 
-    func swipeUp() async {
-        guard let job = pendingJobs.first else { return }
-        await performAction(jobId: job.id, action: .save)
+    func swipeUp(job: JobPayload) async {
+        guard !isProcessingAction else { return }
+        await performAction(job: job, action: .save)
     }
 
-    func performAction(jobId: String, action: JobAction) async {
+    func performAction(job: JobPayload, action: JobAction) async {
+        let jobId = job.id
         print("[VM] performAction — \(action.rawValue) on \(jobId)")
+        isProcessingAction = true
+
+        // Optimistic removal — prevents card flash-back after swipe animation
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            pendingJobs.removeAll { $0.id == jobId }
+        }
+
         let request = JobActionRequest(jobId: jobId, action: action)
         do {
             let response = try await APIClient.shared.performAction(request)
             print("[VM] performAction — success=\(response.success) msg=\(response.message)")
             if response.success {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    pendingJobs.removeAll { $0.id == jobId }
-                }
                 switch action {
                 case .apply:
                     await loadAppliedJobs()
@@ -252,13 +260,18 @@ class JobsViewModel: ObservableObject {
                     break
                 }
                 await loadStats()
+            } else {
+                // Server rejected — restore the job
+                pendingJobs.insert(job, at: 0)
             }
         } catch let apiError as APIError where apiError.is404 {
-            // Job no longer exists on server — purge it locally
             purgeStaleJob(id: jobId)
         } catch {
+            // Network error — restore the job so user can retry
+            pendingJobs.insert(job, at: 0)
             self.error = error.localizedDescription
         }
+        isProcessingAction = false
     }
 
     /// Remove a job from all local lists when the server says it's gone
