@@ -1,0 +1,589 @@
+# LinkedOut
+
+**Tinder for jobs** — an AI-powered job discovery app that fetches listings from 5 remote job boards, scores them with LLMs against your profile, and lets you swipe through the best matches on iOS.
+
+<p align="center">
+  <img src="https://img.shields.io/badge/SwiftUI-iOS_17+-blue?logo=swift" />
+  <img src="https://img.shields.io/badge/FastAPI-Python_3.12-green?logo=fastapi" />
+  <img src="https://img.shields.io/badge/LLM-Gemini_%7C_OpenAI-orange" />
+  <img src="https://img.shields.io/badge/Deploy-Render-purple?logo=render" />
+</p>
+
+---
+
+## How It Works
+
+```
+┌─────────────┐     ┌──────────────┐     ┌──────────────┐     ┌───────────┐
+│  5 Job APIs  │────▶│  Dedup +     │────▶│  LLM Scoring │────▶│  iOS App  │
+│  (Remotive,  │     │  Ingest      │     │  (Gemini /   │     │  Swipe UI │
+│  Himalayas,  │     │  Pipeline    │     │  OpenAI /    │     │  + Map    │
+│  HN, Jobicy, │     │              │     │  Fallback)   │     │           │
+│  RemoteOK)   │     └──────────────┘     └──────────────┘     └───────────┘
+└─────────────┘
+```
+
+1. **Fetch** — Backend pulls listings from 5 remote job boards on a timer (or manual trigger)
+2. **Deduplicate** — 3-layer URL dedup prevents the same listing from appearing twice
+3. **Score** — Each listing is run through an LLM scoring pipeline with anti-sycophancy prompts, the Why Matrix, and configurable penalty/boost weights
+4. **Discover** — iOS app presents scored jobs as swipeable cards. Swipe right to apply, left to reject, up to save for later
+5. **Track** — Applied and saved jobs live in separate lists with notes and status tracking
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Architecture](#architecture)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Local Development (Docker)](#local-development-docker)
+  - [Deploy to Render](#deploy-to-render)
+  - [iOS App Setup](#ios-app-setup)
+- [Configuration](#configuration)
+  - [Environment Variables](#environment-variables)
+  - [Scoring Weights & Presets](#scoring-weights--presets)
+- [Scoring Engine](#scoring-engine)
+  - [Two-Tier Pipeline](#two-tier-pipeline)
+  - [The Why Matrix](#the-why-matrix)
+  - [Score Calibration](#score-calibration)
+  - [Penalties & Boosts](#penalties--boosts)
+  - [LLM Fallback Chain](#llm-fallback-chain)
+- [Job Sources](#job-sources)
+- [Location Intelligence](#location-intelligence)
+- [iOS App](#ios-app)
+  - [Tabs](#tabs)
+  - [Swipe Mechanics](#swipe-mechanics)
+  - [Server Discovery](#server-discovery)
+  - [Settings](#settings)
+- [API Reference](#api-reference)
+- [Data Models](#data-models)
+- [Project Structure](#project-structure)
+
+---
+
+## Features
+
+- **5 job sources** aggregated and deduplicated (Remotive, Himalayas, HN Who's Hiring, Jobicy, RemoteOK)
+- **LLM-powered scoring** with Gemini Flash triage + Gemini Pro full analysis, OpenAI fallback, local keyword fallback
+- **Anti-sycophancy design** — cold analytical prompts at temperature 0.3, score deflation, forced red flags on every job
+- **Why Matrix** — structured `logic_fit`, `domain_leverage`, `risk_reward` assessment for every job
+- **Tinder-style swipe UI** — swipe right (apply), left (reject), up (save), with undo
+- **Interactive map view** — all jobs plotted on Apple Maps with color-coded score pins
+- **Configurable scoring weights** — 3 presets (Relaxed/Balanced/Strict) + per-slider fine-tuning
+- **Multi-location preferences** — score jobs against multiple preferred cities
+- **LinkedIn OAuth** — authenticate and share applications to your LinkedIn profile
+- **Application tracking** — notes, status pipeline (new → applied → phone screen → interview → offer)
+- **Auto server discovery** — iOS app probes Render cloud, local Docker, LAN, and localhost
+- **3-layer URL dedup** — fetch-time, ingest-time, and store-time protection against duplicates
+
+---
+
+## Architecture
+
+```
+LinkedOut/
+├── backend/               # FastAPI Python backend
+│   ├── main.py            # API endpoints + ingest orchestration
+│   ├── scoring_engine.py  # LLM scoring pipeline (Gemini/OpenAI/local)
+│   ├── job_fetcher.py     # 5 async job source fetchers
+│   ├── job_store.py       # JSON file-backed persistent store + dedup
+│   ├── location_mapper.py # 5-tier location classification
+│   ├── models.py          # Pydantic models (JobPayload, UserPreferences, etc.)
+│   ├── config.py          # pydantic-settings environment config
+│   ├── linkedin_api.py    # LinkedIn API client (profile, sharing)
+│   ├── linkedin_oauth.py  # OAuth 2.0 flow
+│   ├── Dockerfile         # Python 3.12-slim + uvicorn
+│   └── requirements.txt   # 8 dependencies
+├── LinkedOut/             # SwiftUI iOS app
+│   ├── LinkedOutApp.swift # App entry point (@main)
+│   ├── ContentView.swift  # Auth-gated root view
+│   ├── Models/            # Codable structs matching backend
+│   ├── ViewModels/        # AuthViewModel, JobsViewModel
+│   ├── Views/             # All SwiftUI views (13 files)
+│   ├── Network/           # APIClient (actor), ServerDiscovery
+│   └── Utils/             # ScoreRing, SwipeHintOverlay, LocationGeocoder
+├── LinkedOut.xcodeproj/   # Xcode project
+├── docker-compose.yml     # Local dev: port 8443, volume mount
+├── render.yaml            # Render Blueprint (one-click deploy)
+└── docs/                  # LinkedIn API reference docs
+```
+
+### Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **iOS App** | SwiftUI, iOS 17+, MapKit, WebKit, Combine |
+| **Backend** | FastAPI, Python 3.12, Pydantic v2, uvicorn |
+| **LLM Scoring** | Google Gemini (primary), OpenAI (fallback), local keyword scorer |
+| **Job APIs** | Remotive, Himalayas, HN Algolia, Jobicy, RemoteOK |
+| **Auth** | LinkedIn OAuth 2.0 |
+| **Storage** | JSON file-backed (job_store.json, seen_urls.json, user_prefs.json) |
+| **Deployment** | Docker on Render (free tier) |
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- **Xcode 15+** (for iOS app)
+- **Docker** (for backend)
+- **API Keys**: At least one of Google Gemini or OpenAI
+- **LinkedIn Developer App** (optional, for OAuth)
+
+### Local Development (Docker)
+
+```bash
+# 1. Clone
+git clone https://github.com/Gunnarguy/LinkedOut.git
+cd LinkedOut
+
+# 2. Configure environment
+cp backend/.env.example backend/.env
+# Edit backend/.env with your API keys
+
+# 3. Build and run
+docker compose up --build -d
+
+# 4. Verify
+curl http://localhost:8443/health
+# → {"status": "ok", "store": {"pending": 0, ...}}
+
+# 5. Trigger first job ingest
+curl -X POST http://localhost:8443/api/ingest/refresh
+```
+
+The backend runs on **port 8443** with job data persisted to `./data/`.
+
+### Deploy to Render
+
+1. Fork this repo
+2. Connect to [Render](https://render.com) → **New Blueprint Instance** → select your fork
+3. Set secret environment variables in the Render dashboard:
+   - `LINKEDIN_CLIENT_ID`
+   - `LINKEDIN_CLIENT_SECRET`
+   - `GEMINI_API_KEY`
+   - `OPENAI_API_KEY` (optional fallback)
+4. Deploy — Render uses `render.yaml` to configure everything else
+
+> **Note:** Render's free tier uses an ephemeral disk. Job data persists in memory during uptime but resets on redeploy. The 3-layer dedup system handles this gracefully.
+
+### iOS App Setup
+
+1. Open `LinkedOut.xcodeproj` in Xcode
+2. Select your development team in Signing & Capabilities
+3. Build and run on a simulator or device (iOS 17+)
+4. The app auto-discovers the backend via `ServerDiscovery`:
+   - Probes Render cloud → local Docker → LAN IP → localhost
+   - Caches the result for 5 minutes
+   - Re-discovers on network errors
+
+---
+
+## Configuration
+
+### Environment Variables
+
+Create `backend/.env` from the example template. All variables with defaults are optional.
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `LINKEDIN_CLIENT_ID` | For OAuth | `""` | LinkedIn app client ID |
+| `LINKEDIN_CLIENT_SECRET` | For OAuth | `""` | LinkedIn app secret |
+| `LINKEDIN_REDIRECT_URI` | For OAuth | Render callback URL | OAuth redirect URI |
+| `LLM_PROVIDER` | No | `gemini` | Primary LLM: `"gemini"` or `"openai"` |
+| `GEMINI_API_KEY` | For Gemini | `""` | Google Gemini API key |
+| `GEMINI_MODEL` | No | `gemini-3.1-pro-preview` | Full scoring model |
+| `GEMINI_FLASH_MODEL` | No | `gemini-3-flash-preview` | Triage (fast) model |
+| `OPENAI_API_KEY` | For OpenAI | `""` | OpenAI API key |
+| `OPENAI_MODEL` | No | `gpt-5.4` | OpenAI model name |
+| `SECRET_KEY` | No | Auto-generated | Token signing key |
+| `MIN_SALARY` | No | `90000` | Minimum salary filter |
+| `REQUIRE_REMOTE` | No | `true` | Remote-only filter |
+| `DEBUG` | No | `true` (local), `false` (Render) | Enable dev endpoints |
+
+### Scoring Weights & Presets
+
+Weights are configurable from the iOS Settings tab or via `PUT /api/preferences`. Three presets ship out of the box:
+
+| Weight | Relaxed 🌊 | Balanced ⚖️ | Strict 🎯 |
+|--------|-----------|-------------|-----------|
+| **Score cutoff** | 0.20 | 0.35 | 0.50 |
+| **Stack mismatch** | –0.10 | –0.20 | –0.35 |
+| **"Builders welcome" boost** | +0.15 | +0.10 | +0.05 |
+| **Portfolio-first boost** | +0.15 | +0.10 | +0.05 |
+| **Nearby penalty** | –0.01 | –0.03 | –0.05 |
+| **Regional penalty** | –0.03 | –0.08 | –0.15 |
+| **Relocation penalty** | –0.05 | –0.15 | –0.25 |
+| **International penalty** | –0.10 | –0.25 | –0.35 |
+| **Experience penalty** | –0.05 | –0.10 | –0.20 |
+| **Credential penalty** | –0.05 | –0.15 | –0.25 |
+
+---
+
+## Scoring Engine
+
+### Two-Tier Pipeline
+
+Every raw listing goes through two stages:
+
+1. **Triage** (Gemini Flash, fast) — Quick pass/fail filter. ~40% of listings survive. Rejects obvious mismatches (wrong seniority, irrelevant domain, hard credential gates) before spending tokens on full analysis.
+
+2. **Full Scoring** (Gemini Pro) — Deep analysis producing the Why Matrix, score, cover letter draft, company intel, red flags, and fit reasons. Temperature **0.3** for factual consistency.
+
+### The Why Matrix
+
+Every scored job gets four structured fields:
+
+| Field | Purpose | Length |
+|-------|---------|--------|
+| **`logic_fit`** | How the role's day-to-day maps to what you actually do | 2–3 sentences |
+| **`domain_leverage`** | Where you have an unfair advantage over typical applicants | 2–3 sentences |
+| **`risk_reward`** | Realistic friction and upside | 2–3 sentences |
+| **`red_flags`** | Every job has at least one. Hard requirements, vague products, credential signals | 1–5 bullets |
+
+### Score Calibration
+
+Scores are calibrated to a realistic distribution, not inflated:
+
+| Range | % of Jobs | Meaning |
+|-------|-----------|---------|
+| **0.85–1.00** | ~5% | Listing practically describes you. Company explicitly values portfolio over credentials |
+| **0.70–0.84** | ~15% | Strong alignment, minimal convincing needed |
+| **0.55–0.69** | ~30% | Decent opportunity with real friction. Interesting but unclear fit |
+| **0.40–0.54** | ~30% | Significant convincing required. Stack or experience gaps |
+| **Below cutoff** | ~20% | Rejected. Enterprise, legacy, rigid HR, hard degree requirements |
+
+**Anchor score: 0.55** — A job with interesting mission and AI relevance but no explicit portfolio signal.
+
+**Score deflation**: `if raw_score > 0.55: deflated = 0.55 + (raw_score - 0.55) * 0.78`
+
+### Penalties & Boosts
+
+Applied on top of the base LLM assessment:
+
+**Location** (relative to preferred locations):
+- Remote / in preferred city: +0
+- Nearby (same state, ~1–2hr drive): `nearby_penalty`
+- Regional (neighboring state): `regional_penalty`
+- Full US relocation: `relocation_penalty`
+- International: `international_penalty`
+
+**Stack Friction** — the decisive factor:
+- Hard requirement in unfamiliar stack: `convincing_penalty`
+- "Any modern framework" / "we value builders": `convincing_boost`
+- Explicitly values shipped products / portfolio-first: `portfolio_boost`
+
+**Experience Reality**:
+- "1–3 years" or "any": +0
+- "5+ years" with flexibility: `experience_penalty`
+- Known elite/selective (FAANG, Jane Street): `credential_penalty`
+
+**Industry Multiplier**:
+- HealthTech / MedTech / Clinical AI: +0.08 (domain differentiator)
+- Developer/AI tools: +0.05
+
+### LLM Fallback Chain
+
+When the primary LLM is rate-limited or unavailable:
+
+```
+Gemini Pro → Gemini Flash → OpenAI GPT → Local Keyword Scorer
+```
+
+The local keyword fallback uses regex matching on tech stack, seniority, and industry signals. Baseline score: **0.45** (mediocre). No Why Matrix fields populated — jobs scored this way are flagged.
+
+---
+
+## Job Sources
+
+Five remote job boards are fetched asynchronously and deduplicated:
+
+| Source | API | What It Provides | Queries |
+|--------|-----|-----------------|---------|
+| **Remotive** | `remotive.com/api/remote-jobs` | Remote-first jobs | 8 search queries (AI engineer, founding engineer, iOS engineer, etc.) |
+| **Himalayas** | `himalayas.app/jobs/api` | Remote-first jobs | 6 search queries |
+| **HN Who's Hiring** | `hn.algolia.com/api/v1` | Monthly hiring threads on Hacker News | Finds latest thread → fetches up to 300 comments → filters by AI/product/iOS keywords |
+| **Jobicy** | `jobicy.com/api/v2/remote-jobs` | Remote jobs by tag | 7 tags (ai, python, javascript, ios, react, devops, data-science) |
+| **RemoteOK** | `remoteok.com/api` | Remote jobs aggregator | Top 100 listings |
+
+### Deduplication
+
+Three layers prevent duplicate jobs:
+
+1. **Fetch-time**: `fetch_all_sources()` deduplicates by URL and by company+title across all sources
+2. **Ingest-time**: `_run_ingest_cycle()` checks both `seen_urls` (persisted) and `store.has_url()` (in-memory index across all buckets), plus within-batch dedup
+3. **Store-time**: `add_pending()` refuses any URL already present in any bucket (pending, applied, saved, rejected). On startup, `_dedup_on_load()` cleans any existing duplicates
+
+---
+
+## Location Intelligence
+
+A 5-tier classification system scores job locations relative to your preferred locations:
+
+| Tier | Name | Example (from Kalamazoo, MI) | Default Penalty |
+|------|------|------------------------------|----------------|
+| **0** | Home | Remote, or job in Kalamazoo | +0 |
+| **1** | Nearby | Grand Rapids, Lansing, Detroit (same state) | –0.03 |
+| **2** | Regional | Ohio, Indiana, Wisconsin (neighboring states) | –0.08 |
+| **3** | Far US | California, Texas, etc. | –0.15 |
+| **4** | International | London, Berlin, Toronto, etc. | –0.25 |
+
+All 50 US states have their neighbors mapped. The system includes Michigan-specific metro areas (Grand Rapids, Battle Creek, Lansing, Jackson, etc.) for fine-grained nearby detection.
+
+**Multi-location support**: If you have `preferred_locations: ["Kalamazoo, Michigan", "New York, New York"]`, a job in NYC gets Tier 0 (home) even though it's far from Kalamazoo. The system returns the best tier across all preferred locations.
+
+---
+
+## iOS App
+
+### Tabs
+
+The app has 6 tabs:
+
+| Tab | View | Description |
+|-----|------|-------------|
+| **Discover** | `CardStackView` | Swipeable card stack of pending jobs, sorted by score or date |
+| **Map** | `JobMapView` | Apple Maps with all jobs pinned (green = on-site, blue = remote HQ) |
+| **Applied** | `AppliedJobsView` | Jobs you swiped right on, with status tracking |
+| **Saved** | `SavedJobsView` | Bookmarked jobs (swiped up) |
+| **Profile** | `ProfileView` | LinkedIn profile display |
+| **Settings** | `SettingsView` | Scoring weights, preferences, presets, server config |
+
+### Swipe Mechanics
+
+Tinder-style card gestures with physics-based animation:
+
+| Gesture | Threshold | Action |
+|---------|-----------|--------|
+| **Swipe right** | >120px horizontal | Apply |
+| **Swipe left** | >120px horizontal | Reject |
+| **Swipe up** | >120px vertical | Save |
+| **Release below threshold** | <120px | Snap back |
+
+- **Card rotation**: `atan(offset.width / 20)` degrees as you drag
+- **Animation**: `easeOut(duration: 0.3)` on release
+- **Stack depth**: Top 3 cards visible (scaled at 1.0, 0.96, 0.92)
+- **Undo**: Restores the last swipe action
+
+### Server Discovery
+
+The app auto-discovers the backend on launch by probing these candidates in priority order:
+
+1. `https://linkedout-backend-9q4t.onrender.com` (Render cloud)
+2. `http://Gunnars-Brain-Extension.local:8443` (local Docker via mDNS)
+3. `http://10.0.0.175:8443` (LAN IP)
+4. `http://localhost:8443` (simulator)
+
+Probes hit `/health` with a 2-second timeout. The result is cached for 5 minutes and invalidated on network errors. The Settings tab allows manual override.
+
+### Settings
+
+The Settings view provides full control over scoring behavior:
+
+- **Quick Presets**: Relaxed 🌊, Balanced ⚖️, Strict 🎯 — one tap to switch
+- **Score Simulator**: Shows how your current weights would score example jobs
+- **Basics**: Max seniority level, minimum salary ($0–$300k), remote-only toggle
+- **Acceptable Locations**: Add/remove preferred cities (multi-location)
+- **Preferred Roles**: Customize which role titles to search for
+- **Excluded Keywords**: Block specific keywords (Staff, Principal, Director, etc.)
+- **Advanced Weight Sliders**: Fine-tune every penalty and boost individually
+- **Backend Sync**: Shows connection status + manual server URL override
+- **Reset to Defaults**: One tap to restore all settings
+
+All settings persist via `@AppStorage` (UserDefaults) and sync to the backend via `PUT /api/preferences`.
+
+---
+
+## API Reference
+
+### Health
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Server health + store stats |
+
+### Authentication
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/auth/login` | Get LinkedIn OAuth URL |
+| GET | `/auth/callback` | OAuth callback (redirects to app) |
+| POST | `/auth/token` | Exchange auth code for profile |
+| GET | `/auth/status/{person_id}` | Check session validity |
+
+### Jobs
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/jobs/pending` | Pending jobs (query: `limit`, `offset`) |
+| GET | `/api/jobs/{job_id}` | Single job by ID |
+| GET | `/api/jobs/applied` | All applied jobs |
+| GET | `/api/jobs/saved` | All saved jobs |
+| GET | `/api/jobs/stats` | Pipeline statistics |
+| POST | `/api/jobs/action` | Apply/reject/save a job |
+| POST | `/api/jobs/undo` | Undo last action |
+| PUT | `/api/jobs/{job_id}/notes` | Update job notes |
+| PUT | `/api/jobs/{job_id}/status` | Update application status |
+
+### Scoring & Ingestion
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/score` | Score a single listing |
+| POST | `/api/score/batch` | Score a batch of listings |
+| POST | `/api/ingest/refresh` | Trigger background ingest |
+| GET | `/api/ingest/status` | Check ingest status |
+
+### Preferences
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/preferences` | Get current preferences |
+| PUT | `/api/preferences` | Update preferences |
+
+### LinkedIn
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/share` | Share job to LinkedIn (query: `person_id`, `job_id`) |
+
+### Development (debug mode only)
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/dev/seed` | Seed 3 mock jobs |
+| POST | `/api/dev/reset-seen` | Clear seen URLs |
+| POST | `/api/dev/clear-pending` | Clear pending queue |
+| POST | `/api/dev/purge-keyword-scored` | Remove locally-scored jobs |
+| GET | `/api/dev/logs` | Recent log lines (query: `n`, default 100) |
+
+---
+
+## Data Models
+
+### JobPayload
+
+The core job object passed between backend and iOS:
+
+```
+id                    UUID string
+company_name          Company name
+role_title            Job title
+salary_floor          Minimum salary (0 = unknown)
+salary_max            Maximum salary (0 = unknown)
+is_remote             Remote flag
+builder_score         0.0–1.0 match score
+location              Location string
+posted_at             Posting date (nullable)
+source_url            Original listing URL
+apply_url             Direct application link
+tags                  Tech/industry tags (max 5)
+
+# AI-Generated Intelligence
+ai_pitch_summary      3-bullet pitch (Markdown)
+drafted_cover_letter   ~150 word cover letter
+description           Full job description
+company_description   About the company
+company_size          e.g. "10-50", "500+"
+company_stage         e.g. "Seed", "Series A", "Public"
+company_url           Company website
+requirements          Key requirements (list)
+nice_to_haves         Nice-to-haves (list)
+tech_stack            Technologies mentioned (list)
+experience_level      e.g. "Entry", "Mid", "Senior"
+job_type              e.g. "Full-time", "Contract"
+benefits              Benefits (list)
+
+# Why Matrix
+logic_fit             How role maps to your skills
+domain_leverage       Your unfair advantage
+risk_reward           Realistic friction + upside
+red_flags             Concerns (list, always ≥1)
+
+# Match Signals
+fit_reasons           2–4 short fit reasons
+dealbreaker_warnings  0–3 convincing-needed warnings
+
+# User Fields
+notes                 Personal notes
+application_status    "new" | "applied" | "phone_screen" | "interview" | "offer" | "rejected"
+```
+
+### UserPreferences
+
+```
+min_salary              Minimum salary filter (default: 90000)
+require_remote          Remote-only toggle (default: false)
+preferred_roles         Role titles to search for
+excluded_keywords       Keywords to block
+location_preference     "Remote" (default)
+preferred_locations     ["Kalamazoo, Michigan"] (multi-city)
+
+# Scoring Weights
+score_cutoff            Reject below this (default: 0.35)
+convincing_penalty      Stack mismatch (default: -0.20)
+convincing_boost        "Builders welcome" (default: +0.10)
+portfolio_boost         Portfolio-first signal (default: +0.10)
+nearby_penalty          Same state (default: -0.03)
+regional_penalty        Neighboring state (default: -0.08)
+relocation_penalty      Full US relocation (default: -0.15)
+international_penalty   International (default: -0.25)
+experience_penalty      5+ years required (default: -0.10)
+credential_penalty      FAANG/rigid (default: -0.15)
+max_seniority_level     "Junior" | "Mid" | "Senior" | "Any"
+```
+
+---
+
+## Project Structure
+
+```
+LinkedOut/
+├── backend/
+│   ├── main.py              # FastAPI app, all endpoints, ingest orchestration
+│   ├── scoring_engine.py    # LLM scoring (triage + full + fallback chain)
+│   ├── job_fetcher.py       # 5 async job source fetchers
+│   ├── job_store.py         # JSON-backed store with 4 buckets + dedup
+│   ├── location_mapper.py   # 5-tier geo classification, 50-state neighbor map
+│   ├── models.py            # Pydantic models (JobPayload, UserPreferences, etc.)
+│   ├── config.py            # Environment config (pydantic-settings)
+│   ├── linkedin_api.py      # LinkedIn profile + sharing API
+│   ├── linkedin_oauth.py    # OAuth 2.0 flow
+│   ├── Dockerfile           # Python 3.12-slim container
+│   ├── requirements.txt     # fastapi, uvicorn, pydantic, httpx, google-genai, openai
+│   └── .env.example         # Environment variable template
+├── LinkedOut/
+│   ├── LinkedOutApp.swift   # @main entry, injects ViewModels
+│   ├── ContentView.swift    # Auth gate → MainTabView or LoginView
+│   ├── Models/
+│   │   ├── JobPayload.swift       # Codable job model (40+ fields)
+│   │   ├── UserPreferences.swift  # Codable preferences model
+│   │   └── UserProfile.swift      # LinkedIn profile + auth models
+│   ├── ViewModels/
+│   │   ├── AuthViewModel.swift    # LinkedIn auth state
+│   │   └── JobsViewModel.swift    # Job data, actions, caching
+│   ├── Views/
+│   │   ├── MainTabView.swift      # 6-tab container
+│   │   ├── CardStackView.swift    # Tinder swipe UI
+│   │   ├── JobCardView.swift      # Individual job card
+│   │   ├── JobDetailView.swift    # Full job detail (scrollable)
+│   │   ├── JobMapView.swift       # MapKit job pins
+│   │   ├── AppliedJobsView.swift  # Applied + Saved lists
+│   │   ├── ProfileView.swift      # LinkedIn profile display
+│   │   ├── SettingsView.swift     # Preferences + weight tuning
+│   │   ├── LoginView.swift        # OAuth login flow
+│   │   ├── OAuthWebView.swift     # WKWebView for LinkedIn auth
+│   │   ├── ErrorBanner.swift      # Error + info banners
+│   │   └── SwipeHintOverlay.swift # Visual swipe direction hints
+│   ├── Network/
+│   │   ├── APIClient.swift        # Actor-based HTTP client
+│   │   └── ServerDiscovery.swift  # Auto-discover backend URL
+│   └── Utils/
+│       ├── LocationGeocoder.swift # CLGeocoder with caching
+│       └── ScoreRing.swift        # Circular score indicator
+├── docker-compose.yml       # Local dev: backend + volume mount
+├── render.yaml              # Render Blueprint config
+├── .gitignore               # Ignores .env, data/, __pycache__, xcuserdata/
+└── docs/                    # LinkedIn API reference docs
+```
+
+---
+
+## License
+
+Personal project. Not currently licensed for redistribution.
