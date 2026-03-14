@@ -37,7 +37,8 @@ struct JobMapView: View {
                         Annotation(pin.job.companyName, coordinate: pin.coordinate) {
                             JobMapPin(
                                 score: pin.job.builderScore,
-                                isRemote: pin.isRemoteHQ
+                                isRemote: pin.isRemoteHQ,
+                                groupCount: pin.locationGroup
                             )
                         }
                         .tag(pin)
@@ -80,7 +81,7 @@ struct JobMapView: View {
             .task {
                 await geocoder.geocode(jobs: allJobs)
             }
-            .onChange(of: allJobs.count) { _, _ in
+            .onChange(of: allJobs.map(\.id)) { _, _ in
                 Task { await geocoder.geocode(jobs: allJobs) }
             }
             .onChange(of: selectedPin) { _, newPin in
@@ -129,6 +130,7 @@ struct JobMapView: View {
 struct JobMapPin: View {
     let score: Double
     let isRemote: Bool
+    var groupCount: Int = 1
 
     private var pinColor: Color {
         if isRemote { return .blue }
@@ -153,6 +155,16 @@ struct JobMapPin: View {
                 Text("\(Int(score * 100))")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(.white)
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if groupCount > 1 {
+                Text("\(groupCount)")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(3)
+                    .background(Circle().fill(.secondary))
+                    .offset(x: 6, y: -6)
             }
         }
     }

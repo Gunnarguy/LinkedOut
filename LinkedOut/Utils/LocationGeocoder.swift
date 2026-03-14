@@ -17,6 +17,7 @@ final class LocationGeocoder: ObservableObject {
         let job: JobPayload
         let coordinate: CLLocationCoordinate2D
         let isRemoteHQ: Bool     // true = remote job, pin is company HQ
+        var locationGroup: Int = 1  // how many jobs share this location
     }
 
     @Published var pins: [GeoResult] = []
@@ -94,6 +95,38 @@ final class LocationGeocoder: ObservableObject {
             }
         }
 
+        applyJitter(&results)
         pins = results
+    }
+
+    /// Spread overlapping pins into a small circle so they're all visible and tappable.
+    private func applyJitter(_ results: inout [GeoResult]) {
+        // Group by rounded coordinate (same location)
+        var groups: [String: [Int]] = [:]
+        for (i, r) in results.enumerated() {
+            let key = String(format: "%.4f,%.4f", r.coordinate.latitude, r.coordinate.longitude)
+            groups[key, default: []].append(i)
+        }
+
+        for (_, indices) in groups where indices.count > 1 {
+            let count = indices.count
+            // Radius scales with count: ~200m base, up to ~500m for large groups
+            let radius = 0.002 + 0.001 * min(Double(count), 8.0) / 8.0
+            for (offset, idx) in indices.enumerated() {
+                let angle = 2 * .pi * Double(offset) / Double(count)
+                let orig = results[idx]
+                let jittered = CLLocationCoordinate2D(
+                    latitude: orig.coordinate.latitude + radius * cos(angle),
+                    longitude: orig.coordinate.longitude + radius * sin(angle)
+                )
+                results[idx] = GeoResult(
+                    id: orig.id,
+                    job: orig.job,
+                    coordinate: jittered,
+                    isRemoteHQ: orig.isRemoteHQ,
+                    locationGroup: count
+                )
+            }
+        }
     }
 }
