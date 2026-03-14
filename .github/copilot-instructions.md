@@ -10,6 +10,7 @@ LinkedOut is a **"Tinder for jobs"** app: a FastAPI backend fetches listings fro
 - **iOS App**: SwiftUI, iOS 17+, MVVM, NavigationStack
 - **LLM Scoring**: Gemini Pro/Flash (primary) → OpenAI GPT-5.4 (fallback) → local keyword scorer (final fallback)
 - **Storage**: JSON file-backed (`job_store.json`, `seen_urls.json`, `user_prefs.json`)
+- **Notion Sync**: Bidirectional sync with Notion database via API v2026-03-11 (`backend/notion_sync.py`)
 - **Deployment**: Docker locally, Render cloud (`render.yaml`)
 
 ## Key Patterns
@@ -45,6 +46,17 @@ LinkedOut is a **"Tinder for jobs"** app: a FastAPI backend fetches listings fro
 2. iOS polls `/api/ingest/status` during active ingests, fetches `/api/jobs/pending` when ready
 3. User swipes → `POST /api/jobs/action` moves job to `applied`/`rejected`/`saved` bucket
 4. All state changes round-trip to backend; iOS caches locally for responsiveness
+5. Notion sync (manual): push all LinkedOut jobs → Notion pages, pull Notion changes → LinkedOut
+
+### Notion Integration
+
+- **`backend/notion_sync.py`** — async httpx client using Notion API v2026-03-11 with `data_source_id` pattern (not the deprecated `database_id` queries)
+- **Discovery**: `GET /v1/databases/{database_id}` → extracts `data_sources[0].id` for all subsequent operations
+- **Schema-adaptive**: reads the Notion database schema and only writes properties that exist (silently skips missing columns)
+- **Cross-reference**: `notion_page_id` field on `JobPayload` links LinkedOut jobs ↔ Notion pages; `LinkedOut ID` property on Notion pages enables reverse lookup
+- **Sync modes**: Full bidirectional (`/api/notion/sync`), push-only (`/api/notion/push`), pull-only (`/api/notion/pull`)
+- **Pull sync**: reads Notion status/notes changes and moves jobs between LinkedOut buckets accordingly
+- **Config**: `NOTION_TOKEN` + `NOTION_DATABASE_ID` in backend `.env`
 
 ## Build & Deploy
 
@@ -92,3 +104,8 @@ curl http://localhost:8443/health
 - `POST /api/ingest/refresh` — trigger background ingest
 - `GET /api/ingest/status` — ingest cycle progress
 - `GET/PUT /api/preferences` — user scoring preferences
+- `GET /api/notion/status` — Notion integration status + schema
+- `POST /api/notion/sync` — bidirectional Notion sync (non-blocking)
+- `POST /api/notion/push` — push all jobs to Notion
+- `POST /api/notion/pull` — pull changes from Notion
+- `GET /api/notion/jobs` — list all Notion database entries

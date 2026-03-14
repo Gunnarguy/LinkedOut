@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     min_salary: int = 90000
     require_remote: bool = True
 
+    # Notion integration
+    notion_token: str = ""
+    notion_database_id: str = ""
+
     # CORS
     allowed_origins: list[str] = ["*"]
 

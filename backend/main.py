@@ -531,6 +531,173 @@ async def update_preferences(prefs: UserPreferences):
     return _user_prefs
 
 
+# ── Notion Sync ──────────────────────────────────────────────────────────────
+
+from notion_sync import notion_sync
+
+_notion_sync_task: asyncio.Task | None = None
+_notion_sync_result: dict | None = None
+
+
+@app.get("/api/notion/status")
+async def notion_status():
+    """Check Notion integration status and configuration."""
+    sync_running = _notion_sync_task is not None and not _notion_sync_task.done()
+
+    status: dict = {
+        "configured": notion_sync.configured,
+        "sync_running": sync_running,
+        "last_sync_result": _notion_sync_result,
+        "database_id": settings.notion_database_id or None,
+        "has_token": bool(settings.notion_token),
+    }
+
+    # If configured, try to discover schema
+    if notion_sync.configured and not sync_running:
+        try:
+            schema = await notion_sync.discover_schema()
+            status["schema"] = schema
+            status["data_source_id"] = notion_sync._data_source_id
+        except Exception as e:
+            status["schema_error"] = str(e)
+
+    return status
+
+
+@app.post("/api/notion/sync")
+async def notion_sync_trigger():
+    """Trigger a full bidirectional Notion sync (non-blocking).
+
+    Push all LinkedOut jobs → Notion, pull Notion changes → LinkedOut.
+    """
+    global _notion_sync_task, _notion_sync_result
+
+    if not notion_sync.configured:
+        raise HTTPException(
+            status_code=400,
+            detail="Notion not configured. Set NOTION_TOKEN and NOTION_DATABASE_ID.",
+        )
+
+    if _notion_sync_task is not None and not _notion_sync_task.done():
+        return {"status": "already_running", "last_result": _notion_sync_result}
+
+    _notion_sync_result = None
+
+    async def _do_sync():
+        global _notion_sync_result
+        try:
+            _notion_sync_result = await notion_sync.full_sync(store)
+        except Exception as e:
+            logger.exception(f"[NOTION] Sync failed: {e}")
+            _notion_sync_result = {"error": str(e)}
+
+    _notion_sync_task = asyncio.create_task(_do_sync())
+    return {"status": "started", "store": store.stats}
+
+
+@app.post("/api/notion/push")
+async def notion_push():
+    """Push all LinkedOut jobs to Notion (one-way, no pull)."""
+    if not notion_sync.configured:
+        raise HTTPException(
+            status_code=400,
+            detail="Notion not configured. Set NOTION_TOKEN and NOTION_DATABASE_ID.",
+        )
+
+    stats = {"pushed": 0, "updated": 0, "errors": 0}
+    buckets = {
+        "pending": store.get_pending(limit=9999),
+        "applied": store.get_applied(),
+        "saved": store.get_saved(),
+        "rejected": store.get_rejected(),
+    }
+
+    for bucket_name, jobs in buckets.items():
+        for job in jobs:
+            try:
+                page_id = await notion_sync.push_job(job, bucket_name)
+                if not job.notion_page_id and page_id:
+                    job.notion_page_id = page_id
+                    store.update_notion_page_id(job.id, page_id)
+                    stats["pushed"] += 1
+                else:
+                    stats["updated"] += 1
+            except Exception as e:
+                logger.error(f"[NOTION] Push failed for {job.id}: {e}")
+                stats["errors"] += 1
+
+    return {"status": "complete", "stats": stats}
+
+
+@app.post("/api/notion/pull")
+async def notion_pull():
+    """Pull changes from Notion → LinkedOut (one-way, no push)."""
+    if not notion_sync.configured:
+        raise HTTPException(
+            status_code=400,
+            detail="Notion not configured. Set NOTION_TOKEN and NOTION_DATABASE_ID.",
+        )
+
+    try:
+        notion_jobs = await notion_sync.pull_jobs()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Notion API error: {e}")
+
+    stats = {"total": len(notion_jobs), "updated": 0, "unmatched": 0}
+
+    for nj in notion_jobs:
+        linkedout_id = nj.get("linkedout_id")
+        if not linkedout_id:
+            stats["unmatched"] += 1
+            continue
+
+        existing = store.get_job(linkedout_id)
+        if not existing:
+            stats["unmatched"] += 1
+            continue
+
+        changed = False
+        # Sync notes
+        if nj.get("notes") and nj["notes"] != existing.notes:
+            store.update_job_notes(linkedout_id, nj["notes"])
+            changed = True
+
+        # Sync bucket
+        notion_status_str = (nj.get("status") or "").lower()
+        current_bucket = store.get_job_bucket(linkedout_id)
+        bucket_map = {
+            "applied": "applied",
+            "saved": "saved",
+            "rejected": "rejected",
+            "not started": "pending",
+            "pending": "pending",
+        }
+        target = bucket_map.get(notion_status_str)
+        if target and target != current_bucket:
+            store.move_to_bucket(linkedout_id, target)
+            changed = True
+
+        if changed:
+            stats["updated"] += 1
+
+    return {"status": "complete", "stats": stats}
+
+
+@app.get("/api/notion/jobs")
+async def notion_list_jobs():
+    """List all jobs in the Notion database (raw pull, no sync)."""
+    if not notion_sync.configured:
+        raise HTTPException(
+            status_code=400,
+            detail="Notion not configured. Set NOTION_TOKEN and NOTION_DATABASE_ID.",
+        )
+
+    try:
+        return await notion_sync.pull_jobs()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Notion API error: {e}")
+
+
 # ── Dev/Debug: Seed with mock data ──────────────────────────────────────────
 
 

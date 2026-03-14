@@ -162,6 +162,28 @@ final class APIClient: @unchecked Sendable {
         return try await post(url, body: Optional<String>.none)
     }
 
+    // MARK: - Notion Sync
+
+    func fetchNotionStatus() async throws -> NotionStatusResponse {
+        return try await get("/api/notion/status")
+    }
+
+    func triggerNotionSync() async throws -> NotionSyncResponse {
+        return try await post("/api/notion/sync", body: Optional<String>.none)
+    }
+
+    func triggerNotionPush() async throws -> NotionSyncResponse {
+        return try await post("/api/notion/push", body: Optional<String>.none)
+    }
+
+    func triggerNotionPull() async throws -> NotionSyncResponse {
+        return try await post("/api/notion/pull", body: Optional<String>.none)
+    }
+
+    func fetchNotionJobs() async throws -> [NotionJob] {
+        return try await get("/api/notion/jobs")
+    }
+
     // MARK: - Generic HTTP
 
     private func get<T: Decodable>(_ path: String) async throws -> T {

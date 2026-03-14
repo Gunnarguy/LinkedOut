@@ -62,6 +62,9 @@ class JobPayload(BaseModel):
         "new"  # new, applied, phone_screen, interview, offer, rejected
     )
 
+    # ── Notion Sync ──────────────────────────────────────────────────────
+    notion_page_id: str = ""  # Notion page UUID for bidirectional sync
+
     def model_dump(self, **kwargs):
         """Override to serialize datetime as ISO 8601 consistently."""
         data = super().model_dump(**kwargs)

@@ -49,6 +49,9 @@ struct JobPayload: Codable, Identifiable, Hashable {
     var notes: String?
     var applicationStatus: String?
 
+    // Notion sync
+    var notionPageId: String?
+
     enum CodingKeys: String, CodingKey {
         case id
         case companyName = "company_name"
@@ -84,6 +87,7 @@ struct JobPayload: Codable, Identifiable, Hashable {
         case riskReward = "risk_reward"
         case notes
         case applicationStatus = "application_status"
+        case notionPageId = "notion_page_id"
     }
 
     func hash(into hasher: inout Hasher) {

@@ -342,6 +342,61 @@ class JobStore:
             "rejected": len(self._rejected),
         }
 
+    # ── Notion sync helpers ──────────────────────────────────────────────
+
+    def update_notion_page_id(self, job_id: str, page_id: str) -> bool:
+        """Set the Notion page ID on a job (cross-reference for sync)."""
+        for bucket in (self._pending, self._applied, self._saved, self._rejected):
+            if job_id in bucket:
+                bucket[job_id].notion_page_id = page_id
+                self._save()
+                return True
+        return False
+
+    def get_job_bucket(self, job_id: str) -> str | None:
+        """Return which bucket a job lives in."""
+        if job_id in self._pending:
+            return "pending"
+        if job_id in self._applied:
+            return "applied"
+        if job_id in self._saved:
+            return "saved"
+        if job_id in self._rejected:
+            return "rejected"
+        return None
+
+    def move_to_bucket(self, job_id: str, target: str) -> bool:
+        """Move a job to a different bucket (used by Notion pull sync)."""
+        job = None
+        source = None
+        for name, bucket in [
+            ("pending", self._pending),
+            ("applied", self._applied),
+            ("saved", self._saved),
+            ("rejected", self._rejected),
+        ]:
+            if job_id in bucket:
+                job = bucket.pop(job_id)
+                source = name
+                break
+        if not job:
+            return False
+
+        dest_map = {
+            "pending": self._pending,
+            "applied": self._applied,
+            "saved": self._saved,
+            "rejected": self._rejected,
+        }
+        dest = dest_map.get(target)
+        if dest is None:
+            return False
+
+        dest[job_id] = job
+        self._save()
+        logger.info(f"[SYNC] Moved {job_id} from {source} → {target}")
+        return True
+
 
 # Singleton
 store = JobStore()

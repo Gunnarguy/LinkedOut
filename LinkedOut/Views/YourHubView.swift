@@ -14,6 +14,9 @@ struct YourHubView: View {
 
     @State private var showSettings = false
     @State private var navigateTo: PipelineDestination?
+    @State private var notionStatus: NotionStatusResponse?
+    @State private var notionSyncing = false
+    @State private var notionSyncMessage: String?
 
     enum PipelineDestination: Hashable {
         case pending, applied, saved, rejected
@@ -25,6 +28,7 @@ struct YourHubView: View {
                 VStack(spacing: 24) {
                     profileHero
                     pipelineDashboard
+                    notionSection
                     quickActions
                     accountSection
                 }
@@ -34,8 +38,8 @@ struct YourHubView: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("You")
             .navigationBarTitleDisplayMode(.large)
-            .refreshable { await jobs.loadStats() }
-            .task { await jobs.loadStats() }
+            .refreshable { await jobs.loadStats(); await loadNotionStatus() }
+            .task { await jobs.loadStats(); await loadNotionStatus() }
             .navigationDestination(isPresented: $showSettings) {
                 SettingsView()
             }
@@ -299,6 +303,234 @@ struct YourHubView: View {
                 RoundedRectangle(cornerRadius: 16)
                     .strokeBorder(.quaternary, lineWidth: 0.5)
             )
+        }
+    }
+
+    // MARK: - Notion Integration
+
+    private var notionSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Notion Sync", systemImage: "arrow.triangle.2.circlepath.doc.on.clipboard")
+                .font(.headline)
+                .foregroundStyle(.primary)
+
+            if let status = notionStatus {
+                if status.configured {
+                    // Connected state
+                    HStack(spacing: 10) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Connected to Notion")
+                                .font(.subheadline.weight(.medium))
+                            if let schema = status.schema {
+                                Text("\(schema.count) properties mapped")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer()
+                    }
+                    .padding(.bottom, 4)
+
+                    // Sync stats from last run
+                    if let result = status.lastSyncResult {
+                        HStack(spacing: 16) {
+                            if let pushed = result.pushed {
+                                VStack {
+                                    Text("\(pushed)")
+                                        .font(.system(.body, design: .rounded).bold())
+                                    Text("Pushed")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            if let updated = result.updated {
+                                VStack {
+                                    Text("\(updated)")
+                                        .font(.system(.body, design: .rounded).bold())
+                                    Text("Updated")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            if let pulled = result.pulled {
+                                VStack {
+                                    Text("\(pulled)")
+                                        .font(.system(.body, design: .rounded).bold())
+                                    Text("Pulled")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            if let errors = result.errors, errors > 0 {
+                                VStack {
+                                    Text("\(errors)")
+                                        .font(.system(.body, design: .rounded).bold())
+                                        .foregroundStyle(.red)
+                                    Text("Errors")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                    }
+
+                    // Sync buttons
+                    HStack(spacing: 12) {
+                        Button {
+                            Task { await triggerSync() }
+                        } label: {
+                            HStack(spacing: 6) {
+                                if notionSyncing {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                }
+                                Text("Full Sync")
+                            }
+                            .font(.subheadline.weight(.medium))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.indigo)
+                        .disabled(notionSyncing)
+
+                        Button {
+                            Task { await triggerPush() }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.up.doc")
+                                Text("Push")
+                            }
+                            .font(.subheadline.weight(.medium))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(notionSyncing)
+
+                        Button {
+                            Task { await triggerPull() }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.down.doc")
+                                Text("Pull")
+                            }
+                            .font(.subheadline.weight(.medium))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(notionSyncing)
+                    }
+
+                    if let msg = notionSyncMessage {
+                        Text(msg)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                    }
+
+                } else {
+                    // Not configured
+                    VStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.title3)
+                            .foregroundStyle(.orange)
+                        Text("Notion not configured")
+                            .font(.subheadline.weight(.medium))
+                        Text("Set NOTION_TOKEN and NOTION_DATABASE_ID in backend .env")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                }
+            } else {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
+                .padding(.vertical, 12)
+            }
+        }
+        .padding(16)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .strokeBorder(.quaternary, lineWidth: 0.5)
+        )
+    }
+
+    // MARK: - Notion Actions
+
+    private func loadNotionStatus() async {
+        do {
+            notionStatus = try await APIClient.shared.fetchNotionStatus()
+        } catch {
+            print("[YourHub] Notion status failed: \(error)")
+        }
+    }
+
+    private func triggerSync() async {
+        notionSyncing = true
+        notionSyncMessage = "Syncing with Notion..."
+        do {
+            _ = try await APIClient.shared.triggerNotionSync()
+            // Poll until done
+            try await pollNotionSync()
+            notionSyncMessage = "Sync complete!"
+            await loadNotionStatus()
+            await jobs.loadStats()
+        } catch {
+            notionSyncMessage = "Sync failed: \(error.localizedDescription)"
+        }
+        notionSyncing = false
+    }
+
+    private func triggerPush() async {
+        notionSyncing = true
+        notionSyncMessage = "Pushing to Notion..."
+        do {
+            _ = try await APIClient.shared.triggerNotionPush()
+            notionSyncMessage = "Push complete"
+            await loadNotionStatus()
+        } catch {
+            notionSyncMessage = "Push failed: \(error.localizedDescription)"
+        }
+        notionSyncing = false
+    }
+
+    private func triggerPull() async {
+        notionSyncing = true
+        notionSyncMessage = "Pulling from Notion..."
+        do {
+            _ = try await APIClient.shared.triggerNotionPull()
+            notionSyncMessage = "Pull complete"
+            await loadNotionStatus()
+            await jobs.loadStats()
+        } catch {
+            notionSyncMessage = "Pull failed: \(error.localizedDescription)"
+        }
+        notionSyncing = false
+    }
+
+    private func pollNotionSync() async throws {
+        // Poll notion status until sync completes (max 60s)
+        for _ in 0..<30 {
+            try await Task.sleep(nanoseconds: 2_000_000_000)
+            let status = try await APIClient.shared.fetchNotionStatus()
+            if !status.syncRunning {
+                return
+            }
         }
     }
 
