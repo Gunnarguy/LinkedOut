@@ -296,10 +296,27 @@ class JobStore:
         return False
 
     def get_applied(self) -> list[JobPayload]:
-        return list(self._applied.values())
+        _STATUS_ORDER = {
+            "interview": 0,
+            "phone_screen": 1,
+            "offer": 2,
+            "applied": 3,
+            "new": 4,
+            "rejected": 5,
+        }
+        return sorted(
+            self._applied.values(),
+            key=lambda j: (
+                _STATUS_ORDER.get(j.application_status or "new", 4),
+                -j.builder_score,
+            ),
+        )
 
     def get_saved(self) -> list[JobPayload]:
-        return list(self._saved.values())
+        return sorted(
+            self._saved.values(),
+            key=lambda j: -j.builder_score,
+        )
 
     def get_rejected(self) -> list[JobPayload]:
         return list(self._rejected.values())

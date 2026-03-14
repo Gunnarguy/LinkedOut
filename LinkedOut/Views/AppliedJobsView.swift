@@ -10,6 +10,62 @@ import SwiftUI
 struct AppliedJobsView: View {
     @EnvironmentObject var jobs: JobsViewModel
     @State private var selectedJob: JobPayload?
+    @State private var sortByNewest = false
+
+    private var sortedApplied: [JobPayload] {
+        if sortByNewest {
+            return jobs.appliedJobs.sorted {
+                ($0.postedAt ?? .distantPast) > ($1.postedAt ?? .distantPast)
+            }
+        }
+        return jobs.appliedJobs // backend sorts by status pipeline then score
+    }
+
+    /// Group applied jobs by their status for section display
+    private var groupedApplied: [(String, [JobPayload])] {
+        let order = ["interview", "phone_screen", "offer", "applied", "new", "rejected"]
+        let grouped = Dictionary(grouping: sortedApplied) { $0.applicationStatus ?? "new" }
+        return order.compactMap { key in
+            guard let items = grouped[key], !items.isEmpty else { return nil }
+            return (key, items)
+        }
+    }
+
+    private func sectionTitle(_ status: String) -> String {
+        switch status {
+        case "interview": return "Interviewing"
+        case "phone_screen": return "Phone Screen"
+        case "offer": return "Offers"
+        case "applied": return "Applied"
+        case "new": return "New"
+        case "rejected": return "Rejected"
+        default: return status.capitalized
+        }
+    }
+
+    private func sectionIcon(_ status: String) -> String {
+        switch status {
+        case "interview": return "person.2.fill"
+        case "phone_screen": return "phone.fill"
+        case "offer": return "gift.fill"
+        case "applied": return "paperplane.fill"
+        case "new": return "sparkles"
+        case "rejected": return "xmark.circle"
+        default: return "circle"
+        }
+    }
+
+    private func sectionColor(_ status: String) -> Color {
+        switch status {
+        case "interview": return .purple
+        case "phone_screen": return .orange
+        case "offer": return .green
+        case "applied": return .blue
+        case "new": return .secondary
+        case "rejected": return .red
+        default: return .secondary
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -17,18 +73,46 @@ struct AppliedJobsView: View {
                 if jobs.appliedJobs.isEmpty {
                     emptyState
                 } else {
-                    List(jobs.appliedJobs) { job in
-                        Button {
-                            selectedJob = job
-                        } label: {
-                            JobListRow(job: job, showStatus: true)
+                    List {
+                        ForEach(groupedApplied, id: \.0) { status, items in
+                            Section {
+                                ForEach(items) { job in
+                                    Button {
+                                        selectedJob = job
+                                    } label: {
+                                        JobListRow(job: job, showStatus: true)
+                                    }
+                                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                                }
+                            } header: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: sectionIcon(status))
+                                    Text(sectionTitle(status))
+                                    Spacer()
+                                    Text("\(items.count)")
+                                        .foregroundStyle(.tertiary)
+                                }
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(sectionColor(status))
+                            }
                         }
-                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                     }
                     .listStyle(.plain)
                 }
             }
             .navigationTitle("Applied")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        withAnimation(.spring(response: 0.3)) {
+                            sortByNewest.toggle()
+                        }
+                    } label: {
+                        Image(systemName: sortByNewest ? "clock.fill" : "list.bullet")
+                            .foregroundStyle(sortByNewest ? .orange : .blue)
+                    }
+                }
+            }
             .task { await jobs.loadAppliedJobs() }
             .refreshable { await jobs.loadAppliedJobs() }
             .sheet(item: $selectedJob) { job in
@@ -72,6 +156,16 @@ struct AppliedJobsView: View {
 struct SavedJobsView: View {
     @EnvironmentObject var jobs: JobsViewModel
     @State private var selectedJob: JobPayload?
+    @State private var sortByNewest = false
+
+    private var sortedSaved: [JobPayload] {
+        if sortByNewest {
+            return jobs.savedJobs.sorted {
+                ($0.postedAt ?? .distantPast) > ($1.postedAt ?? .distantPast)
+            }
+        }
+        return jobs.savedJobs // backend sorts by score descending
+    }
 
     var body: some View {
         NavigationStack {
@@ -79,11 +173,11 @@ struct SavedJobsView: View {
                 if jobs.savedJobs.isEmpty {
                     emptyState
                 } else {
-                    List(jobs.savedJobs) { job in
+                    List(sortedSaved) { job in
                         Button {
                             selectedJob = job
                         } label: {
-                            JobListRow(job: job, showStatus: false)
+                            JobListRow(job: job, showStatus: true)
                         }
                         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                     }
@@ -91,6 +185,18 @@ struct SavedJobsView: View {
                 }
             }
             .navigationTitle("Saved")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        withAnimation(.spring(response: 0.3)) {
+                            sortByNewest.toggle()
+                        }
+                    } label: {
+                        Image(systemName: sortByNewest ? "clock.fill" : "star.fill")
+                            .foregroundStyle(sortByNewest ? .orange : .blue)
+                    }
+                }
+            }
             .task { await jobs.loadSavedJobs() }
             .refreshable { await jobs.loadSavedJobs() }
             .sheet(item: $selectedJob) { job in
