@@ -84,13 +84,16 @@
 - **Anti-sycophancy design** — cold analytical prompts at temperature 0.3, score deflation, forced red flags on every job
 - **Why Matrix** — structured `logic_fit`, `domain_leverage`, `risk_reward` assessment for every job
 - **Tinder-style swipe UI** — swipe right (apply), left (reject), up (save), with undo
+- **List/card toggle** — switch between swipe cards and a scrollable list with enriched job rows (score ring, tags, tech stack, fit reasons, red flags, AI pitch)
 - **Interactive map view** — all jobs plotted on Apple Maps with color-coded score pins
-- **Configurable scoring weights** — 3 presets (Relaxed/Balanced/Strict) + per-slider fine-tuning
+- **Unified "You" hub** — tappable pipeline dashboard (In Queue, Applied, Saved, Passed) that navigates directly to each job list
+- **Configurable scoring weights** — 3 presets (Relaxed/Balanced/Strict) + per-slider fine-tuning with real-time sync indicators
 - **Multi-location preferences** — score jobs against multiple preferred cities
 - **LinkedIn OAuth** — authenticate and share applications to your LinkedIn profile
 - **Application tracking** — notes, status pipeline (new → applied → phone screen → interview → offer)
 - **Auto server discovery** — iOS app probes Render cloud, local Docker, LAN, and localhost
 - **3-layer URL dedup** — fetch-time, ingest-time, and store-time protection against duplicates
+- **Concurrency-safe ingest** — `asyncio.Lock` prevents overlapping periodic and manual ingest cycles
 
 ---
 
@@ -115,7 +118,7 @@ LinkedOut/
 │   ├── ContentView.swift  # Auth-gated root view
 │   ├── Models/            # Codable structs matching backend
 │   ├── ViewModels/        # AuthViewModel, JobsViewModel
-│   ├── Views/             # All SwiftUI views (13 files)
+│   ├── Views/             # All SwiftUI views (14 files)
 │   ├── Network/           # APIClient (actor), ServerDiscovery
 │   └── Utils/             # ScoreRing, SwipeHintOverlay, LocationGeocoder
 ├── LinkedOut.xcodeproj/   # Xcode project
@@ -223,17 +226,17 @@ Create `backend/.env` from the example template. All variables with defaults are
 Weights are configurable from the iOS Settings tab or via `PUT /api/preferences`. Three presets ship out of the box:
 
 | Weight                       | Relaxed 🌊 | Balanced ⚖️ | Strict 🎯 |
-| ---------------------------- | --------- | ---------- | -------- |
-| **Score cutoff**             | 0.20      | 0.35       | 0.50     |
-| **Stack mismatch**           | –0.10     | –0.20      | –0.35    |
-| **"Builders welcome" boost** | +0.15     | +0.10      | +0.05    |
-| **Portfolio-first boost**    | +0.15     | +0.10      | +0.05    |
-| **Nearby penalty**           | –0.01     | –0.03      | –0.05    |
-| **Regional penalty**         | –0.03     | –0.08      | –0.15    |
-| **Relocation penalty**       | –0.05     | –0.15      | –0.25    |
-| **International penalty**    | –0.10     | –0.25      | –0.35    |
-| **Experience penalty**       | –0.05     | –0.10      | –0.20    |
-| **Credential penalty**       | –0.05     | –0.15      | –0.25    |
+| ---------------------------- | ---------- | ----------- | --------- |
+| **Score cutoff**             | 0.20       | 0.35        | 0.50      |
+| **Stack mismatch**           | –0.10      | –0.20       | –0.35     |
+| **"Builders welcome" boost** | +0.15      | +0.10       | +0.05     |
+| **Portfolio-first boost**    | +0.15      | +0.10       | +0.05     |
+| **Nearby penalty**           | –0.01      | –0.03       | –0.05     |
+| **Regional penalty**         | –0.03      | –0.08       | –0.15     |
+| **Relocation penalty**       | –0.05      | –0.15       | –0.25     |
+| **International penalty**    | –0.10      | –0.25       | –0.35     |
+| **Experience penalty**       | –0.05      | –0.10       | –0.20     |
+| **Credential penalty**       | –0.05      | –0.15       | –0.25     |
 
 ---
 
@@ -245,7 +248,7 @@ Every raw listing goes through two stages:
 
 1. **Triage** (Gemini Flash, fast) — Quick pass/fail filter. ~40% of listings survive. Rejects obvious mismatches (wrong seniority, irrelevant domain, hard credential gates) before spending tokens on full analysis.
 
-2. **Full Scoring** (Gemini Pro) — Deep analysis producing the Why Matrix, score, cover letter draft, company intel, red flags, and fit reasons. Temperature **0.3** for factual consistency.
+2. **Full Scoring** (Gemini Pro) — Deep analysis producing the Why Matrix, score, cover letter draft, company intel, red flags, and fit reasons. Temperature **0.3** for factual consistency. Prompts use second-person voice ("your skills", "you built") and cover letter drafts avoid corporate filler — confident peer tone, no "excited/thrilled/passionate".
 
 ### The Why Matrix
 
@@ -359,16 +362,15 @@ All 50 US states have their neighbors mapped. The system includes Michigan-speci
 
 ### Tabs
 
-The app has 6 tabs:
+The app has 5 tabs:
 
 | Tab          | View              | Description                                                         |
 | ------------ | ----------------- | ------------------------------------------------------------------- |
-| **Discover** | `CardStackView`   | Swipeable card stack of pending jobs, sorted by score or date       |
+| **Discover** | `CardStackView`   | Swipeable card stack or list of pending jobs, with list/card toggle |
 | **Map**      | `JobMapView`      | Apple Maps with all jobs pinned (green = on-site, blue = remote HQ) |
 | **Applied**  | `AppliedJobsView` | Jobs you swiped right on, with status tracking                      |
 | **Saved**    | `SavedJobsView`   | Bookmarked jobs (swiped up)                                         |
-| **Profile**  | `ProfileView`     | LinkedIn profile display                                            |
-| **Settings** | `SettingsView`    | Scoring weights, preferences, presets, server config                |
+| **You**      | `YourHubView`     | Unified dashboard — tappable pipeline stats, profile, and settings  |
 
 ### Swipe Mechanics
 
@@ -399,7 +401,7 @@ Probes hit `/health` with a 2-second timeout. The result is cached for 5 minutes
 
 ### Settings
 
-The Settings view provides full control over scoring behavior:
+The Settings view (accessible from the "You" hub) provides full control over scoring behavior:
 
 - **Quick Presets**: Relaxed 🌊, Balanced ⚖️, Strict 🎯 — one tap to switch
 - **Score Simulator**: Shows how your current weights would score example jobs
@@ -409,9 +411,10 @@ The Settings view provides full control over scoring behavior:
 - **Excluded Keywords**: Block specific keywords (Staff, Principal, Director, etc.)
 - **Advanced Weight Sliders**: Fine-tune every penalty and boost individually
 - **Backend Sync**: Shows connection status + manual server URL override
+- **Sync Indicators**: Toolbar cloud badge (idle → syncing → synced → failed) + floating "Saved & synced" toast on successful save
 - **Reset to Defaults**: One tap to restore all settings
 
-All settings persist via `@AppStorage` (UserDefaults) and sync to the backend via `PUT /api/preferences`.
+All settings persist locally via `@AppStorage` (UserDefaults) — they survive even when the backend is offline. When connected, settings sync to the backend via `PUT /api/preferences`.
 
 ---
 
@@ -440,6 +443,7 @@ All settings persist via `@AppStorage` (UserDefaults) and sync to the backend vi
 | GET    | `/api/jobs/{job_id}`        | Single job by ID                        |
 | GET    | `/api/jobs/applied`         | All applied jobs                        |
 | GET    | `/api/jobs/saved`           | All saved jobs                          |
+| GET    | `/api/jobs/rejected`        | All rejected/passed jobs                |
 | GET    | `/api/jobs/stats`           | Pipeline statistics                     |
 | POST   | `/api/jobs/action`          | Apply/reject/save a job                 |
 | POST   | `/api/jobs/undo`            | Undo last action                        |
@@ -584,14 +588,17 @@ LinkedOut/
 │   │   ├── AuthViewModel.swift    # LinkedIn auth state
 │   │   └── JobsViewModel.swift    # Job data, actions, caching
 │   ├── Views/
-│   │   ├── MainTabView.swift      # 6-tab container
-│   │   ├── CardStackView.swift    # Tinder swipe UI
+│   │   ├── MainTabView.swift      # 5-tab container (Discover, Map, Applied, Saved, You)
+│   │   ├── CardStackView.swift    # Tinder swipe UI + list/card toggle
 │   │   ├── JobCardView.swift      # Individual job card
 │   │   ├── JobDetailView.swift    # Full job detail (scrollable)
 │   │   ├── JobMapView.swift       # MapKit job pins
-│   │   ├── AppliedJobsView.swift  # Applied + Saved lists
+│   │   ├── AppliedJobsView.swift  # Applied + Saved lists (enriched JobListRow)
+│   │   ├── YourHubView.swift      # Unified dashboard: stats, profile, settings
+│   │   ├── PendingJobsListView.swift  # Pending queue list (from stat card)
+│   │   ├── RejectedJobsView.swift # Passed/rejected jobs list
 │   │   ├── ProfileView.swift      # LinkedIn profile display
-│   │   ├── SettingsView.swift     # Preferences + weight tuning
+│   │   ├── SettingsView.swift     # Preferences + weight tuning + sync indicators
 │   │   ├── LoginView.swift        # OAuth login flow
 │   │   ├── OAuthWebView.swift     # WKWebView for LinkedIn auth
 │   │   ├── ErrorBanner.swift      # Error + info banners
@@ -601,7 +608,8 @@ LinkedOut/
 │   │   └── ServerDiscovery.swift  # Auto-discover backend URL
 │   └── Utils/
 │       ├── LocationGeocoder.swift # CLGeocoder with caching
-│       └── ScoreRing.swift        # Circular score indicator
+│       ├── ScoreRing.swift        # Circular score indicator
+│       └── SwipeHintOverlay.swift # Visual swipe direction hints
 ├── docker-compose.yml       # Local dev: backend + volume mount
 ├── render.yaml              # Render Blueprint config
 ├── .gitignore               # Ignores .env, data/, __pycache__, xcuserdata/

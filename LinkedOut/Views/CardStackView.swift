@@ -41,6 +41,17 @@ struct CardStackView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     HStack(spacing: 12) {
+                        // List / Card toggle
+                        Button {
+                            haptic()
+                            withAnimation(.spring(response: 0.3)) {
+                                showListView.toggle()
+                            }
+                        } label: {
+                            Image(systemName: showListView ? "rectangle.stack.fill" : "list.bullet")
+                                .foregroundStyle(showListView ? .orange : .primary)
+                        }
+
                         Button {
                             haptic()
                             Task { await jobs.ingestNewJobs() }
@@ -52,7 +63,10 @@ struct CardStackView: View {
                             }
                         }
                         .disabled(jobs.isIngesting)
-
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    HStack(spacing: 12) {
                         // Sort toggle
                         Button {
                             withAnimation(.spring(response: 0.3)) {
@@ -61,19 +75,6 @@ struct CardStackView: View {
                         } label: {
                             Image(systemName: sortByNewest ? "clock.fill" : "star.fill")
                                 .foregroundStyle(sortByNewest ? .orange : .blue)
-                        }
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 12) {
-                        // List / Card toggle
-                        Button {
-                            withAnimation(.spring(response: 0.3)) {
-                                showListView.toggle()
-                            }
-                        } label: {
-                            Image(systemName: showListView ? "rectangle.stack" : "list.bullet")
-                                .foregroundStyle(.primary)
                         }
 
                         if let stats = jobs.stats {

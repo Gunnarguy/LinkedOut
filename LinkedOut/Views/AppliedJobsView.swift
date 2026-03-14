@@ -244,32 +244,37 @@ struct JobListRow: View {
     var showStatus: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
+            // ── Row 1: Score + Title + Salary ──
             HStack(spacing: 14) {
-                ScoreRing(score: job.builderScore, size: 44, lineWidth: 4)
+                ScoreRing(score: job.builderScore, size: 48, lineWidth: 4.5)
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(job.roleTitle)
                         .font(.headline)
                         .foregroundStyle(.primary)
                         .lineLimit(2)
 
-                    Text(job.companyName)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        Text(job.companyName)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.secondary)
+
+                        if let size = job.companySize, !size.isEmpty, size != "Unknown" {
+                            Text("·")
+                                .foregroundStyle(.quaternary)
+                            Text(size)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
 
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 4) {
                     Text(job.salaryDisplay)
-                        .font(.subheadline.weight(.medium))
-
-                    if job.isRemote {
-                        Text("Remote")
-                            .font(.caption)
-                            .foregroundStyle(.green)
-                    }
+                        .font(.subheadline.weight(.semibold))
 
                     // Posted date
                     HStack(spacing: 3) {
@@ -283,45 +288,147 @@ struct JobListRow: View {
                 }
             }
 
-            // Status badge + notes preview
-            HStack(spacing: 8) {
-                if showStatus, let status = job.applicationStatus, !status.isEmpty, status != "new" {
-                    Text(job.statusDisplay)
-                        .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(statusColor(status).opacity(0.12))
-                        .foregroundStyle(statusColor(status))
-                        .clipShape(Capsule())
-                }
+            // ── Row 2: Tag pills (remote, location, experience, job type, stage) ──
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    if job.isRemote {
+                        pillTag("Remote", icon: "wifi", color: .green)
+                    }
 
-                if let stage = job.companyStage, !stage.isEmpty, stage != "Unknown" {
-                    Text(stage)
-                        .font(.caption2.weight(.medium))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.teal.opacity(0.1))
-                        .foregroundStyle(.teal)
-                        .clipShape(Capsule())
-                }
+                    if !job.location.isEmpty && job.location != "Unknown" && !job.isRemote {
+                        pillTag(job.location, icon: "mappin", color: .indigo)
+                    }
 
-                if let stack = job.techStack, !stack.isEmpty {
-                    Text(stack.prefix(3).joined(separator: " · "))
+                    if let level = job.experienceLevel, !level.isEmpty {
+                        pillTag(level, icon: "chart.bar.fill", color: .orange)
+                    }
+
+                    if let jtype = job.jobType, !jtype.isEmpty, jtype != "Unknown" {
+                        pillTag(jtype, icon: "briefcase.fill", color: .blue)
+                    }
+
+                    if let stage = job.companyStage, !stage.isEmpty, stage != "Unknown" {
+                        pillTag(stage, icon: "building.2", color: .teal)
+                    }
+
+                    if showStatus, let status = job.applicationStatus, !status.isEmpty, status != "new" {
+                        pillTag(job.statusDisplay, icon: statusIcon(status), color: statusColor(status))
+                    }
+                }
+            }
+
+            // ── Row 3: Tech stack ──
+            if let stack = job.techStack, !stack.isEmpty {
+                HStack(spacing: 0) {
+                    Image(systemName: "wrench.and.screwdriver")
                         .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 16)
+                    Text(stack.joined(separator: " · "))
+                        .font(.caption2.weight(.medium))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
 
+            // ── Row 4: Fit reasons (green chips) ──
+            if let reasons = job.fitReasons, !reasons.isEmpty {
+                HStack(spacing: 0) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.green)
+                        .frame(width: 16)
+                    Text(reasons.prefix(3).joined(separator: " · "))
+                        .font(.caption2)
+                        .foregroundStyle(.green)
+                        .lineLimit(1)
+                }
+            }
+
+            // ── Row 5: Red flags / dealbreakers (if any) ──
+            if let warnings = job.dealbreakerWarnings, !warnings.isEmpty {
+                HStack(spacing: 0) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                        .frame(width: 16)
+                    Text(warnings.joined(separator: " · "))
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                        .lineLimit(1)
+                }
+            } else if let flags = job.redFlags, !flags.isEmpty {
+                HStack(spacing: 0) {
+                    Image(systemName: "flag.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                        .frame(width: 16)
+                    Text(flags.prefix(2).joined(separator: " · "))
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                }
+            }
+
+            // ── Row 6: AI pitch (first line) ──
+            if !job.aiPitchSummary.isEmpty {
+                let firstLine = job.pitchBullets.first ?? job.aiPitchSummary
+                HStack(spacing: 0) {
+                    Image(systemName: "sparkles")
+                        .font(.caption2)
+                        .foregroundStyle(.purple)
+                        .frame(width: 16)
+                    Text(firstLine.trimmingCharacters(in: CharacterSet(charactersIn: "•-– ")))
+                        .font(.caption2)
+                        .foregroundStyle(.purple.opacity(0.8))
+                        .lineLimit(2)
+                        .italic()
+                }
+            }
+
+            // ── Row 7: Notes (user-added) ──
             if let notes = job.notes, !notes.isEmpty {
-                Text(notes)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .padding(.top, 2)
+                HStack(spacing: 0) {
+                    Image(systemName: "note.text")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 16)
+                    Text(notes)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
+    }
+
+    // MARK: - Helpers
+
+    @ViewBuilder
+    private func pillTag(_ text: String, icon: String, color: Color) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: icon)
+                .font(.system(size: 8, weight: .bold))
+            Text(text)
+                .font(.caption2.weight(.medium))
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(color.opacity(0.1))
+        .foregroundStyle(color)
+        .clipShape(Capsule())
+    }
+
+    private func statusIcon(_ status: String) -> String {
+        switch status {
+        case "applied": return "paperplane.fill"
+        case "phone_screen": return "phone.fill"
+        case "interview": return "person.2.fill"
+        case "offer": return "gift.fill"
+        case "rejected": return "xmark.circle"
+        default: return "circle"
+        }
     }
 
     private func statusColor(_ status: String) -> Color {
