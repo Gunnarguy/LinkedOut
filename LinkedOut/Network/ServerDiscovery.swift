@@ -10,13 +10,13 @@ import Foundation
 
 struct ServerDiscovery {
     /// Candidate URLs in priority order.
-    /// Render is primary — always-on cloud server, works from any network.
-    /// Local Docker is faster when on home wifi.
+    /// Local Docker is preferred (has persistent data). Render is fallback
+    /// when not on home wifi (ephemeral disk — data resets on redeploy).
     static let candidates: [String] = [
-        "https://linkedout-backend-9q4t.onrender.com",
         "http://Gunnars-Brain-Extension.local:8443",
         "http://10.0.0.175:8443",
-        "http://localhost:8443"
+        "http://localhost:8443",
+        "https://linkedout-backend-9q4t.onrender.com"
     ]
 
     /// How long to cache a successful discovery before re-probing.
@@ -27,6 +27,7 @@ struct ServerDiscovery {
     private nonisolated(unsafe) static var cachedAt: Date = .distantPast
 
     /// Probes ALL candidates in parallel. Returns the highest-priority one that responds.
+    /// If the current server is still healthy, stays on it to avoid data disruption.
     /// Caches result for 5 minutes to avoid re-probing on every foreground.
     static func discover() async -> String? {
         // Return cache if fresh
@@ -36,7 +37,16 @@ struct ServerDiscovery {
             return cached
         }
 
-        // Probe all in parallel
+        // Check if current server is still healthy — stay on it if so
+        let current = UserDefaults.standard.string(forKey: "serverURL") ?? ""
+        if !current.isEmpty, await probe(current) {
+            cachedURL = current
+            cachedAt = Date()
+            print("[DISCOVERY] Current server still healthy: \(current)")
+            return current
+        }
+
+        // Current server is down — probe all in parallel
         let results = await withTaskGroup(of: (Int, String, Bool).self) { group in
             for (index, candidate) in candidates.enumerated() {
                 group.addTask {
