@@ -41,6 +41,7 @@ struct JobPayload: Codable, Identifiable, Hashable {
     var dealbreakerWarnings: [String]?
 
     // Why Matrix (structured factual assessment)
+    var jobSnapshot: String?
     var logicFit: String?
     var domainLeverage: String?
     var riskReward: String?
@@ -75,6 +76,7 @@ struct JobPayload: Codable, Identifiable, Hashable {
         case niceToHaves = "nice_to_haves"
         case techStack = "tech_stack"
         case whyInteresting = "why_interesting"
+        case jobSnapshot = "job_snapshot"
         case redFlags = "red_flags"
         case applyUrl = "apply_url"
         case experienceLevel = "experience_level"

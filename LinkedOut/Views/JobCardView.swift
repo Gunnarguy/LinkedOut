@@ -140,6 +140,39 @@ struct JobCardView: View {
 
             Divider()
 
+            // Job Snapshot — what this role actually IS
+            if let snapshot = job.jobSnapshot, !snapshot.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("The Job")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
+
+                    Text(snapshot)
+                        .font(.subheadline)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(.primary)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 4)
+            } else if let desc = job.companyDescription, !desc.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("The Company")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
+
+                    Text(desc)
+                        .font(.subheadline)
+                        .lineLimit(3)
+                        .foregroundStyle(.primary)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 4)
+            }
+
             // AI Pitch
             VStack(alignment: .leading, spacing: 8) {
                 Text("AI Assessment")

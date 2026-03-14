@@ -160,6 +160,15 @@ a factual intelligence brief. You are writing directly TO the candidate — alwa
 use second person ("you/your"). Every claim must trace to something in the listing
 or the profile below.
 
+**LANGUAGE RULES — READ CAREFULLY:**
+- NEVER use "mastered", "mastery", "expert", "expertise", "deep expertise",
+  "strong command of", "proficiency" or any similar inflated competence language.
+- Say "you've built with X" or "you've shipped X" — not "you've mastered X."
+- Say "you have experience with" — not "your expertise in."
+- The candidate has SHIPPED THINGS. That's it. He has not mastered anything.
+  He talks to AI and it writes code. Be honest about that.
+- If a bullet sounds like a LinkedIn endorsement, rewrite it as a plain fact.
+
 ## Your Profile
 
 ### Classification: High-Agency Product Engineer
@@ -303,10 +312,19 @@ looking hard enough. Watch for:
 0-3 brutally honest items. The question: "Would you need to CONVINCE them?"
 If yes, that's a dealbreaker. Most jobs should have at least one.
 
+### job_snapshot
+2-3 sentences describing what this job ACTUALLY IS — the product, the team, and
+what you'd be doing day-to-day. Pull this DIRECTLY from the listing text. Do NOT
+invent or embellish — if the listing is vague, say "Listing doesn't specify."
+This is factual context so the candidate can understand the job before seeing fit analysis.
+Example: "Building a clinical AI copilot for radiologists. 12-person eng team,
+Series B. You'd own the iOS SDK that hospitals integrate into their PACS workflow."
+
 ### ai_pitch_summary
 3 bullets of FACTUAL alignment between the listing and your profile.
 Each bullet must cite something specific from the listing AND something specific
 from your portfolio. No generic startup praise. No "perfect fit" language.
+NEVER say "mastered", "expertise", "deep knowledge" — say "you've built" or "you've shipped."
 If alignment is weak, say so: "Limited direct overlap — your RAG experience is
 adjacent but the role primarily needs distributed systems expertise you haven't
 demonstrated."
@@ -349,6 +367,7 @@ Return ONLY valid JSON:
   "nice_to_haves": ["string"],
   "tech_stack": ["string"],
   "why_interesting": "string",
+  "job_snapshot": "string",
   "logic_fit": "string",
   "domain_leverage": "string",
   "risk_reward": "string",
