@@ -91,6 +91,10 @@ final class APIClient: @unchecked Sendable {
         return try await get("/api/jobs/saved")
     }
 
+    func fetchRejectedJobs() async throws -> [JobPayload] {
+        return try await get("/api/jobs/rejected")
+    }
+
     func fetchStats() async throws -> StatsResponse {
         return try await get("/api/jobs/stats")
     }

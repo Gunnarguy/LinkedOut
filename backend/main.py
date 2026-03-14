@@ -73,7 +73,11 @@ def _load_prefs() -> UserPreferences:
     try:
         if _PREFS_FILE.exists():
             data = json.loads(_PREFS_FILE.read_text())
-            return UserPreferences(**data)
+            prefs = UserPreferences(**data)
+            # Re-save if the file was missing newly-added fields
+            if set(data.keys()) != set(prefs.model_dump().keys()):
+                _save_prefs(prefs)
+            return prefs
     except Exception:
         pass
     return UserPreferences()
@@ -351,6 +355,12 @@ async def get_applied_jobs():
 async def get_saved_jobs():
     """Get all saved/bookmarked jobs."""
     return store.get_saved()
+
+
+@app.get("/api/jobs/rejected", response_model=list[JobPayload])
+async def get_rejected_jobs():
+    """Get all jobs the user passed on."""
+    return store.get_rejected()
 
 
 @app.get("/api/jobs/stats")

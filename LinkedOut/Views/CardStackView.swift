@@ -25,7 +25,7 @@ struct CardStackView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
+            Group {
                 if jobs.isLoading && jobs.pendingJobs.isEmpty {
                     loadingView
                 } else if jobs.pendingJobs.isEmpty {

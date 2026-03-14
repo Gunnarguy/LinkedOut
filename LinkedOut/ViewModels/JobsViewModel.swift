@@ -14,6 +14,7 @@ class JobsViewModel: ObservableObject {
     @Published var pendingJobs: [JobPayload] = []
     @Published var appliedJobs: [JobPayload] = []
     @Published var savedJobs: [JobPayload] = []
+    @Published var rejectedJobs: [JobPayload] = []
     @Published var stats: StatsResponse?
     @Published var isLoading = false
     @Published var isIngesting = false
@@ -106,6 +107,16 @@ class JobsViewModel: ObservableObject {
             print("[VM] loadSavedJobs — got \(savedJobs.count)")
         } catch {
             print("[VM] loadSavedJobs — ERROR (suppressed): \(error)")
+        }
+    }
+
+    func loadRejectedJobs() async {
+        print("[VM] loadRejectedJobs — starting")
+        do {
+            rejectedJobs = try await APIClient.shared.fetchRejectedJobs()
+            print("[VM] loadRejectedJobs — got \(rejectedJobs.count)")
+        } catch {
+            print("[VM] loadRejectedJobs — ERROR (suppressed): \(error)")
         }
     }
 

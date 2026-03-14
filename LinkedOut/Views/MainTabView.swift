@@ -36,14 +36,9 @@ struct MainTabView: View {
                 }
                 .badge(jobs.savedJobs.count)
 
-            ProfileView()
+            YourHubView()
                 .tabItem {
-                    Label("Profile", systemImage: "person.circle")
-                }
-
-            SettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: "gearshape")
+                    Label("You", systemImage: "person.crop.circle")
                 }
         }
         .task {
