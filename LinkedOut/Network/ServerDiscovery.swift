@@ -23,8 +23,8 @@ struct ServerDiscovery {
     private static let cacheSeconds: TimeInterval = 300  // 5 minutes
 
     /// Last successful discovery result + timestamp.
-    private static var cachedURL: String?
-    private static var cachedAt: Date = .distantPast
+    private nonisolated(unsafe) static var cachedURL: String?
+    private nonisolated(unsafe) static var cachedAt: Date = .distantPast
 
     /// Probes ALL candidates in parallel. Returns the highest-priority one that responds.
     /// Caches result for 5 minutes to avoid re-probing on every foreground.

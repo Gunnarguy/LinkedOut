@@ -32,7 +32,7 @@ enum APIError: LocalizedError {
     }
 }
 
-actor APIClient {
+final class APIClient: @unchecked Sendable {
     static let shared = APIClient()
 
     /// Reads the server URL from UserDefaults (synced with Settings @AppStorage)
@@ -54,13 +54,13 @@ actor APIClient {
 
         self.decoder = JSONDecoder()
         // Flexible date decoding: handles ISO 8601, fractional seconds, and space-separated
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let fallbackFormatter = ISO8601DateFormatter()
-        fallbackFormatter.formatOptions = [.withInternetDateTime]
         self.decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let str = try container.decode(String.self)
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let fallbackFormatter = ISO8601DateFormatter()
+            fallbackFormatter.formatOptions = [.withInternetDateTime]
             // Try ISO 8601 with fractional seconds first
             if let date = formatter.date(from: str) { return date }
             // Without fractional seconds
