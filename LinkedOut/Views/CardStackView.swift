@@ -11,6 +11,7 @@ import UIKit
 struct CardStackView: View {
     @EnvironmentObject var jobs: JobsViewModel
     @State private var sortByNewest = false
+    @State private var showListView = false
 
     /// Sorted view of pending jobs — either by score (default) or newest first
     private var sortedPending: [JobPayload] {
@@ -29,6 +30,8 @@ struct CardStackView: View {
                     loadingView
                 } else if jobs.pendingJobs.isEmpty {
                     emptyView
+                } else if showListView {
+                    pendingListView
                 } else {
                     cardStack
                 }
@@ -62,13 +65,25 @@ struct CardStackView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    if let stats = jobs.stats {
-                        HStack(spacing: 12) {
-                            Label("\(stats.pending)", systemImage: "tray")
-                            Label("\(stats.applied)", systemImage: "checkmark.circle")
+                    HStack(spacing: 12) {
+                        // List / Card toggle
+                        Button {
+                            withAnimation(.spring(response: 0.3)) {
+                                showListView.toggle()
+                            }
+                        } label: {
+                            Image(systemName: showListView ? "rectangle.stack" : "list.bullet")
+                                .foregroundStyle(.primary)
                         }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+
+                        if let stats = jobs.stats {
+                            HStack(spacing: 12) {
+                                Label("\(stats.pending)", systemImage: "tray")
+                                Label("\(stats.applied)", systemImage: "checkmark.circle")
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
@@ -127,6 +142,53 @@ struct CardStackView: View {
             get: { jobs.jobToApply != nil },
             set: { if !$0 { jobs.jobToApply = nil } }
         )
+    }
+
+    // MARK: - List View
+
+    private var pendingListView: some View {
+        List {
+            Section {
+                ForEach(sortedPending) { job in
+                    Button {
+                        jobs.selectedJob = job
+                    } label: {
+                        JobListRow(job: job)
+                    }
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    .swipeActions(edge: .trailing) {
+                        Button {
+                            haptic()
+                            Task { await jobs.swipeRight(job: job) }
+                        } label: {
+                            Label("Apply", systemImage: "checkmark")
+                        }
+                        .tint(.green)
+
+                        Button {
+                            haptic()
+                            Task { await jobs.swipeUp(job: job) }
+                        } label: {
+                            Label("Save", systemImage: "bookmark")
+                        }
+                        .tint(.blue)
+                    }
+                    .swipeActions(edge: .leading) {
+                        Button(role: .destructive) {
+                            haptic()
+                            Task { await jobs.swipeLeft(job: job) }
+                        } label: {
+                            Label("Pass", systemImage: "xmark")
+                        }
+                    }
+                }
+            } header: {
+                Text("\(sortedPending.count) jobs in queue")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .listStyle(.plain)
     }
 
     // MARK: - Card Stack
