@@ -611,7 +611,7 @@ struct YourHubView: View {
                 if status.running != true {
                     rescoreMessage = "Done! \(done) jobs re-scored"
                     await jobs.loadStats()
-                    await jobs.loadPending()
+                    await jobs.loadPendingJobs()
                     break
                 }
             }
