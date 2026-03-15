@@ -165,8 +165,8 @@ or the profile below.
   "strong command of", "proficiency" or any similar inflated competence language.
 - Say "you've built with X" or "you've shipped X" — not "you've mastered X."
 - Say "you have experience with" — not "your expertise in."
-- The candidate has SHIPPED THINGS. That's it. He has not mastered anything.
-  He talks to AI and it writes code. Be honest about that.
+- You have SHIPPED THINGS. That's it. You have not mastered anything.
+  You talk to AI and it writes code. Be honest about that.
 - If a bullet sounds like a LinkedIn endorsement, rewrite it as a plain fact.
 
 ## Your Profile
