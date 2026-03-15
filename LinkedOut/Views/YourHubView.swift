@@ -17,6 +17,8 @@ struct YourHubView: View {
     @State private var notionStatus: NotionStatusResponse?
     @State private var notionSyncing = false
     @State private var notionSyncMessage: String?
+    @State private var rescoring = false
+    @State private var rescoreMessage: String?
 
     enum PipelineDestination: Hashable {
         case pending, applied, saved, rejected
@@ -249,6 +251,44 @@ struct YourHubView: View {
                 )
             }
             .buttonStyle(.plain)
+
+            // Re-score all jobs
+            Button {
+                Task { await triggerRescore() }
+            } label: {
+                HStack(spacing: 14) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(.orange.gradient)
+                            .frame(width: 40, height: 40)
+                        if rescoring {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.body.bold())
+                                .foregroundStyle(.white)
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Re-score All Jobs")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text(rescoreMessage ?? "Re-run AI scoring with latest prompt")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+                .padding(14)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(.quaternary, lineWidth: 0.5)
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(rescoring)
         }
     }
 
@@ -535,6 +575,33 @@ struct YourHubView: View {
     }
 
     // MARK: - Helpers
+
+    private func triggerRescore() async {
+        rescoring = true
+        rescoreMessage = "Starting re-score..."
+        do {
+            let resp = try await APIClient.shared.rescoreJobs(buckets: ["pending", "saved", "applied"])
+            let total = resp.total ?? 0
+            rescoreMessage = "Scoring \(total) jobs..."
+            // Poll until done
+            for _ in 0..<120 {
+                try await Task.sleep(nanoseconds: 2_000_000_000)
+                let status = try await APIClient.shared.fetchRescoreStatus()
+                let done = status.done ?? 0
+                let errs = status.errors ?? 0
+                rescoreMessage = "Scored \(done)/\(total)\(errs > 0 ? " (\(errs) errors)" : "")"
+                if status.running != true {
+                    rescoreMessage = "Done! \(done) jobs re-scored"
+                    await jobs.loadStats()
+                    await jobs.loadPending()
+                    break
+                }
+            }
+        } catch {
+            rescoreMessage = "Re-score failed: \(error.localizedDescription)"
+        }
+        rescoring = false
+    }
 
     private func heroInitials(_ profile: LinkedInProfile) -> some View {
         ZStack {

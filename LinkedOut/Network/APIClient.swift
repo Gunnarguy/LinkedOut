@@ -131,6 +131,17 @@ final class APIClient: @unchecked Sendable {
         return try await get("/api/ingest/status")
     }
 
+    // MARK: - Re-score
+
+    func rescoreJobs(buckets: [String] = ["pending"]) async throws -> RescoreResponse {
+        let query = buckets.map { "buckets=\($0)" }.joined(separator: "&")
+        return try await post("/api/jobs/rescore?\(query)", body: Optional<String>.none)
+    }
+
+    func fetchRescoreStatus() async throws -> RescoreResponse {
+        return try await get("/api/jobs/rescore/status")
+    }
+
     // MARK: - Preferences
 
     func syncPreferences(_ prefs: UserPreferences) async throws -> UserPreferences {

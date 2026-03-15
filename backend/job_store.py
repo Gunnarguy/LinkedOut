@@ -274,6 +274,22 @@ class JobStore:
         self._save()
         return job
 
+    def update_job(self, job_id: str, updated: JobPayload) -> bool:
+        """Replace a job in-place in whatever bucket it lives in."""
+        for bucket in (self._pending, self._applied, self._saved, self._rejected):
+            if job_id in bucket:
+                bucket[job_id] = updated
+                self._save()
+                return True
+        return False
+
+    def all_jobs(self) -> list[JobPayload]:
+        """Return every job across all buckets."""
+        jobs: list[JobPayload] = []
+        for bucket in (self._pending, self._applied, self._saved, self._rejected):
+            jobs.extend(bucket.values())
+        return jobs
+
     def update_job_notes(self, job_id: str, notes: str) -> bool:
         """Update notes on any job in any bucket."""
         for bucket in (self._pending, self._applied, self._saved, self._rejected):

@@ -591,6 +591,9 @@ async def score_job(
             logic_fit=data.get("logic_fit", ""),
             domain_leverage=data.get("domain_leverage", ""),
             risk_reward=data.get("risk_reward", ""),
+            company_oneliner=data.get("company_oneliner", ""),
+            they_want=data.get("they_want", []),
+            job_snapshot=data.get("job_snapshot", ""),
         )
 
         return ScoringResult(passed_filter=True, job=job)

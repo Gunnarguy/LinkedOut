@@ -72,6 +72,15 @@ struct IngestResponse: Codable {
     }
 }
 
+struct RescoreResponse: Codable {
+    let status: String
+    let total: Int?
+    let buckets: [String]?
+    let running: Bool?
+    let done: Int?
+    let errors: Int?
+}
+
 struct IngestStatusResponse: Codable {
     let taskRunning: Bool
     let manualRunning: Bool

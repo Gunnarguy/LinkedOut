@@ -431,6 +431,93 @@ async def score_job_batch(
     return results
 
 
+# ── Re-score existing jobs ───────────────────────────────────────────────────
+
+_rescore_task: asyncio.Task | None = None
+_rescore_progress: dict = {"running": False, "done": 0, "total": 0, "errors": 0}
+
+
+@app.post("/api/jobs/rescore")
+async def rescore_jobs(buckets: list[str] = Query(default=["pending"])):
+    """Re-run LLM scoring on existing jobs (non-blocking).
+
+    Reconstructs RawJobListing from each stored job and re-scores with the
+    current prompt. Preserves job ID, notes, application_status, notion_page_id.
+    """
+    global _rescore_task
+    if _rescore_task is not None and not _rescore_task.done():
+        return {"status": "already_running", **_rescore_progress}
+
+    # Collect jobs from requested buckets
+    bucket_map = {
+        "pending": store._pending,
+        "applied": store._applied,
+        "saved": store._saved,
+        "rejected": store._rejected,
+    }
+    jobs_to_rescore: list[JobPayload] = []
+    for b in buckets:
+        if b in bucket_map:
+            jobs_to_rescore.extend(bucket_map[b].values())
+
+    if not jobs_to_rescore:
+        return {"status": "nothing_to_rescore", "total": 0}
+
+    _rescore_progress.update(running=True, done=0, total=len(jobs_to_rescore), errors=0)
+
+    async def _do_rescore():
+        async with _ingest_lock:
+            prefs = _user_prefs
+            for job in jobs_to_rescore:
+                try:
+                    raw = RawJobListing(
+                        title=job.role_title or "",
+                        company=job.company_name or "",
+                        description=job.description or "",
+                        url=job.source_url or "",
+                        salary_text=f"${job.salary_floor}" if job.salary_floor else "",
+                        location=job.location or "",
+                        is_remote=job.is_remote,
+                    )
+                    result = await score_job(raw, prefs)
+                    if result.passed_filter and result.job:
+                        # Preserve user-managed fields
+                        result.job.id = job.id
+                        result.job.notes = job.notes
+                        result.job.application_status = job.application_status
+                        result.job.notion_page_id = job.notion_page_id
+                        result.job.posted_at = job.posted_at
+                        store.update_job(job.id, result.job)
+                        logger.info(
+                            f"[RESCORE] Updated {job.role_title} @ {job.company_name} "
+                            f"score={result.job.builder_score:.2f}"
+                        )
+                    else:
+                        logger.info(
+                            f"[RESCORE] {job.role_title} @ {job.company_name} "
+                            f"— kept existing (LLM rejected on rescore)"
+                        )
+                except Exception as e:
+                    _rescore_progress["errors"] += 1
+                    logger.warning(f"[RESCORE] Error on {job.role_title}: {e}")
+                _rescore_progress["done"] += 1
+                await asyncio.sleep(1.5)  # Rate limit pacing
+            _rescore_progress["running"] = False
+
+    _rescore_task = asyncio.create_task(_do_rescore())
+    return {
+        "status": "started",
+        "total": len(jobs_to_rescore),
+        "buckets": buckets,
+    }
+
+
+@app.get("/api/jobs/rescore/status")
+async def rescore_status():
+    """Check re-score progress."""
+    return _rescore_progress
+
+
 # ── LinkedIn Sharing ─────────────────────────────────────────────────────────
 
 
