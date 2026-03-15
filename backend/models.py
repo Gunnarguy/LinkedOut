@@ -52,6 +52,9 @@ class JobPayload(BaseModel):
     )  # Honest warnings about why this role might reject the user
 
     # ── Why Matrix (structured factual assessment) ───────────────────────
+    job_snapshot: str = ""  # Factual summary of what the job is (from listing)
+    company_oneliner: str = ""  # One sentence: what the company actually does
+    they_want: list[str] = Field(default_factory=list)  # What they're looking for (from listing)
     logic_fit: str = ""  # How the role maps to what Gunnar actually does
     domain_leverage: str = ""  # Where he has an unfair advantage
     risk_reward: str = ""  # Realistic friction and upside

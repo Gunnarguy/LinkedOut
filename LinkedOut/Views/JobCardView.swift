@@ -140,36 +140,61 @@ struct JobCardView: View {
 
             Divider()
 
-            // Job Snapshot — what this role actually IS
-            if let snapshot = job.jobSnapshot, !snapshot.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("The Job")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
+            // Company one-liner + Job snapshot
+            VStack(alignment: .leading, spacing: 8) {
+                if let oneliner = job.companyOneliner, !oneliner.isEmpty {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "building.2")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 2)
+                        Text(oneliner)
+                            .font(.subheadline)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } else if let desc = job.companyDescription, !desc.isEmpty {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "building.2")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 2)
+                        Text(desc)
+                            .font(.subheadline)
+                            .lineLimit(2)
+                    }
+                }
 
+                if let snapshot = job.jobSnapshot, !snapshot.isEmpty {
                     Text(snapshot)
                         .font(.subheadline)
+                        .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                        .foregroundStyle(.primary)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .padding(.bottom, 4)
-            } else if let desc = job.companyDescription, !desc.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("The Company")
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 4)
+
+            // They Want — what the listing actually asks for
+            if let wants = job.theyWant, !wants.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("They Want")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .textCase(.uppercase)
 
-                    Text(desc)
-                        .font(.subheadline)
-                        .lineLimit(3)
-                        .foregroundStyle(.primary)
+                    ForEach(wants.prefix(4), id: \.self) { item in
+                        HStack(alignment: .top, spacing: 6) {
+                            Text("·")
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(.secondary)
+                            Text(item)
+                                .font(.caption)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 12)
                 .padding(.bottom, 4)
             }
 

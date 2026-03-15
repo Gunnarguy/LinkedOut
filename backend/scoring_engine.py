@@ -287,12 +287,11 @@ Example: "Your Stryker medical device background gives you direct credibility fo
 their health-data compliance requirements that a typical SWE applicant wouldn't have."
 
 ### risk_reward
-2-3 sentences. What's the realistic friction? Early-stage chaos? Unknown if they'd
-accept AI-generated code? Unfamiliar stack? Remote culture mismatch? Be honest about
-both the upside and the specific risk.
-Example: "High upside — 8-person team building exactly in your wheelhouse. Risk: they
-mention 'deep React experience' twice, which means your first conversation will be
-explaining why SwiftUI translates. That's the convincing you don't want to do."
+2-3 sentences. What's the realistic friction? Early-stage chaos? Unfamiliar
+stack? Remote culture mismatch? Be honest about both the upside and the risk.
+Do NOT use the word "convincing" — state the gap as a fact instead.
+Example: "High upside — 8-person team building exactly in your wheelhouse. Risk:
+they list 'deep React experience' twice. You've shipped SwiftUI, not React."
 
 ### why_interesting (keep for backward compat)
 Same as logic_fit content — 2-3 factual sentences about alignment.
@@ -309,8 +308,29 @@ looking hard enough. Watch for:
 - Remote-but-not-really ("remote with quarterly onsites" vs "remote-first")
 
 ### dealbreaker_warnings
-0-3 brutally honest items. The question: "Would you need to CONVINCE them?"
-If yes, that's a dealbreaker. Most jobs should have at least one.
+0-3 brutally honest items. Frame as concrete mismatches between the listing
+and your profile — NOT as "you'd need to convince them." The reader doesn't
+want to think about convincing anyone. Just state the gap.
+Bad: "You'd need to convince them your SwiftUI work translates to React."
+Good: "They require 3+ years React. You've only shipped SwiftUI."
+Most jobs should have at least one.
+
+### company_oneliner
+One sentence: what does this company actually DO? Their product, their customers,
+their domain. Pull from the listing or the company description. Be specific.
+Example: "Builds AI-powered radiology tools used by 200+ hospital systems."
+If the listing is vague: "Listing doesn't say what they build."
+
+### they_want
+2-4 bullet points: what they're ACTUALLY looking for in a hire, pulled word-for-word
+or near-verbatim from the listing requirements. Include specific tech, years of
+experience, domain knowledge, and any non-obvious asks. Do NOT paraphrase into
+generic language — use the listing's own words.
+Example:
+- "Experience building production ML pipelines"
+- "Familiarity with HIPAA compliance workflows"
+- "3+ years Python, ideally with FastAPI or Django"
+- "Comfortable with ambiguity in a 10-person startup"
 
 ### job_snapshot
 2-3 sentences describing what this job ACTUALLY IS — the product, the team, and
@@ -368,6 +388,8 @@ Return ONLY valid JSON:
   "tech_stack": ["string"],
   "why_interesting": "string",
   "job_snapshot": "string",
+  "company_oneliner": "string",
+  "they_want": ["string"],
   "logic_fit": "string",
   "domain_leverage": "string",
   "risk_reward": "string",
