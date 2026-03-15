@@ -886,6 +886,154 @@ async def notion_create_job(body: dict):
         raise HTTPException(status_code=502, detail=f"Notion API error: {e}")
 
 
+# ── Score Notion jobs with LLM ──────────────────────────────────────────────
+
+_notion_score_task: asyncio.Task | None = None
+_notion_score_progress: dict = {
+    "running": False,
+    "done": 0,
+    "total": 0,
+    "errors": 0,
+    "scored": 0,
+    "skipped": 0,
+}
+
+
+@app.post("/api/notion/score")
+async def notion_score_jobs(
+    rescore_all: bool = Query(default=False),
+):
+    """Score Notion database jobs with the LLM scoring engine (non-blocking).
+
+    By default only scores jobs that don't already have a score.
+    Set rescore_all=true to re-score everything.
+    Writes scores and AI analysis back to Notion properties.
+    """
+    global _notion_score_task
+    if not notion_sync.configured:
+        raise HTTPException(status_code=400, detail="Notion not configured")
+
+    if _notion_score_task is not None and not _notion_score_task.done():
+        return {"status": "already_running", **_notion_score_progress}
+
+    # Fetch all Notion jobs
+    try:
+        notion_jobs = await notion_sync.pull_jobs()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Notion fetch failed: {e}")
+
+    # Filter to unscored (or all if rescore_all)
+    to_score = []
+    for nj in notion_jobs:
+        if rescore_all or nj.get("score") is None:
+            to_score.append(nj)
+
+    if not to_score:
+        return {"status": "nothing_to_score", "total": 0}
+
+    _notion_score_progress.update(
+        running=True, done=0, total=len(to_score), errors=0, scored=0, skipped=0
+    )
+
+    async def _do_notion_score():
+        async with _ingest_lock:
+            prefs = _user_prefs
+            schema = await notion_sync.discover_schema()
+
+            for nj in to_score:
+                page_id = nj["notion_page_id"]
+                company = nj.get("name") or nj.get("company") or ""
+                role = nj.get("role") or ""
+                location = nj.get("location") or ""
+                salary = nj.get("salary") or ""
+                source_url = nj.get("source_url") or ""
+                tech_stack = nj.get("tech_stack") or []
+
+                # Build a description from available data
+                desc_parts = []
+                if role:
+                    desc_parts.append(f"Role: {role}")
+                if company:
+                    desc_parts.append(f"Company: {company}")
+                if location:
+                    desc_parts.append(f"Location: {location}")
+                if salary:
+                    desc_parts.append(f"Salary: {salary}")
+                if tech_stack:
+                    desc_parts.append(f"Tech Stack: {', '.join(tech_stack)}")
+                if nj.get("notes"):
+                    desc_parts.append(f"Notes: {nj['notes']}")
+
+                description = (
+                    "\n".join(desc_parts) if desc_parts else f"{role} at {company}"
+                )
+
+                try:
+                    raw = RawJobListing(
+                        title=role or company,
+                        company=company,
+                        description=description,
+                        url=source_url,
+                        salary_text=salary,
+                        location=location,
+                        is_remote=nj.get("remote", False),
+                    )
+                    result = await score_job(raw, prefs)
+
+                    if result.passed_filter and result.job:
+                        j = result.job
+                        # Write score + AI analysis back to Notion
+                        updates: dict = {}
+                        if "Score" in schema:
+                            updates["Score"] = round(j.builder_score * 100, 1)
+                        if "AI Summary" in schema and j.ai_pitch_summary:
+                            updates["AI Summary"] = j.ai_pitch_summary[:2000]
+                        if "Tech Stack Summary" in schema and j.tech_stack:
+                            updates["Tech Stack Summary"] = ", ".join(j.tech_stack)
+                        if "Gaps" in schema and j.red_flags:
+                            updates["Gaps"] = "; ".join(j.red_flags)
+                        if "Gains" in schema and j.fit_reasons:
+                            updates["Gains"] = "; ".join(j.fit_reasons)
+                        if "Cover Letter" in schema and j.drafted_cover_letter:
+                            updates["Cover Letter"] = j.drafted_cover_letter[:2000]
+
+                        if updates:
+                            await notion_sync.update_page_properties(page_id, updates)
+
+                        _notion_score_progress["scored"] += 1
+                        logger.info(
+                            f"[NOTION-SCORE] {role} @ {company} → "
+                            f"score={j.builder_score:.2f}"
+                        )
+                    else:
+                        _notion_score_progress["skipped"] += 1
+                        logger.info(
+                            f"[NOTION-SCORE] {role} @ {company} — "
+                            f"rejected: {result.rejection_reason}"
+                        )
+                except Exception as e:
+                    _notion_score_progress["errors"] += 1
+                    logger.warning(f"[NOTION-SCORE] Error on {role} @ {company}: {e}")
+
+                _notion_score_progress["done"] += 1
+                await asyncio.sleep(2.0)  # Rate limit (Notion + LLM)
+
+            _notion_score_progress["running"] = False
+
+    _notion_score_task = asyncio.create_task(_do_notion_score())
+    return {
+        "status": "started",
+        "total": len(to_score),
+        "rescore_all": rescore_all,
+    }
+
+
+@app.get("/api/notion/score/status")
+async def notion_score_status():
+    """Check Notion scoring progress."""
+    return _notion_score_progress
+
+
 # ── Dev/Debug: Seed with mock data ──────────────────────────────────────────
 
 

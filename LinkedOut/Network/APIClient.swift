@@ -242,6 +242,24 @@ final class APIClient: @unchecked Sendable {
         return try decode(data, response: response)
     }
 
+    func scoreNotionJobs(rescoreAll: Bool = false) async throws -> [String: Any] {
+        guard let url = URL(string: "\(baseURL)/api/notion/score?rescore_all=\(rescoreAll)") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        let (data, response) = try await performRequest(request)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+        if let httpResp = response as? HTTPURLResponse, httpResp.statusCode >= 400 {
+            throw APIError.httpError(statusCode: httpResp.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+        return json
+    }
+
+    func fetchNotionScoreStatus() async throws -> NotionScoreStatus {
+        return try await get("/api/notion/score/status")
+    }
+
     // MARK: - Generic HTTP
 
     private func get<T: Decodable>(_ path: String) async throws -> T {

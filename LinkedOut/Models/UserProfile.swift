@@ -219,3 +219,12 @@ struct NotionJob: Codable, Identifiable {
 struct NotionSchemaResponse: Codable {
     let schema: [String: String]
 }
+
+struct NotionScoreStatus: Codable {
+    let running: Bool
+    let done: Int
+    let total: Int
+    let errors: Int
+    let scored: Int
+    let skipped: Int
+}

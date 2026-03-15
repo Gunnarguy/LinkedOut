@@ -20,6 +20,9 @@ struct NotionDatabaseView: View {
     @State private var selectedJob: NotionJob?
     @State private var showCreateSheet = false
     @State private var jobToDelete: NotionJob?
+    @State private var isScoring = false
+    @State private var scoreProgress: NotionScoreStatus?
+    @State private var scoreMessage: String?
 
     private var filteredJobs: [NotionJob] {
         var result = jobs
@@ -108,6 +111,21 @@ struct NotionDatabaseView: View {
                             Label("New Entry", systemImage: "plus")
                         }
                     }
+                    Section {
+                        Button {
+                            Task { await scoreUnscored(rescoreAll: false) }
+                        } label: {
+                            Label("Score Unscored", systemImage: "brain")
+                        }
+                        .disabled(isScoring)
+
+                        Button {
+                            Task { await scoreUnscored(rescoreAll: true) }
+                        } label: {
+                            Label("Re-score All", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                        .disabled(isScoring)
+                    }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
@@ -156,6 +174,43 @@ struct NotionDatabaseView: View {
                 Text("Archive \"\(job.name ?? "this entry")\" in Notion? This can be undone from Notion's trash.")
             }
         }
+        .safeAreaInset(edge: .bottom) {
+            if isScoring || scoreMessage != nil {
+                HStack(spacing: 10) {
+                    if isScoring {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        if isScoring, let p = scoreProgress {
+                            Text("Scoring \(p.done)/\(p.total)...")
+                                .font(.subheadline.weight(.medium))
+                            Text("\(p.scored) scored, \(p.skipped) skipped, \(p.errors) errors")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else if let msg = scoreMessage {
+                            Text(msg)
+                                .font(.subheadline.weight(.medium))
+                        }
+                    }
+                    Spacer()
+                    if !isScoring {
+                        Button("Dismiss") {
+                            withAnimation { scoreMessage = nil }
+                        }
+                        .font(.caption)
+                    }
+                }
+                .padding(12)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                .padding(.horizontal, 16)
+                .padding(.bottom, 4)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
     }
 
     private func loadData() async {
@@ -180,6 +235,35 @@ struct NotionDatabaseView: View {
         } catch {
             errorMessage = "Archive failed: \(error.localizedDescription)"
         }
+    }
+
+    private func scoreUnscored(rescoreAll: Bool) async {
+        isScoring = true
+        scoreMessage = nil
+        scoreProgress = nil
+
+        do {
+            _ = try await APIClient.shared.scoreNotionJobs(rescoreAll: rescoreAll)
+
+            // Poll for progress
+            while true {
+                try await Task.sleep(nanoseconds: 2_000_000_000) // 2s
+                let status = try await APIClient.shared.fetchNotionScoreStatus()
+                scoreProgress = status
+                if !status.running {
+                    scoreMessage = "Done! \(status.scored) scored, \(status.skipped) skipped"
+                    if status.errors > 0 {
+                        scoreMessage! += ", \(status.errors) errors"
+                    }
+                    // Refresh the list to show new scores
+                    await loadData()
+                    break
+                }
+            }
+        } catch {
+            scoreMessage = "Scoring failed: \(error.localizedDescription)"
+        }
+        isScoring = false
     }
 }
 
