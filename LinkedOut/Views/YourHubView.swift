@@ -470,6 +470,24 @@ struct YourHubView: View {
                         .disabled(notionSyncing)
                     }
 
+                    NavigationLink {
+                        NotionDatabaseView()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "tablecells")
+                            Text("View Database")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .font(.subheadline.weight(.medium))
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 14)
+                        .background(.indigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+                    }
+                    .buttonStyle(.plain)
+
                     if let msg = notionSyncMessage {
                         Text(msg)
                             .font(.caption)

@@ -28,25 +28,34 @@ _NOTION_CONFIG_FILE = _DATA_DIR / "notion_config.json"
 # These are the expected column names in the user's Notion database.
 # The sync adapts: if a property doesn't exist, it's silently skipped.
 
-PROP_NAME = "Name"  # title — "Role @ Company"
-PROP_COMPANY = "Company"
-PROP_ROLE = "Role"
-PROP_STATUS = "Status"
+PROP_NAME = "Company"  # title column — contains company name as page title
+PROP_COMPANY = "Company"  # same as title in this database
+PROP_ROLE = "Role Title 1"
+PROP_STATUS = "Status 1"
 PROP_SCORE = "Score"
-PROP_SALARY = "Salary"
+PROP_SALARY = "Salary Range"
 PROP_REMOTE = "Remote"
 PROP_LOCATION = "Location"
-PROP_SOURCE_URL = "Source URL"
+PROP_SOURCE_URL = "Link"
 PROP_APPLY_URL = "Apply URL"
 PROP_TAGS = "Tags"
-PROP_TECH_STACK = "Tech Stack"
+PROP_TECH_STACK = "Tech Stack Summary"
 PROP_NOTES = "Notes"
 PROP_LINKEDOUT_ID = "LinkedOut ID"
-PROP_POSTED = "Posted"
+PROP_POSTED = "Date Found"
 PROP_AI_SUMMARY = "AI Summary"
 PROP_EXPERIENCE = "Experience Level"
 PROP_JOB_TYPE = "Job Type"
 PROP_COMPANY_STAGE = "Company Stage"
+PROP_DATE_APPLIED = "Date Applied"
+PROP_COVER_LETTER = "Cover Letter"
+PROP_CONTACT = "Contact"
+PROP_NEXT_STEP = "Next Step"
+PROP_LAST_STEP = "Last Step"
+PROP_ENTHUSIASM = "Enthusiasm Level"
+PROP_GAPS = "Gaps"
+PROP_GAINS = "Gains"
+PROP_ICE_BREAKER = "Ice Breaker"
 
 
 class NotionSync:
@@ -196,11 +205,17 @@ class NotionSync:
     def _parse_page(self, page: dict) -> dict:
         """Extract structured data from a Notion page object."""
         props = page.get("properties", {})
+        company = self._get_title(props, PROP_NAME)
+        # Tech Stack Summary is rich_text in this database, split by comma
+        tech_str = self._get_rich_text(props, PROP_TECH_STACK)
+        tech_list = (
+            [t.strip() for t in tech_str.split(",") if t.strip()] if tech_str else []
+        )
         return {
             "notion_page_id": page["id"],
             "notion_url": page.get("url", ""),
-            "name": self._get_title(props, PROP_NAME),
-            "company": self._get_rich_text(props, PROP_COMPANY),
+            "name": company,
+            "company": company,
             "role": self._get_rich_text(props, PROP_ROLE),
             "status": self._get_select(props, PROP_STATUS),
             "score": self._get_number(props, PROP_SCORE),
@@ -210,7 +225,7 @@ class NotionSync:
             "source_url": self._get_url(props, PROP_SOURCE_URL),
             "apply_url": self._get_url(props, PROP_APPLY_URL),
             "tags": self._get_multi_select(props, PROP_TAGS),
-            "tech_stack": self._get_multi_select(props, PROP_TECH_STACK),
+            "tech_stack": tech_list,
             "notes": self._get_rich_text(props, PROP_NOTES),
             "linkedout_id": self._get_rich_text(props, PROP_LINKEDOUT_ID),
             "posted": self._get_date(props, PROP_POSTED),
@@ -307,20 +322,120 @@ class NotionSync:
             return results[0]["id"]
         return None
 
+    # ── Single Page CRUD ─────────────────────────────────────────────────
+
+    async def get_page(self, page_id: str) -> dict:
+        """Fetch a single Notion page by ID and return parsed data."""
+        url = f"{NOTION_API}/v1/pages/{page_id}"
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(url, headers=self._headers())
+            resp.raise_for_status()
+            page = resp.json()
+        return self._parse_page(page)
+
+    async def update_page_properties(self, page_id: str, updates: dict) -> dict:
+        """Update arbitrary properties on a Notion page.
+
+        `updates` is a dict mapping property names to their new values.
+        We build the correct Notion property format based on the schema type.
+        """
+        schema = await self.discover_schema()
+        properties: dict = {}
+
+        for prop_name, value in updates.items():
+            if prop_name not in schema:
+                continue
+            prop_type = schema[prop_name]
+            properties[prop_name] = self._value_to_notion_property(prop_type, value)
+
+        if not properties:
+            return await self.get_page(page_id)
+
+        url = f"{NOTION_API}/v1/pages/{page_id}"
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.patch(
+                url, headers=self._headers(), json={"properties": properties}
+            )
+            resp.raise_for_status()
+            page = resp.json()
+
+        logger.info(f"[NOTION] Updated page {page_id}: {list(updates.keys())}")
+        return self._parse_page(page)
+
+    async def archive_page(self, page_id: str) -> bool:
+        """Archive (soft-delete) a Notion page."""
+        url = f"{NOTION_API}/v1/pages/{page_id}"
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.patch(
+                url, headers=self._headers(), json={"archived": True}
+            )
+            resp.raise_for_status()
+        logger.info(f"[NOTION] Archived page {page_id}")
+        return True
+
+    async def create_page_from_properties(self, properties: dict) -> dict:
+        """Create a new Notion page from raw property name→value pairs."""
+        ds_id = await self.discover_data_source()
+        schema = await self.discover_schema()
+
+        notion_props: dict = {}
+        for prop_name, value in properties.items():
+            if prop_name not in schema:
+                continue
+            prop_type = schema[prop_name]
+            notion_props[prop_name] = self._value_to_notion_property(prop_type, value)
+
+        body = {
+            "parent": {"type": "data_source_id", "data_source_id": ds_id},
+            "properties": notion_props,
+        }
+
+        url = f"{NOTION_API}/v1/pages"
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(url, headers=self._headers(), json=body)
+            resp.raise_for_status()
+            page = resp.json()
+
+        logger.info(f"[NOTION] Created page {page['id']} from raw properties")
+        return self._parse_page(page)
+
+    def _value_to_notion_property(self, prop_type: str, value) -> dict:
+        """Convert a Python value to the correct Notion property format."""
+        if prop_type == "title":
+            return {"title": [{"text": {"content": str(value or "")[:2000]}}]}
+        elif prop_type == "rich_text":
+            return self._make_rich_text(str(value or ""))
+        elif prop_type == "number":
+            try:
+                return {"number": float(value) if value is not None else None}
+            except (ValueError, TypeError):
+                return {"number": None}
+        elif prop_type == "checkbox":
+            return {"checkbox": bool(value)}
+        elif prop_type in ("select", "status"):
+            return {prop_type: {"name": str(value or "")}}
+        elif prop_type == "multi_select":
+            if isinstance(value, list):
+                return {"multi_select": [{"name": str(v)} for v in value]}
+            return {"multi_select": [{"name": str(value)}] if value else []}
+        elif prop_type == "url":
+            return {"url": str(value) if value else None}
+        elif prop_type == "date":
+            return {"date": {"start": str(value)} if value else None}
+        else:
+            # Unknown type — try rich_text as fallback
+            return self._make_rich_text(str(value or ""))
+
     def _build_properties(self, job: JobPayload, bucket: str, schema: dict) -> dict:
         """Build Notion properties dict, only including props that exist in the schema."""
         props: dict = {}
 
-        # Title is always the Name/title property
+        # Title is the Company column
         if PROP_NAME in schema:
-            props[PROP_NAME] = {
-                "title": [
-                    {"text": {"content": f"{job.role_title} @ {job.company_name}"}}
-                ]
-            }
+            props[PROP_NAME] = {"title": [{"text": {"content": job.company_name}}]}
 
-        if PROP_COMPANY in schema and schema[PROP_COMPANY] == "rich_text":
-            props[PROP_COMPANY] = self._make_rich_text(job.company_name)
+        # Company is the same as name/title in this database, skip duplicate
+        # PROP_COMPANY == PROP_NAME so no separate rich_text needed
 
         if PROP_ROLE in schema and schema[PROP_ROLE] == "rich_text":
             props[PROP_ROLE] = self._make_rich_text(job.role_title)
@@ -364,10 +479,15 @@ class NotionSync:
         if PROP_TAGS in schema and schema[PROP_TAGS] == "multi_select":
             props[PROP_TAGS] = {"multi_select": [{"name": t} for t in (job.tags or [])]}
 
-        if PROP_TECH_STACK in schema and schema[PROP_TECH_STACK] == "multi_select":
-            props[PROP_TECH_STACK] = {
-                "multi_select": [{"name": t} for t in (job.tech_stack or [])]
-            }
+        if PROP_TECH_STACK in schema:
+            tech_text = ", ".join(job.tech_stack or [])
+            ptype = schema[PROP_TECH_STACK]
+            if ptype == "multi_select":
+                props[PROP_TECH_STACK] = {
+                    "multi_select": [{"name": t} for t in (job.tech_stack or [])]
+                }
+            elif ptype == "rich_text":
+                props[PROP_TECH_STACK] = self._make_rich_text(tech_text)
 
         if PROP_NOTES in schema and schema[PROP_NOTES] == "rich_text":
             props[PROP_NOTES] = self._make_rich_text(job.notes)

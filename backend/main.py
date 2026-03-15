@@ -822,6 +822,70 @@ async def notion_list_jobs():
         raise HTTPException(status_code=502, detail=f"Notion API error: {e}")
 
 
+@app.get("/api/notion/schema")
+async def notion_schema():
+    """Return the Notion database schema (property names and types)."""
+    if not notion_sync.configured:
+        raise HTTPException(status_code=400, detail="Notion not configured")
+    try:
+        schema = await notion_sync.discover_schema()
+        return {"schema": schema}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Notion API error: {e}")
+
+
+@app.get("/api/notion/jobs/{page_id}")
+async def notion_get_job(page_id: str):
+    """Fetch a single Notion page by its page ID."""
+    if not notion_sync.configured:
+        raise HTTPException(status_code=400, detail="Notion not configured")
+    try:
+        return await notion_sync.get_page(page_id)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Notion API error: {e}")
+
+
+@app.patch("/api/notion/jobs/{page_id}")
+async def notion_update_job(page_id: str, body: dict):
+    """Update properties on a Notion page.
+
+    Body is a dict mapping property names to new values.
+    Example: {"Status": "Applied", "Notes": "Great fit", "Score": 85}
+    """
+    if not notion_sync.configured:
+        raise HTTPException(status_code=400, detail="Notion not configured")
+    try:
+        return await notion_sync.update_page_properties(page_id, body)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Notion API error: {e}")
+
+
+@app.delete("/api/notion/jobs/{page_id}")
+async def notion_delete_job(page_id: str):
+    """Archive (soft-delete) a Notion page."""
+    if not notion_sync.configured:
+        raise HTTPException(status_code=400, detail="Notion not configured")
+    try:
+        await notion_sync.archive_page(page_id)
+        return {"status": "archived", "page_id": page_id}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Notion API error: {e}")
+
+
+@app.post("/api/notion/jobs")
+async def notion_create_job(body: dict):
+    """Create a new Notion page from property name → value pairs.
+
+    Body example: {"Name": "iOS Engineer @ Acme", "Status": "Not started", "Remote": true}
+    """
+    if not notion_sync.configured:
+        raise HTTPException(status_code=400, detail="Notion not configured")
+    try:
+        return await notion_sync.create_page_from_properties(body)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Notion API error: {e}")
+
+
 # ── Dev/Debug: Seed with mock data ──────────────────────────────────────────
 
 

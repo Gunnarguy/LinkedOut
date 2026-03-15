@@ -200,6 +200,48 @@ final class APIClient: @unchecked Sendable {
         return try await get("/api/notion/jobs")
     }
 
+    func fetchNotionSchema() async throws -> NotionSchemaResponse {
+        return try await get("/api/notion/schema")
+    }
+
+    func fetchNotionJob(pageId: String) async throws -> NotionJob {
+        return try await get("/api/notion/jobs/\(pageId)")
+    }
+
+    func updateNotionJob(pageId: String, properties: [String: Any]) async throws -> NotionJob {
+        guard let url = URL(string: "\(baseURL)/api/notion/jobs/\(pageId)") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: properties)
+        let (data, response) = try await performRequest(request)
+        return try decode(data, response: response)
+    }
+
+    func deleteNotionJob(pageId: String) async throws -> [String: String] {
+        guard let url = URL(string: "\(baseURL)/api/notion/jobs/\(pageId)") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        let (data, response) = try await performRequest(request)
+        return try decode(data, response: response)
+    }
+
+    func createNotionJob(properties: [String: Any]) async throws -> NotionJob {
+        guard let url = URL(string: "\(baseURL)/api/notion/jobs") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: properties)
+        let (data, response) = try await performRequest(request)
+        return try decode(data, response: response)
+    }
+
     // MARK: - Generic HTTP
 
     private func get<T: Decodable>(_ path: String) async throws -> T {

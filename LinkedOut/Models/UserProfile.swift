@@ -173,25 +173,25 @@ struct NotionSyncResponse: Codable {
 struct NotionJob: Codable, Identifiable {
     let notionPageId: String
     let notionUrl: String?
-    let name: String?
-    let company: String?
-    let role: String?
-    let status: String?
-    let score: Double?
-    let salary: String?
-    let remote: Bool?
-    let location: String?
+    var name: String?
+    var company: String?
+    var role: String?
+    var status: String?
+    var score: Double?
+    var salary: String?
+    var remote: Bool?
+    var location: String?
     let sourceUrl: String?
     let applyUrl: String?
-    let tags: [String]?
-    let techStack: [String]?
-    let notes: String?
+    var tags: [String]?
+    var techStack: [String]?
+    var notes: String?
     let linkedoutId: String?
     let posted: String?
-    let aiSummary: String?
-    let experienceLevel: String?
-    let jobType: String?
-    let companyStage: String?
+    var aiSummary: String?
+    var experienceLevel: String?
+    var jobType: String?
+    var companyStage: String?
     let lastEdited: String?
 
     var id: String { notionPageId }
@@ -214,4 +214,8 @@ struct NotionJob: Codable, Identifiable {
         case companyStage = "company_stage"
         case lastEdited = "last_edited"
     }
+}
+
+struct NotionSchemaResponse: Codable {
+    let schema: [String: String]
 }
