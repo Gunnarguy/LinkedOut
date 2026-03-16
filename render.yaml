@@ -6,7 +6,12 @@ services:
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    plan: free
+    plan: starter
+    healthCheckPath: /health
+    disk:
+      name: linkedout-data
+      mountPath: /app/data
+      sizeGB: 1
     envVars:
       - key: LINKEDIN_CLIENT_ID
         sync: false

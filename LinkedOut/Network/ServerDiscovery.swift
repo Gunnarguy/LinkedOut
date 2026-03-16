@@ -3,15 +3,15 @@
 //  LinkedOut
 //
 //  Auto-discovers the backend server by probing candidate URLs.
-//  Works on both Simulator (localhost) and physical devices (.local / LAN IP).
+//  Prefers local Docker (faster, persistent data) but falls back to
+//  Render cloud so the app works anywhere without the Mac.
 //
 
 import Foundation
 
 struct ServerDiscovery {
     /// Candidate URLs in priority order.
-    /// Local Docker is preferred (has persistent data). Render is fallback
-    /// when not on home wifi (ephemeral disk — data resets on redeploy).
+    /// Local Docker is preferred (faster). Render cloud is the always-on fallback.
     static let candidates: [String] = [
         "http://Gunnars-Brain-Extension.local:8443",
         "http://10.0.0.175:8443",
@@ -47,6 +47,7 @@ struct ServerDiscovery {
         }
 
         // Current server is down — probe all in parallel
+        print("[DISCOVERY] Current server unreachable, probing all candidates...")
         let results = await withTaskGroup(of: (Int, String, Bool).self) { group in
             for (index, candidate) in candidates.enumerated() {
                 group.addTask {
@@ -68,6 +69,7 @@ struct ServerDiscovery {
 
         cachedURL = best.1
         cachedAt = Date()
+        UserDefaults.standard.set(best.1, forKey: "serverURL")
         print("[DISCOVERY] Found server: \(best.1) (probed \(results.count) OK)")
         return best.1
     }
@@ -80,8 +82,10 @@ struct ServerDiscovery {
     private static func probe(_ base: String) async -> Bool {
         guard let url = URL(string: "\(base)/health") else { return false }
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 2
-        config.timeoutIntervalForResource = 2
+        // Cloud (HTTPS) may need slightly longer than LAN
+        let timeout: TimeInterval = base.hasPrefix("https") ? 5 : 2
+        config.timeoutIntervalForRequest = timeout
+        config.timeoutIntervalForResource = timeout
         let session = URLSession(configuration: config)
         do {
             let (_, response) = try await session.data(from: url)
