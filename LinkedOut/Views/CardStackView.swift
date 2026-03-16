@@ -386,7 +386,7 @@ struct CardStackView: View {
                     .background(.red.opacity(0.1))
                     .clipShape(Circle())
             }
-            .disabled(jobs.isProcessingAction)
+            .disabled(sortedPending.first.map { jobs.processingJobIds.contains($0.id) } ?? true)
 
             // Save
             Button {
@@ -402,7 +402,7 @@ struct CardStackView: View {
                     .background(.blue.opacity(0.1))
                     .clipShape(Circle())
             }
-            .disabled(jobs.isProcessingAction)
+            .disabled(sortedPending.first.map { jobs.processingJobIds.contains($0.id) } ?? true)
 
             // Apply
             Button {
@@ -418,7 +418,7 @@ struct CardStackView: View {
                     .background(.green.opacity(0.1))
                     .clipShape(Circle())
             }
-            .disabled(jobs.isProcessingAction)
+            .disabled(sortedPending.first.map { jobs.processingJobIds.contains($0.id) } ?? true)
         }
         .padding(.bottom, 8)
     }

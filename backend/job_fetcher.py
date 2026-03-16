@@ -230,6 +230,26 @@ async def fetch_hn_whoishiring() -> list[RawJobListing]:
                 # Parse first line as title (usually "Company | Role | Location")
                 clean_text = re.sub(r"<[^>]+>", "\n", text)
                 clean_text = re.sub(r"&[a-z]+;", " ", clean_text)
+                
+                # RECURSIVELY FETCH ALL REPLIES
+                # Important for context like "position filled" or "no US candidates"
+                def gather_replies(node) -> list[str]:
+                    collected = []
+                    for c in node.get("children", []):
+                        ctext = c.get("text") or ""
+                        if ctext:
+                            cc = re.sub(r"<[^>]+>", "\n", ctext)
+                            cc = re.sub(r"&[a-z]+;", " ", cc)
+                            cauthor = c.get("author", "someone")
+                            collected.append(f"Comment from {cauthor}: {cc.strip()}")
+                        collected.extend(gather_replies(c))
+                    return collected
+                
+                replies = gather_replies(child)
+                if replies:
+                    clean_text += "\n\n[USER REPLIES TO THIS POSTING - CRITICAL CONTEXT]\n"
+                    clean_text += "\n\n".join(replies)
+
                 lines = [l.strip() for l in clean_text.split("\n") if l.strip()]
                 if not lines:
                     continue

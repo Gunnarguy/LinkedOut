@@ -107,8 +107,8 @@ class JobsViewModel: ObservableObject {
     @Published var topCardOffset: CGSize = .zero
     @Published var topCardRotation: Double = 0
 
-    /// Prevents double-swipe race conditions
-    @Published var isProcessingAction = false
+    /// Prevents double-swipe race conditions on the same job
+    @Published var processingJobIds: Set<String> = []
 
     // MARK: - Console Telemetry
 
@@ -442,7 +442,7 @@ class JobsViewModel: ObservableObject {
     // MARK: - Swipe Actions
 
     func swipeRight(job: JobPayload) async {
-        guard !isProcessingAction else { return }
+        guard !processingJobIds.contains(job.id) else { return }
         // Show the "apply" prompt instead of silently moving to applied list
         jobToApply = job
     }
@@ -454,53 +454,64 @@ class JobsViewModel: ObservableObject {
     }
 
     func swipeLeft(job: JobPayload) async {
-        guard !isProcessingAction else { return }
+        guard !processingJobIds.contains(job.id) else { return }
         await performAction(job: job, action: .reject)
     }
 
     func swipeUp(job: JobPayload) async {
-        guard !isProcessingAction else { return }
+        guard !processingJobIds.contains(job.id) else { return }
         await performAction(job: job, action: .save)
     }
 
     func performAction(job: JobPayload, action: JobAction) async {
         let jobId = job.id
+        guard !processingJobIds.contains(jobId) else { return }
         print("[VM] performAction — \(action.rawValue) on \(jobId)")
-        isProcessingAction = true
+        processingJobIds.insert(jobId)
 
         // Optimistic removal — prevents card flash-back after swipe animation
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             pendingJobs.removeAll { $0.id == jobId }
-        }
-
-        let request = JobActionRequest(jobId: jobId, action: action)
-        do {
-            let response = try await APIClient.shared.performAction(request)
-            print("[VM] performAction — success=\(response.success) msg=\(response.message)")
-            if response.success {
-                recordAction(job: job, action: action)
-                markURLDecided(job.sourceUrl)
-                switch action {
-                case .apply:
-                    await loadAppliedJobs()
-                case .save:
-                    await loadSavedJobs()
-                case .reject:
-                    break
-                }
-                await loadStats()
-            } else {
-                // Server rejected — restore the job
-                pendingJobs.insert(job, at: 0)
+            
+            // Instantly update target list for snappy offline/local UX
+            switch action {
+            case .apply:
+                appliedJobs.insert(job, at: 0)
+                Self.writeCache("applied", jobs: appliedJobs)
+            case .save:
+                savedJobs.insert(job, at: 0)
+                Self.writeCache("saved", jobs: savedJobs)
+            case .reject:
+                rejectedJobs.insert(job, at: 0)
+                Self.writeCache("rejected", jobs: rejectedJobs)
             }
-        } catch let apiError as APIError where apiError.is404 {
-            purgeStaleJob(id: jobId)
-        } catch {
-            // Network error — restore the job so user can retry
-            pendingJobs.insert(job, at: 0)
-            self.error = error.localizedDescription
+            
+            Self.writeCache("pending", jobs: pendingJobs)
         }
-        isProcessingAction = false
+        
+        // Mark instantly so it never comes back
+        recordAction(job: job, action: action)
+        markURLDecided(job.sourceUrl)
+
+        // Fire-and-forget network sync
+        Task.detached {
+            let request = JobActionRequest(jobId: jobId, action: action)
+            do {
+                let response = try await APIClient.shared.performAction(request)
+                print("[VM] background performAction — success=\(response.success) msg=\(response.message)")
+                if response.success {
+                    await self.loadStats()
+                } else {
+                    print("[VM] background server rejected action on \(jobId)")
+                }
+            } catch {
+                print("[VM] background performAction failed — \(error.localizedDescription) (User relies on local cache)")
+            }
+            
+            await MainActor.run {
+                self.processingJobIds.remove(jobId)
+            }
+        }
     }
 
     /// Remove a job from all local lists when the server says it's gone
@@ -510,6 +521,9 @@ class JobsViewModel: ObservableObject {
             appliedJobs.removeAll { $0.id == id }
             savedJobs.removeAll { $0.id == id }
             if selectedJob?.id == id { selectedJob = nil }
+            Self.writeCache("pending", jobs: pendingJobs)
+            Self.writeCache("applied", jobs: appliedJobs)
+            Self.writeCache("saved", jobs: savedJobs)
         }
     }
 
