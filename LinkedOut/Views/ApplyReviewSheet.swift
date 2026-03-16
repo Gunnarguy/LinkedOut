@@ -14,7 +14,7 @@ struct ApplyReviewSheet: View {
     let onCancel: () -> Void
 
     @State private var copied = false
-    @State private var safariURL: URL? = nil
+    @State private var safariWrapper: URLWrapper? = nil
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -130,8 +130,8 @@ struct ApplyReviewSheet: View {
                                 if !textToCopy.isEmpty {
                                     UIPasteboard.general.string = textToCopy
                                 }
-                                
-                                safariURL = url
+
+                                safariWrapper = URLWrapper(url: url)
                                 onApply() // Tracks the swipe in the LinkedOut offline cache immediately
                             } label: {
                                 HStack {
@@ -181,10 +181,7 @@ struct ApplyReviewSheet: View {
                     }
                 }
             }
-            .fullScreenCover(item: Binding<URLWrapper>(
-                get: { safariURL.map { URLWrapper(url: $0) } },
-                set: { safariURL = $0?.url }
-            )) { wrapper in
+            .fullScreenCover(item: $safariWrapper) { wrapper in
                 SafariView(url: wrapper.url)
                     .ignoresSafeArea()
             }

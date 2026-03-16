@@ -509,7 +509,7 @@ class JobsViewModel: ObservableObject {
             }
 
             await MainActor.run {
-                self.processingJobIds.remove(jobId)
+                _ = self.processingJobIds.remove(jobId)
             }
         }
     }
