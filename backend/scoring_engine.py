@@ -86,8 +86,9 @@ async def _call_llm(
 ) -> str:
     """Route LLM call with automatic fallback chain.
 
-    Chain: Gemini Pro/Flash → Flash (if Pro rate-limited) → OpenAI GPT-5.4
-    Retries on transient errors (rate limits, timeouts, server disconnects).
+    Chain: Gemini Pro → Flash (on timeout/rate-limit) → OpenAI GPT-5.4
+    On Pro timeout: skip retries, immediately try Flash (Pro is unresponsive).
+    On rate limit: retry with backoff, then Flash → OpenAI.
     """
     provider = settings.llm_provider.lower()
     max_retries = 3
@@ -107,14 +108,34 @@ async def _call_llm(
             error_str = str(e)
             error_type = type(e).__name__
             is_rate_limit = "429" in error_str or "RESOURCE_EXHAUSTED" in error_str
+            is_timeout = isinstance(e, asyncio.TimeoutError) or error_str == ""
             is_transient = (
                 is_rate_limit
-                or isinstance(e, asyncio.TimeoutError)
+                or is_timeout
                 or "disconnected" in error_str.lower()
                 or "server" in error_str.lower()
                 or "connection" in error_str.lower()
-                or error_str == ""  # empty error = timeout
             )
+
+            # On Pro timeout: don't waste retries, immediately fall through to Flash
+            if is_timeout and provider == "gemini" and not use_flash:
+                logger.warning(
+                    f"[LLM] Gemini Pro timed out ({timeout}s) → trying Flash..."
+                )
+                try:
+                    return await _call_gemini(
+                        system, user_msg, use_flash=True, timeout=timeout
+                    )
+                except Exception as flash_err:
+                    logger.warning(f"Flash also failed: {flash_err}")
+                if settings.openai_api_key:
+                    logger.warning("Flash failed → falling back to OpenAI GPT-5.4")
+                    try:
+                        return await _call_openai(system, user_msg)
+                    except Exception as oai_err:
+                        logger.error(f"OpenAI fallback also failed: {oai_err}")
+                        raise oai_err from e
+                raise
 
             if is_transient and attempt < max_retries - 1:
                 wait_time = 3 * (attempt + 1)
@@ -125,8 +146,8 @@ async def _call_llm(
                 await asyncio.sleep(wait_time)
                 continue
 
-            if is_rate_limit:
-                # Exhausted retries — walk the fallback chain
+            # Exhausted retries on any transient error — walk the fallback chain
+            if is_transient:
                 if provider == "gemini" and not use_flash:
                     logger.warning("Gemini Pro exhausted → trying Flash...")
                     try:
@@ -136,7 +157,6 @@ async def _call_llm(
                     except Exception as flash_err:
                         logger.warning(f"Flash also failed: {flash_err}")
 
-                # Final fallback: OpenAI GPT-5.4
                 if provider != "openai" and settings.openai_api_key:
                     logger.warning("Gemini exhausted → falling back to OpenAI GPT-5.4")
                     try:
