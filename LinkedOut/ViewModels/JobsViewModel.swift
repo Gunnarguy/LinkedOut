@@ -39,11 +39,44 @@ class JobsViewModel: ObservableObject {
         return Set(decoded.map { $0.lowercased() })
     }
 
-    /// Pending jobs with blocked companies filtered out
+    /// Pending jobs with blocked companies and already-decided URLs filtered out
     var visiblePendingJobs: [JobPayload] {
         let blocked = blockedCompanies
-        if blocked.isEmpty { return pendingJobs }
-        return pendingJobs.filter { !blocked.contains($0.companyName.lowercased()) }
+        let decided = decidedURLs
+        return pendingJobs.filter { job in
+            if !blocked.isEmpty && blocked.contains(job.companyName.lowercased()) { return false }
+            if decided.contains(job.sourceUrl) { return false }
+            return true
+        }
+    }
+
+    // MARK: - Local Decided-URLs Tracker
+    // Tracks URLs the user has acted on locally, so jobs never resurface
+    // even when switching backends (local Docker ↔ Render).
+
+    private static let decidedURLsKey = "decidedJobURLs"
+
+    /// URLs the user has already applied/rejected/saved — persisted in UserDefaults
+    private var decidedURLs: Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: Self.decidedURLsKey) ?? [])
+    }
+
+    /// Record a URL as decided so it never shows up again
+    private func markURLDecided(_ url: String) {
+        var urls = UserDefaults.standard.stringArray(forKey: Self.decidedURLsKey) ?? []
+        if !urls.contains(url) {
+            urls.append(url)
+            // Cap at 5000 to avoid UserDefaults bloat
+            if urls.count > 5000 { urls.removeFirst(urls.count - 5000) }
+            UserDefaults.standard.set(urls, forKey: Self.decidedURLsKey)
+        }
+    }
+
+    /// Remove a URL from the decided set (used by undo)
+    private func unmarkURLDecided(_ url: String) {
+        var urls = UserDefaults.standard.stringArray(forKey: Self.decidedURLsKey) ?? []
+        urls.removeAll { $0 == url }
+        UserDefaults.standard.set(urls, forKey: Self.decidedURLsKey)
     }
 
     /// The job the user wants to apply to after swiping right
@@ -309,6 +342,7 @@ class JobsViewModel: ObservableObject {
             print("[VM] performAction — success=\(response.success) msg=\(response.message)")
             if response.success {
                 recordAction(job: job, action: action)
+                markURLDecided(job.sourceUrl)
                 switch action {
                 case .apply:
                     await loadAppliedJobs()
@@ -358,6 +392,7 @@ class JobsViewModel: ObservableObject {
         let id = UUID()
         let jobId: String
         let jobTitle: String
+        let sourceUrl: String
         let action: JobAction
         let timestamp: Date
     }
@@ -372,6 +407,7 @@ class JobsViewModel: ObservableObject {
         recentActions.append(RecentAction(
             jobId: job.id,
             jobTitle: job.roleTitle,
+            sourceUrl: job.sourceUrl,
             action: action,
             timestamp: Date()
         ))
@@ -390,6 +426,7 @@ class JobsViewModel: ObservableObject {
             let result = try await APIClient.shared.undoLastAction()
             if result.success {
                 let undone = recentActions.removeLast()
+                unmarkURLDecided(undone.sourceUrl)
                 info = "Undid \(undone.action.rawValue) on \(undone.jobTitle)"
                 await refreshAll()
             } else {
