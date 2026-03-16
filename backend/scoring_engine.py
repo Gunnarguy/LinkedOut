@@ -265,13 +265,15 @@ ACTUALLY SAYS, or am I inferring enthusiasm that isn't there?"
 
 **Experience Reality**:
 - "1-3 years" or "any": no penalty
-- "3-5 years professional": -0.05 (your apps MAY count — FLAG it)
+- "3-5 years professional": -0.05 (your published apps MAY count — FLAG it)
+- "5+ years" strictly enterprise/corporate SWE: HARD REJECT (passed_filter=false)
 - "5+ years" with flexibility: {experience_penalty} (FLAG)
 - "CS degree required" with NO escape hatch: HARD REJECT (passed_filter=false)
 - "CS degree preferred": -0.03 (FLAG — but don't reject)
 - "CS degree or equivalent experience": no penalty (this is fine)
 - "No degree required" / "we don't care about degrees": +0.08 (THIS IS WHAT YOU WANT)
 - Known elite/selective (FAANG, Jane Street): {credential_penalty}
+- Strict corporate environment/agile ("enterprise scale", "large teams"): -0.10
 
 **Non-Traditional / Portfolio-First Signals** (BOOST these — they're gold):
 - "No CS degree required" / "We value skills over credentials": +0.10
@@ -424,11 +426,7 @@ any reasonable chance of being a good fit, and only reject clear mismatches.
 Target a ~60% pass rate — let borderline jobs through for full scoring.
 
 ## Your snapshot
-AI-native builder. You orchestrate AI agents to generate all code — you do NOT
-hand-write it. You do this because you can, it's fun, and you want to get paid for it.
-Shipped 6 projects (4 on App Store). 758 commits. Swift/iOS, Python, RAG, vector DBs,
-LLM orchestration, MCP servers, Docker. B.S. Kinesiology — NO CS degree, no
-professional SWE experience. Healthcare ops day job (Stryker/VA Palo Alto).
+{professional_profile}
 Home: {preferred_locations}. Wants 100% remote.
 Max seniority comfort level: {max_seniority_level}
 
@@ -440,6 +438,7 @@ Max seniority comfort level: {max_seniority_level}
 - **Requires CS/engineering degree with NO "or equivalent" / "or equivalent experience"**
   This is the #1 dealbreaker. If it says "requires CS degree" with no escape hatch, REJECT.
 - Requires 7+ years professional SWE experience with no flexibility
+- Explicitly demands "enterprise scale", "corporate experience", or "strict agile ceremonies" with 0 signal they welcome indie/hobbyist builders.
 - Hard requires a specific non-matching stack (Java, Go, C++, Rust) with NO signal
   they accept portfolio or fast learners
 - Pure non-tech (sales, marketing, HR, legal, finance, design-only)
@@ -480,7 +479,8 @@ async def triage_job(raw: RawJobListing, prefs: UserPreferences | None = None) -
         if prefs.preferred_locations
         else "Kalamazoo, Michigan"
     )
-    triage_sys = TRIAGE_PROMPT.replace("{preferred_locations}", locations_formatted)
+    triage_sys = TRIAGE_PROMPT.replace("{professional_profile}", prefs.professional_profile)
+    triage_sys = triage_sys.replace("{preferred_locations}", locations_formatted)
     triage_sys = triage_sys.replace(
         "{max_seniority_level}", prefs.max_seniority_level or "Senior"
     )
