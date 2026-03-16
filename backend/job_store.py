@@ -94,8 +94,14 @@ class JobStore:
                 self._url_index.add(job.source_url)
 
     def _dedup_on_load(self) -> None:
-        """Remove duplicate jobs (same URL) on startup. Keeps the first seen copy."""
+        """Remove duplicate jobs (same URL) within and across buckets on startup.
+
+        Priority: applied > saved > pending > rejected.
+        If the same URL exists in saved AND pending, the pending copy is removed.
+        """
         removed = 0
+
+        # Phase 1: Intra-bucket dedup (same URL twice in one bucket)
         for bucket_name, bucket in [
             ("pending", self._pending),
             ("applied", self._applied),
@@ -112,8 +118,39 @@ class JobStore:
             for jid in to_remove:
                 bucket.pop(jid)
                 removed += 1
+            if to_remove:
+                logger.info(
+                    f"[DEDUP] Removed {len(to_remove)} intra-bucket dupes from {bucket_name}"
+                )
+
+        # Phase 2: Cross-bucket dedup — higher-priority bucket wins
+        # Priority order: applied > saved > pending > rejected
+        # A URL in "saved" should NOT also be in "pending" or "rejected"
+        global_seen: dict[str, str] = {}  # url → bucket_name that owns it
+        priority_order = [
+            ("applied", self._applied),
+            ("saved", self._saved),
+            ("pending", self._pending),
+            ("rejected", self._rejected),
+        ]
+        for bucket_name, bucket in priority_order:
+            to_remove: list[str] = []
+            for jid, job in bucket.items():
+                if job.source_url in global_seen:
+                    owner = global_seen[job.source_url]
+                    logger.info(
+                        f"[DEDUP] Cross-bucket: removing '{job.role_title}' from "
+                        f"{bucket_name} (already in {owner})"
+                    )
+                    to_remove.append(jid)
+                else:
+                    global_seen[job.source_url] = bucket_name
+            for jid in to_remove:
+                bucket.pop(jid)
+                removed += 1
+
         if removed:
-            logger.info(f"[DEDUP] Removed {removed} duplicate jobs on startup")
+            logger.info(f"[DEDUP] Removed {removed} total duplicate jobs on startup")
             self._save()
         self._rebuild_url_index()
         # Sync seen_urls with what's actually in the store
@@ -181,10 +218,21 @@ class JobStore:
         return url in self._url_index
 
     def add_pending(self, job: JobPayload) -> None:
-        # Refuse duplicates — same URL in any bucket
+        # Refuse duplicates — same URL in any bucket (belt + suspenders)
         if self.has_url(job.source_url):
-            logger.info(f"[DEDUP] Skipping duplicate URL: {job.source_url[:80]}")
+            logger.info(
+                f"[DEDUP] Skipping duplicate URL (index): {job.source_url[:80]}"
+            )
             return
+        # Fallback: linear scan in case _url_index drifted
+        for bucket in (self._pending, self._applied, self._saved, self._rejected):
+            for existing in bucket.values():
+                if existing.source_url == job.source_url:
+                    logger.warning(
+                        f"[DEDUP] URL index miss! URL exists in bucket but not index: {job.source_url[:80]}"
+                    )
+                    self._url_index.add(job.source_url)
+                    return
         self._pending[job.id] = job
         self._seen_urls.add(job.source_url)
         self._url_index.add(job.source_url)
