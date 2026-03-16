@@ -43,7 +43,7 @@ def _get_gemini_client():
 
 
 async def _call_gemini(
-    system: str, user_msg: str, use_flash: bool = False, timeout: int = 60
+    system: str, user_msg: str, use_flash: bool = False, timeout: int = 120
 ) -> str:
     """Call Google Gemini (Pro or Flash). Raises on failure."""
     client = _get_gemini_client()
@@ -82,7 +82,7 @@ async def _call_openai(system: str, user_msg: str) -> str:
 
 
 async def _call_llm(
-    system: str, user_msg: str, use_flash: bool = False, timeout: int = 60
+    system: str, user_msg: str, use_flash: bool = False, timeout: int = 120
 ) -> str:
     """Route LLM call with automatic fallback chain.
 
@@ -968,34 +968,55 @@ async def triage_and_score(
 
     if llm_works:
         logger.info("LLM scoring working — using LLM for remaining listings")
+        # Score remaining survivors in parallel batches of 3
+        sem = asyncio.Semaphore(3)
         consecutive_fallbacks = 0
-        for raw in survivors[1:]:
-            result = await score_job(raw, prefs)
-            # Detect if this job fell back to local scorer
-            is_local = (
-                result.job
-                and "local keyword" in (result.job.ai_pitch_summary or "").lower()
-            )
-            if is_local:
-                consecutive_fallbacks += 1
-            else:
-                consecutive_fallbacks = 0
+        fell_back_to_local = False
 
-            results.append(result)
+        async def _score_one(raw_listing):
+            async with sem:
+                return await score_job(raw_listing, prefs)
 
-            # If LLM failed 2+ times in a row, give up and use local for the rest
-            if consecutive_fallbacks >= 2:
-                remaining = survivors[len(results):]
-                if remaining:
-                    logger.warning(
-                        f"LLM failed {consecutive_fallbacks}x in a row — "
-                        f"switching to local scorer for remaining {len(remaining)} listings"
-                    )
-                    for r in remaining:
-                        results.append(score_job_locally(r, prefs))
+        score_batch_size = 3
+        remaining_survivors = survivors[1:]
+        for i in range(0, len(remaining_survivors), score_batch_size):
+            if fell_back_to_local:
                 break
+            batch = remaining_survivors[i : i + score_batch_size]
+            batch_results = await asyncio.gather(
+                *(_score_one(raw) for raw in batch),
+                return_exceptions=True,
+            )
+            for raw, result in zip(batch, batch_results):
+                if isinstance(result, BaseException):
+                    logger.warning(f"[SCORE] Exception scoring {raw.title}: {result}")
+                    result = score_job_locally(raw, prefs)
 
-            await asyncio.sleep(0.5)
+                is_local = (
+                    result.job
+                    and "local keyword" in (result.job.ai_pitch_summary or "").lower()
+                )
+                if is_local:
+                    consecutive_fallbacks += 1
+                else:
+                    consecutive_fallbacks = 0
+
+                results.append(result)
+
+                if consecutive_fallbacks >= 3:
+                    rest = remaining_survivors[i + score_batch_size :]
+                    if rest:
+                        logger.warning(
+                            f"LLM failed {consecutive_fallbacks}x in a row — "
+                            f"switching to local scorer for remaining {len(rest)} listings"
+                        )
+                        for r in rest:
+                            results.append(score_job_locally(r, prefs))
+                    fell_back_to_local = True
+                    break
+
+            if not fell_back_to_local:
+                await asyncio.sleep(0.3)
     else:
         logger.warning("LLM scoring failed — using local keyword scorer for all")
         for raw in survivors[1:]:
