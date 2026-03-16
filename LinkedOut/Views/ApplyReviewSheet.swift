@@ -14,6 +14,7 @@ struct ApplyReviewSheet: View {
     let onCancel: () -> Void
 
     @State private var copied = false
+    @State private var safariURL: URL? = nil
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -124,12 +125,18 @@ struct ApplyReviewSheet: View {
                         let applyURL = job.applyUrl ?? job.sourceUrl
                         if let url = URL(string: applyURL) {
                             Button {
-                                UIApplication.shared.open(url)
-                                onApply()
+                                // Auto-copy pitch summary/cover letter to clipboard first
+                                let textToCopy = job.draftedCoverLetter.isEmpty ? job.aiPitchSummary : job.draftedCoverLetter
+                                if !textToCopy.isEmpty {
+                                    UIPasteboard.general.string = textToCopy
+                                }
+                                
+                                safariURL = url
+                                onApply() // Tracks the swipe in the LinkedOut offline cache immediately
                             } label: {
                                 HStack {
                                     Image(systemName: "paperplane.fill")
-                                    Text("Open Application")
+                                    Text("Open Application & Auto-Copy Pitch")
                                 }
                                 .font(.headline)
                                 .frame(maxWidth: .infinity)
@@ -174,6 +181,18 @@ struct ApplyReviewSheet: View {
                     }
                 }
             }
+            .fullScreenCover(item: Binding<URLWrapper>(
+                get: { safariURL.map { URLWrapper(url: $0) } },
+                set: { safariURL = $0?.url }
+            )) { wrapper in
+                SafariView(url: wrapper.url)
+                    .ignoresSafeArea()
+            }
         }
     }
+}
+
+struct URLWrapper: Identifiable {
+    let id = UUID()
+    let url: URL
 }

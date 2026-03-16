@@ -472,7 +472,7 @@ class JobsViewModel: ObservableObject {
         // Optimistic removal — prevents card flash-back after swipe animation
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             pendingJobs.removeAll { $0.id == jobId }
-            
+
             // Instantly update target list for snappy offline/local UX
             switch action {
             case .apply:
@@ -485,10 +485,10 @@ class JobsViewModel: ObservableObject {
                 rejectedJobs.insert(job, at: 0)
                 Self.writeCache("rejected", jobs: rejectedJobs)
             }
-            
+
             Self.writeCache("pending", jobs: pendingJobs)
         }
-        
+
         // Mark instantly so it never comes back
         recordAction(job: job, action: action)
         markURLDecided(job.sourceUrl)
@@ -507,7 +507,7 @@ class JobsViewModel: ObservableObject {
             } catch {
                 print("[VM] background performAction failed — \(error.localizedDescription) (User relies on local cache)")
             }
-            
+
             await MainActor.run {
                 self.processingJobIds.remove(jobId)
             }

@@ -534,7 +534,8 @@ class NotionSync:
             "pending": job_store.get_pending(limit=9999),
             "applied": job_store.get_applied(),
             "saved": job_store.get_saved(),
-            "rejected": job_store.get_rejected(),
+            # DO NOT push 'rejected' jobs to keep the Notion board clean
+            # "rejected": job_store.get_rejected(),
         }
 
         for bucket_name, jobs in buckets.items():
