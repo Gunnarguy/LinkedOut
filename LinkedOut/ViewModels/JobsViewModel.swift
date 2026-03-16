@@ -98,6 +98,87 @@ class JobsViewModel: ObservableObject {
     /// Prevents double-swipe race conditions
     @Published var isProcessingAction = false
 
+    // MARK: - Console Telemetry
+
+    /// Latest telemetry snapshot (also used by TelemetryView)
+    @Published var telemetry: TelemetryResponse?
+
+    private var telemetryTask: Task<Void, Never>?
+
+    /// Start polling backend telemetry and printing to Xcode console.
+    /// Called once from app startup; safe to call multiple times.
+    func startTelemetryLogger() {
+        guard telemetryTask == nil else { return }
+        print("[TELEM] 🟢 Starting background telemetry logger (10s interval)")
+        telemetryTask = Task {
+            while !Task.isCancelled {
+                await fetchAndLogTelemetry()
+                try? await Task.sleep(nanoseconds: 10_000_000_000) // 10s
+            }
+        }
+    }
+
+    func stopTelemetryLogger() {
+        telemetryTask?.cancel()
+        telemetryTask = nil
+        print("[TELEM] 🔴 Telemetry logger stopped")
+    }
+
+    /// Single fetch + console print. Can be called on-demand too.
+    func fetchAndLogTelemetry() async {
+        do {
+            let t = try await APIClient.shared.fetchTelemetry(logLines: 0)
+            self.telemetry = t
+            printTelemetry(t)
+        } catch {
+            print("[TELEM] ❌ Failed to fetch: \(error.localizedDescription)")
+        }
+    }
+
+    private func printTelemetry(_ t: TelemetryResponse) {
+        let s = t.server
+        let i = t.ingest
+        let p = i.progress
+        let r = t.rescore
+        let st = t.store
+        let l = t.llm
+
+        var lines: [String] = []
+        lines.append("┌─── TELEMETRY ───────────────────────────────────")
+        lines.append("│ 🖥  \(s.hostname):\(s.port)  up \(s.uptimeHuman)  \(s.render ? "☁️ Render" : "🐳 Docker")  debug=\(s.debug)")
+        lines.append("│ 📦 Store: \(st.pending)P / \(st.applied)A / \(st.saved)S / \(st.rejected)R  seen=\(st.seenUrls ?? 0)")
+        lines.append("│ 🤖 LLM: \(l.provider)  gemini=\(l.hasGeminiKey ? "✅" : "❌")  openai=\(l.hasOpenaiKey ? "✅" : "❌")")
+
+        // Ingest
+        let lockIcon = i.lockHeld ? "🔒" : "🔓"
+        if p.phase == "idle" || p.phase == "complete" {
+            let dur = p.lastDurationS.map { String(format: "%.1fs", $0) } ?? "-"
+            lines.append("│ ⚙️ Ingest: \(p.phase)  \(lockIcon)  cycles=\(p.cyclesCompleted)  last=\(dur)")
+        } else {
+            lines.append("│ ⚙️ Ingest: \(p.phase.uppercased())  \(lockIcon)  batch \(p.batch)/\(p.totalBatches)")
+            lines.append("│    fetched=\(p.fetched) new=\(p.newAfterDedup) scored=\(p.scored) queued=\(p.queued) rejected=\(p.rejected) low=\(p.lowScore) err=\(p.errors)")
+        }
+
+        // Rescore
+        if r.running {
+            lines.append("│ 🔄 Rescore: RUNNING \(r.done)/\(r.total)  errors=\(r.errors)")
+        } else if r.total > 0 {
+            lines.append("│ 🔄 Rescore: done \(r.done)/\(r.total)  errors=\(r.errors)")
+        }
+
+        // Notion
+        let n = t.notion
+        if n.configured {
+            var nParts = ["configured"]
+            if n.syncTaskAlive { nParts.append("SYNCING") }
+            if n.scoreTaskAlive { nParts.append("SCORING") }
+            lines.append("│ 📝 Notion: \(nParts.joined(separator: " | "))")
+        }
+
+        lines.append("└─────────────────────────────────────────────────")
+        print(lines.joined(separator: "\n"))
+    }
+
     // MARK: - Disk Cache
 
     private static let cacheDir: URL = {
@@ -115,8 +196,12 @@ class JobsViewModel: ObservableObject {
         rejectedJobs = Self.readCache("rejected") ?? []
         let total = pendingJobs.count + savedJobs.count + appliedJobs.count + rejectedJobs.count
         if total > 0 {
-            print("[VM] loadCachedJobs — restored \(pendingJobs.count) pending, \(savedJobs.count) saved, \(appliedJobs.count) applied, \(rejectedJobs.count) rejected from cache")
+            print("[BOOT] 💾 Restored from cache: \(pendingJobs.count)P / \(savedJobs.count)S / \(appliedJobs.count)A / \(rejectedJobs.count)R")
+        } else {
+            print("[BOOT] 💾 No cached jobs found")
         }
+        print("[BOOT] 📋 Decided URLs tracked: \(decidedURLs.count)")
+        print("[BOOT] 🚫 Blocked companies: \(blockedCompanies.isEmpty ? "none" : blockedCompanies.joined(separator: ", "))")
     }
 
     private static func readCache(_ name: String) -> [JobPayload]? {
@@ -249,6 +334,12 @@ class JobsViewModel: ObservableObject {
 
                 let status = try await APIClient.shared.fetchIngestStatus()
                 let stillActive = status.manualRunning || (status.cycleActive ?? false)
+
+                // Pull live telemetry during ingest for console visibility
+                if pollCount % 3 == 0 { // Every ~6s
+                    await fetchAndLogTelemetry()
+                }
+
                 if !stillActive {
                     // Ingest finished
                     let ingested = status.lastIngestResult ?? 0
@@ -272,8 +363,19 @@ class JobsViewModel: ObservableObject {
                     return
                 }
 
-                // Update progress message
-                if pollCount % 5 == 0 {
+                // Update progress message with live telemetry data
+                if let t = telemetry {
+                    let p = t.ingest.progress
+                    if p.phase == "scoring" && p.totalBatches > 0 {
+                        ingestProgress = "Scoring batch \(p.batch)/\(p.totalBatches) — \(p.queued) queued so far"
+                    } else if p.phase == "fetching" {
+                        ingestProgress = "Fetching from job boards…"
+                    } else if p.phase == "deduping" {
+                        ingestProgress = "Deduplicating \(p.fetched) listings…"
+                    } else if pollCount % 5 == 0 {
+                        ingestProgress = "Still scoring... (\(pollCount * 2)s)"
+                    }
+                } else if pollCount % 5 == 0 {
                     ingestProgress = "Still scoring... (\(pollCount * 2)s)"
                 }
             }

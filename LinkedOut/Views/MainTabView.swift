@@ -47,6 +47,8 @@ struct MainTabView: View {
             if let found = await ServerDiscovery.discover() {
                 serverURL = found
             }
+            // Start background telemetry logging to Xcode console
+            jobs.startTelemetryLogger()
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
