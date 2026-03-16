@@ -364,16 +364,28 @@ async def get_rejected_jobs():
 
 
 @app.post("/api/jobs/import")
-async def import_jobs(jobs: list[JobPayload]):
-    """Bulk-import pre-scored jobs (e.g. from another backend instance)."""
+async def import_jobs(jobs: list[JobPayload], force: bool = Query(False)):
+    """Bulk-import pre-scored jobs. Use force=true to overwrite existing."""
     added = 0
+    updated = 0
     for job in jobs:
-        if not store.has_url(job.source_url):
+        if store.has_url(job.source_url):
+            if force:
+                # Overwrite: find and replace in pending bucket
+                for jid, existing in list(store._pending.items()):
+                    if existing.source_url == job.source_url:
+                        store._pending[jid] = job.model_copy(update={"id": jid})
+                        updated += 1
+                        break
+        else:
             store.add_pending(job)
             added += 1
+    if updated:
+        store._save()
     return {
         "imported": added,
-        "skipped": len(jobs) - added,
+        "updated": updated,
+        "skipped": len(jobs) - added - updated,
         "total_pending": len(store._pending),
     }
 
