@@ -363,6 +363,21 @@ async def get_rejected_jobs():
     return store.get_rejected()
 
 
+@app.post("/api/jobs/import")
+async def import_jobs(jobs: list[JobPayload]):
+    """Bulk-import pre-scored jobs (e.g. from another backend instance)."""
+    added = 0
+    for job in jobs:
+        if not store.has_url(job.source_url):
+            store.add_pending(job)
+            added += 1
+    return {
+        "imported": added,
+        "skipped": len(jobs) - added,
+        "total_pending": len(store._pending),
+    }
+
+
 @app.get("/api/jobs/stats")
 async def get_stats():
     """Pipeline statistics."""
