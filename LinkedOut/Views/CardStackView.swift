@@ -12,6 +12,7 @@ struct CardStackView: View {
     @EnvironmentObject var jobs: JobsViewModel
     @State private var sortByNewest = false
     @State private var showListView = false
+    @AppStorage("lastViewedTimestamp") private var lastViewedTimestamp: Double = 0
 
     /// Sorted view of pending jobs — either by score (default) or newest first
     private var sortedPending: [JobPayload] {
@@ -21,6 +22,16 @@ struct CardStackView: View {
             }
         }
         return jobs.pendingJobs // already sorted by score from backend
+    }
+
+    /// The cutoff date: jobs added after this are "new"
+    private var lastViewedDate: Date {
+        lastViewedTimestamp > 0 ? Date(timeIntervalSince1970: lastViewedTimestamp) : .distantPast
+    }
+
+    private func isJobNew(_ job: JobPayload) -> Bool {
+        guard let posted = job.postedAt else { return false }
+        return posted > lastViewedDate
     }
 
     var body: some View {
@@ -92,6 +103,8 @@ struct CardStackView: View {
                 jobs.loadCachedJobs()   // instant — show cached cards while network loads
                 await jobs.loadPendingJobs()
                 await jobs.autoIngestIfNeeded()
+                // Mark current time so next session knows what's "new"
+                lastViewedTimestamp = Date().timeIntervalSince1970
             }
             .task { await jobs.loadStats() }
             .refreshable { await jobs.refreshAll() }
@@ -154,7 +167,7 @@ struct CardStackView: View {
                     Button {
                         jobs.selectedJob = job
                     } label: {
-                        JobListRow(job: job)
+                        JobListRow(job: job, isNew: isJobNew(job))
                     }
                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                     .swipeActions(edge: .trailing) {
@@ -201,7 +214,12 @@ struct CardStackView: View {
                 ForEach(Array(sortedPending.prefix(3).enumerated().reversed()), id: \.element.id) { index, job in
                     let isTop = index == 0
 
-                    JobCardView(job: job, isTopCard: isTop) {
+                    JobCardView(
+                        job: job,
+                        isTopCard: isTop,
+                        isNew: isJobNew(job),
+                        queuePosition: isTop ? "\(index + 1) of \(sortedPending.count)" : nil
+                    ) {
                         jobs.selectedJob = job
                     }
                     .padding(.horizontal, 16)

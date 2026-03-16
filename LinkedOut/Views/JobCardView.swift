@@ -10,6 +10,8 @@ import SwiftUI
 struct JobCardView: View {
     let job: JobPayload
     var isTopCard: Bool = false
+    var isNew: Bool = false
+    var queuePosition: String? = nil
     var onTap: (() -> Void)?
 
     var body: some View {
@@ -17,9 +19,20 @@ struct JobCardView: View {
             // Header
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(job.roleTitle)
-                        .font(.title2.bold())
-                        .lineLimit(2)
+                    HStack(spacing: 6) {
+                        Text(job.roleTitle)
+                            .font(.title2.bold())
+                            .lineLimit(2)
+                        if isNew {
+                            Text("NEW")
+                                .font(.caption2.weight(.heavy))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(.green)
+                                .foregroundStyle(.white)
+                                .clipShape(Capsule())
+                        }
+                    }
 
                     Text(job.companyName)
                         .font(.title3)
@@ -28,7 +41,14 @@ struct JobCardView: View {
 
                 Spacer()
 
-                ScoreRing(score: job.builderScore, size: 56, lineWidth: 5)
+                VStack(alignment: .trailing, spacing: 4) {
+                    ScoreRing(score: job.builderScore, size: 56, lineWidth: 5)
+                    if let pos = queuePosition {
+                        Text(pos)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             .padding(20)
 
@@ -65,51 +85,9 @@ struct JobCardView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 6)
 
-            // Fit reasons — WHY this job matches Gunnar
-            if let reasons = job.fitReasons, !reasons.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(reasons.prefix(3), id: \.self) { reason in
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrow.right.circle.fill")
-                                    .font(.system(size: 8))
-                                Text(reason)
-                            }
-                            .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.green.opacity(0.12))
-                            .foregroundStyle(.green)
-                            .clipShape(Capsule())
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                }
-                .padding(.bottom, 4)
-            }
-
-            // Dealbreaker warnings — honest heads-up about potential rejection risks
-            if let warnings = job.dealbreakerWarnings, !warnings.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(warnings.prefix(2), id: \.self) { warning in
-                        HStack(alignment: .top, spacing: 4) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.system(size: 8))
-                                .padding(.top, 3)
-                            Text(warning)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.red.opacity(0.8))
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 4)
-            }
-
             Divider()
 
-            // Meta row
+            // Meta row — salary, location, freshness
             HStack(spacing: 16) {
                 Label(job.salaryDisplay, systemImage: "dollarsign.circle")
                     .font(.subheadline.weight(.medium))
@@ -125,7 +103,6 @@ struct JobCardView: View {
 
                 Spacer()
 
-                // Freshness indicator
                 HStack(spacing: 3) {
                     Circle()
                         .fill(freshnessColor)
@@ -140,130 +117,214 @@ struct JobCardView: View {
 
             Divider()
 
-            // Company one-liner + Job snapshot
-            VStack(alignment: .leading, spacing: 8) {
-                if let oneliner = job.companyOneliner, !oneliner.isEmpty {
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "building.2")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 2)
-                        Text(oneliner)
-                            .font(.subheadline)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                } else if let desc = job.companyDescription, !desc.isEmpty {
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "building.2")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 2)
-                        Text(desc)
-                            .font(.subheadline)
-                            .lineLimit(2)
-                    }
-                }
+            // ── JOB CONTENT (the actual posting) ──
 
-                if let snapshot = job.jobSnapshot, !snapshot.isEmpty {
-                    Text(snapshot)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            .padding(.bottom, 4)
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 12) {
 
-            // They Want — what the listing actually asks for
-            if let wants = job.theyWant, !wants.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("They Want")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
-
-                    ForEach(wants.prefix(4), id: \.self) { item in
-                        HStack(alignment: .top, spacing: 6) {
-                            Text("·")
-                                .font(.subheadline.weight(.bold))
+                    // Job description — the actual posting text
+                    if let desc = job.description, !desc.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("About This Role")
+                                .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
-                            Text(item)
-                                .font(.caption)
+                                .textCase(.uppercase)
+                            Text(cleanHTML(desc))
+                                .font(.subheadline)
+                                .lineLimit(4)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
+                        .padding(.horizontal, 20)
                     }
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 4)
-            }
 
-            // AI Pitch
-            VStack(alignment: .leading, spacing: 8) {
-                Text("AI Assessment")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
+                    // Company one-liner
+                    if let oneliner = job.companyOneliner, !oneliner.isEmpty {
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "building.2")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .padding(.top, 2)
+                            Text(oneliner)
+                                .font(.subheadline)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.horizontal, 20)
+                    } else if let compDesc = job.companyDescription, !compDesc.isEmpty {
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "building.2")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .padding(.top, 2)
+                            Text(compDesc)
+                                .font(.subheadline)
+                                .lineLimit(2)
+                        }
+                        .padding(.horizontal, 20)
+                    }
 
-                ForEach(job.pitchBullets, id: \.self) { bullet in
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "sparkle")
-                            .font(.caption)
-                            .foregroundStyle(.blue)
-                            .padding(.top, 2)
+                    // What they're looking for — requirements
+                    if let reqs = job.requirements, !reqs.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("What They're Looking For")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
 
-                        Text(bullet.replacingOccurrences(of: "• ", with: ""))
+                            ForEach(reqs.prefix(5), id: \.self) { item in
+                                HStack(alignment: .top, spacing: 6) {
+                                    Text("·")
+                                        .font(.subheadline.weight(.bold))
+                                        .foregroundStyle(.secondary)
+                                    Text(item)
+                                        .font(.caption)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                    } else if let wants = job.theyWant, !wants.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("What They're Looking For")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+
+                            ForEach(wants.prefix(5), id: \.self) { item in
+                                HStack(alignment: .top, spacing: 6) {
+                                    Text("·")
+                                        .font(.subheadline.weight(.bold))
+                                        .foregroundStyle(.secondary)
+                                    Text(item)
+                                        .font(.caption)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                    }
+
+                    // Tech stack
+                    if let stack = job.techStack, !stack.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(stack.prefix(6), id: \.self) { tech in
+                                    Text(tech)
+                                        .font(.caption2.weight(.medium))
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(.indigo.opacity(0.1))
+                                        .foregroundStyle(.indigo)
+                                        .clipShape(Capsule())
+                                }
+                                if stack.count > 6 {
+                                    Text("+\(stack.count - 6)")
+                                        .font(.caption2.weight(.medium))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                        }
+                    }
+
+                    // Job snapshot (if available — newer Why Matrix field)
+                    if let snapshot = job.jobSnapshot, !snapshot.isEmpty {
+                        Text(snapshot)
                             .font(.subheadline)
+                            .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 20)
+                    }
+
+                    Divider()
+                        .padding(.horizontal, 20)
+
+                    // ── YOUR FIT (moved below job content) ──
+
+                    // Fit reasons
+                    if let reasons = job.fitReasons, !reasons.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(reasons.prefix(3), id: \.self) { reason in
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "arrow.right.circle.fill")
+                                            .font(.system(size: 8))
+                                        Text(reason)
+                                    }
+                                    .font(.caption2.weight(.semibold))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(.green.opacity(0.12))
+                                    .foregroundStyle(.green)
+                                    .clipShape(Capsule())
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                        }
+                    }
+
+                    // Dealbreaker warnings
+                    if let warnings = job.dealbreakerWarnings, !warnings.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(warnings.prefix(2), id: \.self) { warning in
+                                HStack(alignment: .top, spacing: 4) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.system(size: 8))
+                                        .padding(.top, 3)
+                                    Text(warning)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(.red.opacity(0.8))
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                    }
+
+                    // Quick Take (AI assessment)
+                    if !job.aiPitchSummary.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Quick Take")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+
+                            ForEach(job.pitchBullets.prefix(3), id: \.self) { bullet in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(systemName: "sparkle")
+                                        .font(.caption)
+                                        .foregroundStyle(.blue)
+                                        .padding(.top, 2)
+                                    Text(bullet.replacingOccurrences(of: "• ", with: ""))
+                                        .font(.caption)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                    }
+
+                    // Tags
+                    if !job.tags.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(job.tags, id: \.self) { tag in
+                                    Text(tag)
+                                        .font(.caption.weight(.medium))
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 4)
+                                        .background(.blue.opacity(0.1))
+                                        .foregroundStyle(.blue)
+                                        .clipShape(Capsule())
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                        }
                     }
                 }
+                .padding(.vertical, 12)
             }
-            .padding(20)
 
             Spacer(minLength: 0)
-
-            // Tech stack preview (first 4)
-            if let stack = job.techStack, !stack.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(stack.prefix(5), id: \.self) { tech in
-                            Text(tech)
-                                .font(.caption2.weight(.medium))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(.indigo.opacity(0.1))
-                                .foregroundStyle(.indigo)
-                                .clipShape(Capsule())
-                        }
-                        if stack.count > 5 {
-                            Text("+\(stack.count - 5)")
-                                .font(.caption2.weight(.medium))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                }
-                .padding(.bottom, 8)
-            }
-
-            // Tags
-            if !job.tags.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(job.tags, id: \.self) { tag in
-                            Text(tag)
-                                .font(.caption.weight(.medium))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(.blue.opacity(0.1))
-                                .foregroundStyle(.blue)
-                                .clipShape(Capsule())
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                }
-                .padding(.bottom, 16)
-            }
 
             // Hint footer (only on top card)
             if isTopCard {
@@ -305,5 +366,15 @@ struct JobCardView: View {
         if hours < 24 { return .blue }         // today
         if hours < 72 { return .orange }       // last few days
         return .gray                           // older
+    }
+
+    /// Strip basic HTML entities from raw job descriptions
+    private func cleanHTML(_ text: String) -> String {
+        text.replacingOccurrences(of: "&#x2F;", with: "/")
+            .replacingOccurrences(of: "&#x27;", with: "'")
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
     }
 }

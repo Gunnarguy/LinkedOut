@@ -242,18 +242,30 @@ struct SavedJobsView: View {
 struct JobListRow: View {
     let job: JobPayload
     var showStatus: Bool = false
+    var isNew: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // ── Row 1: Score + Title + Salary ──
+            // ── Row 1: Score + Title + Salary + NEW badge ──
             HStack(spacing: 14) {
                 ScoreRing(score: job.builderScore, size: 48, lineWidth: 4.5)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(job.roleTitle)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
+                    HStack(spacing: 6) {
+                        Text(job.roleTitle)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+                        if isNew {
+                            Text("NEW")
+                                .font(.system(size: 9, weight: .heavy))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(.green)
+                                .foregroundStyle(.white)
+                                .clipShape(Capsule())
+                        }
+                    }
 
                     HStack(spacing: 6) {
                         Text(job.companyName)
@@ -261,7 +273,7 @@ struct JobListRow: View {
                             .foregroundStyle(.secondary)
 
                         if let size = job.companySize, !size.isEmpty, size != "Unknown" {
-                            Text("·")
+                            Text("\u{00B7}")
                                 .foregroundStyle(.quaternary)
                             Text(size)
                                 .font(.caption2)
@@ -276,7 +288,6 @@ struct JobListRow: View {
                     Text(job.salaryDisplay)
                         .font(.subheadline.weight(.semibold))
 
-                    // Posted date
                     HStack(spacing: 3) {
                         Circle()
                             .fill(rowFreshnessColor(job))
@@ -317,42 +328,73 @@ struct JobListRow: View {
                 }
             }
 
-            // ── Row 3: Tech stack ──
+            // ── Row 3: Job description snippet ──
+            if let desc = job.description, !desc.isEmpty {
+                HStack(spacing: 0) {
+                    Image(systemName: "doc.text")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 16)
+                    Text(desc.replacingOccurrences(of: "&#x2F;", with: "/")
+                            .replacingOccurrences(of: "&#x27;", with: "'")
+                            .replacingOccurrences(of: "&amp;", with: "&")
+                            .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+
+            // ── Row 4: Tech stack ──
             if let stack = job.techStack, !stack.isEmpty {
                 HStack(spacing: 0) {
                     Image(systemName: "wrench.and.screwdriver")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .frame(width: 16)
-                    Text(stack.joined(separator: " · "))
+                    Text(stack.joined(separator: " \u{00B7} "))
                         .font(.caption2.weight(.medium))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
 
-            // ── Row 4: Fit reasons (green chips) ──
+            // ── Row 5: Requirements (first 2) ──
+            if let reqs = job.requirements, !reqs.isEmpty {
+                HStack(spacing: 0) {
+                    Image(systemName: "checklist")
+                        .font(.caption2)
+                        .foregroundStyle(.indigo)
+                        .frame(width: 16)
+                    Text(reqs.prefix(3).joined(separator: " \u{00B7} "))
+                        .font(.caption2)
+                        .foregroundStyle(.indigo.opacity(0.8))
+                        .lineLimit(1)
+                }
+            }
+
+            // ── Row 6: Fit reasons (green chips) ──
             if let reasons = job.fitReasons, !reasons.isEmpty {
                 HStack(spacing: 0) {
                     Image(systemName: "checkmark.seal.fill")
                         .font(.caption2)
                         .foregroundStyle(.green)
                         .frame(width: 16)
-                    Text(reasons.prefix(3).joined(separator: " · "))
+                    Text(reasons.prefix(3).joined(separator: " \u{00B7} "))
                         .font(.caption2)
                         .foregroundStyle(.green)
                         .lineLimit(1)
                 }
             }
 
-            // ── Row 5: Red flags / dealbreakers (if any) ──
+            // ── Row 7: Red flags / dealbreakers (if any) ──
             if let warnings = job.dealbreakerWarnings, !warnings.isEmpty {
                 HStack(spacing: 0) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.caption2)
                         .foregroundStyle(.red)
                         .frame(width: 16)
-                    Text(warnings.joined(separator: " · "))
+                    Text(warnings.joined(separator: " \u{00B7} "))
                         .font(.caption2)
                         .foregroundStyle(.red)
                         .lineLimit(1)
@@ -363,14 +405,14 @@ struct JobListRow: View {
                         .font(.caption2)
                         .foregroundStyle(.orange)
                         .frame(width: 16)
-                    Text(flags.prefix(2).joined(separator: " · "))
+                    Text(flags.prefix(2).joined(separator: " \u{00B7} "))
                         .font(.caption2)
                         .foregroundStyle(.orange)
                         .lineLimit(1)
                 }
             }
 
-            // ── Row 6: AI pitch (first line) ──
+            // ── Row 8: AI quick take (first line) ──
             if !job.aiPitchSummary.isEmpty {
                 let firstLine = job.pitchBullets.first ?? job.aiPitchSummary
                 HStack(spacing: 0) {
@@ -378,7 +420,7 @@ struct JobListRow: View {
                         .font(.caption2)
                         .foregroundStyle(.purple)
                         .frame(width: 16)
-                    Text(firstLine.trimmingCharacters(in: CharacterSet(charactersIn: "•-– ")))
+                    Text(firstLine.trimmingCharacters(in: CharacterSet(charactersIn: "\u{2022}-\u{2013} ")))
                         .font(.caption2)
                         .foregroundStyle(.purple.opacity(0.8))
                         .lineLimit(2)
@@ -386,7 +428,7 @@ struct JobListRow: View {
                 }
             }
 
-            // ── Row 7: Notes (user-added) ──
+            // ── Row 9: Notes (user-added) ──
             if let notes = job.notes, !notes.isEmpty {
                 HStack(spacing: 0) {
                     Image(systemName: "note.text")

@@ -473,7 +473,7 @@ struct SettingsView: View {
                         )
                         WeightSlider(
                             label: "\"Builders Welcome\"",
-                            detail: "Score boost when the listing explicitly says something like \"show us what you\u2019ve built\" or \"any modern framework\"",
+                            detail: "Score boost when the listing explicitly says something like 'show us what you've built' or 'any modern framework'",
                             value: $convincingBoost, range: 0.0...0.25, step: 0.05, onChange: debouncedSync
                         )
                         WeightSlider(
@@ -553,7 +553,7 @@ struct SettingsView: View {
                             .autocorrectionDisabled()
                             .keyboardType(.URL)
                             .font(.caption.monospaced())
-                        Text("The address of your LinkedOut backend. Auto-discovered on launch — you usually don\u2019t need to change this.")
+                        Text("The address of your LinkedOut backend. Auto-discovered on launch — you usually don\u{2019}t need to change this.")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -590,7 +590,7 @@ struct SettingsView: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .font(.caption.monospaced())
-                        Text("Paste your Notion integration\u2019s secret token. Starts with \"ntn_\".")
+                        Text("Paste your Notion integration\u{2019}s secret token. Starts with \"ntn_\".")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
