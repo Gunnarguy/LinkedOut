@@ -63,6 +63,7 @@ struct SettingsView: View {
     @AppStorage("preferredRolesJSON") private var preferredRolesJSON: String = "[]"
     @AppStorage("excludedKeywordsJSON") private var excludedKeywordsJSON: String = "[]"
     @AppStorage("preferredLocationsJSON") private var preferredLocationsJSON: String = "[\"Kalamazoo, Michigan\"]"
+    @AppStorage("blockedCompaniesJSON") private var blockedCompaniesJSON: String = "[]"
 
     // ── Scoring Weights ──
     @AppStorage("scoreCutoff") private var scoreCutoff: Double = 0.35
@@ -80,8 +81,10 @@ struct SettingsView: View {
     @State private var preferredRoles: [String] = []
     @State private var preferredLocations: [String] = ["Kalamazoo, Michigan"]
     @State private var excludedKeywords: [String] = []
+    @State private var blockedCompanies: [String] = []
     @State private var newRole = ""
     @State private var newKeyword = ""
+    @State private var newBlockedCompany = ""
     @State private var newLocationCity = ""
     @State private var newLocationState = ""
     @State private var syncStatus: SyncStatus = .idle
@@ -439,6 +442,33 @@ struct SettingsView: View {
                     Text("If any of these appear in the job title or description, the job is rejected. Swipe to delete.")
                 }
 
+                Section {
+                    ForEach(blockedCompanies, id: \.self) { company in
+                        Text(company).foregroundStyle(.red)
+                    }
+                    .onDelete { indexSet in
+                        blockedCompanies.remove(atOffsets: indexSet)
+                        saveBlockedCompaniesToStorage()
+                    }
+
+                    HStack {
+                        TextField("Add company...", text: $newBlockedCompany)
+                        Button {
+                            guard !newBlockedCompany.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+                            blockedCompanies.append(newBlockedCompany.trimmingCharacters(in: .whitespaces))
+                            newBlockedCompany = ""
+                            saveBlockedCompaniesToStorage()
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                        }
+                        .disabled(newBlockedCompany.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                } header: {
+                    Text("Blocked Companies")
+                } footer: {
+                    Text("Jobs from these companies are hidden from your queue. Swipe to delete.")
+                }
+
                 // ── Advanced: Individual Weights ────────────────────
                 Section {
                     DisclosureGroup("Fine-Tune Weights", isExpanded: $showAdvanced) {
@@ -771,6 +801,11 @@ struct SettingsView: View {
             preferredLocations = UserPreferences.default.preferredLocations
             saveLocationsToStorage()
         }
+
+        if let data = blockedCompaniesJSON.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode([String].self, from: data) {
+            blockedCompanies = decoded
+        }
     }
 
     private func saveRolesToStorage() {
@@ -788,6 +823,12 @@ struct SettingsView: View {
     private func saveLocationsToStorage() {
         if let data = try? JSONEncoder().encode(preferredLocations) {
             preferredLocationsJSON = String(data: data, encoding: .utf8) ?? "[\"Kalamazoo, Michigan\"]"
+        }
+    }
+
+    private func saveBlockedCompaniesToStorage() {
+        if let data = try? JSONEncoder().encode(blockedCompanies) {
+            blockedCompaniesJSON = String(data: data, encoding: .utf8) ?? "[]"
         }
     }
 

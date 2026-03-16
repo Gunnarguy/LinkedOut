@@ -82,6 +82,12 @@ struct JobDetailView: View {
             .navigationTitle("Job Dossier")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    ShareLink(item: job.shareText) {
+                        Image(systemName: "square.and.arrow.up")
+                            .foregroundStyle(.blue)
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark.circle.fill")
@@ -707,11 +713,43 @@ struct JobDetailView: View {
                 }
                 .disabled(shareStatus == .sharing || shareStatus == .shared)
             }
+
+            // Block company
+            Button(role: .destructive) {
+                blockCompany(job.companyName)
+                Task {
+                    await jobs.performAction(job: job, action: .reject)
+                    dismiss()
+                }
+            } label: {
+                Label("Block \(job.companyName)", systemImage: "nosign")
+                    .font(.caption.weight(.medium))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(.red.opacity(0.05))
+                    .foregroundStyle(.red.opacity(0.6))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
         }
         .padding(20)
     }
 
     // MARK: - Helpers
+
+    private func blockCompany(_ name: String) {
+        let key = "blockedCompaniesJSON"
+        var list: [String] = []
+        if let data = UserDefaults.standard.string(forKey: key)?.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode([String].self, from: data) {
+            list = decoded
+        }
+        if !list.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) {
+            list.append(name)
+            if let encoded = try? JSONEncoder().encode(list) {
+                UserDefaults.standard.set(String(data: encoded, encoding: .utf8), forKey: key)
+            }
+        }
+    }
 
     private func saveNotes() async {
         await jobs.updateNotes(jobId: job.id, notes: noteDraft)

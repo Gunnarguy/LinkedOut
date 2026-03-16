@@ -21,6 +21,28 @@ class JobsViewModel: ObservableObject {
     @Published var error: String?
     @Published var info: String?
 
+    /// The timestamp of the last time the user viewed the Discover tab
+    @Published var lastSeenTimestamp: Date = .distantPast
+
+    /// Number of pending jobs newer than lastSeenTimestamp
+    var newJobCount: Int {
+        pendingJobs.filter { ($0.postedAt ?? .distantPast) > lastSeenTimestamp }.count
+    }
+
+    /// Companies the user has blocked (loaded from @AppStorage via SettingsView)
+    var blockedCompanies: Set<String> {
+        guard let data = UserDefaults.standard.string(forKey: "blockedCompaniesJSON")?.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode([String].self, from: data) else { return [] }
+        return Set(decoded.map { $0.lowercased() })
+    }
+
+    /// Pending jobs with blocked companies filtered out
+    var visiblePendingJobs: [JobPayload] {
+        let blocked = blockedCompanies
+        if blocked.isEmpty { return pendingJobs }
+        return pendingJobs.filter { !blocked.contains($0.companyName.lowercased()) }
+    }
+
     /// The job the user wants to apply to after swiping right
     @Published var jobToApply: JobPayload?
 
@@ -243,6 +265,7 @@ class JobsViewModel: ObservableObject {
 
     /// Actually mark the job as applied after the user confirms or dismisses the apply prompt
     func confirmApply(job: JobPayload) async {
+        ApplicationTracker.markApplied(jobId: job.id)
         await performAction(job: job, action: .apply)
     }
 
@@ -271,6 +294,7 @@ class JobsViewModel: ObservableObject {
             let response = try await APIClient.shared.performAction(request)
             print("[VM] performAction — success=\(response.success) msg=\(response.message)")
             if response.success {
+                recordAction(job: job, action: action)
                 switch action {
                 case .apply:
                     await loadAppliedJobs()
@@ -315,10 +339,44 @@ class JobsViewModel: ObservableObject {
 
     // MARK: - Undo
 
+    /// Tracks recent actions for multi-undo (local mirror of backend's 20-deep stack)
+    struct RecentAction: Identifiable {
+        let id = UUID()
+        let jobId: String
+        let jobTitle: String
+        let action: JobAction
+        let timestamp: Date
+    }
+
+    @Published var recentActions: [RecentAction] = []
+
+    /// How many actions can be undone
+    var undoCount: Int { recentActions.count }
+
+    /// Record a local action for undo tracking
+    func recordAction(job: JobPayload, action: JobAction) {
+        recentActions.append(RecentAction(
+            jobId: job.id,
+            jobTitle: job.roleTitle,
+            action: action,
+            timestamp: Date()
+        ))
+        // Keep in sync with backend's 20-deep limit
+        if recentActions.count > 20 {
+            recentActions.removeFirst()
+        }
+    }
+
     func undoLastAction() async {
+        guard !recentActions.isEmpty else {
+            self.error = "Nothing to undo"
+            return
+        }
         do {
             let result = try await APIClient.shared.undoLastAction()
             if result.success {
+                let undone = recentActions.removeLast()
+                info = "Undid \(undone.action.rawValue) on \(undone.jobTitle)"
                 await refreshAll()
             } else {
                 self.error = result.message

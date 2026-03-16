@@ -4,6 +4,11 @@ Sources:
   1. Remotive (free, no auth, remote-first jobs)
   2. HimalayanJobs / Arbeitnow (free, no auth)
   3. HackerNews "Who's Hiring" (Algolia API, free)
+  4. Jobicy (free, no auth, remote-first)
+  5. RemoteOK (free, no auth)
+  6. We Work Remotely (RSS feed, free, no auth — top remote job board)
+  7. Arbeitnow (free API, no auth — EU + global remote)
+  8. The Muse (free public API, no auth — career platform)
 """
 
 from __future__ import annotations
@@ -48,7 +53,7 @@ async def fetch_remotive(queries: list[str] | None = None) -> list[RawJobListing
     """Fetch remote jobs from Remotive API (free, no auth)."""
     import time as _time
     t0 = _time.monotonic()
-    queries = queries or SEARCH_QUERIES[:8]
+    queries = queries or SEARCH_QUERIES
     all_listings: list[RawJobListing] = []
     seen_urls: set[str] = set()
 
@@ -101,7 +106,7 @@ async def fetch_himalayas() -> list[RawJobListing]:
     seen_urls: set[str] = set()
 
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-        for query in SEARCH_QUERIES[:6]:
+        for query in SEARCH_QUERIES:
             try:
                 resp = await client.get(
                     "https://himalayas.app/jobs/api",
@@ -201,11 +206,11 @@ async def fetch_hn_whoishiring() -> list[RawJobListing]:
                 re.IGNORECASE,
             )
 
-            # Only filter out clearly senior/director-level roles
+            # Only filter out clearly executive/director-level roles
+            # Let the scoring engine evaluate senior/staff/lead properly
             neg_keywords = re.compile(
-                r"\bsenior\b|\bstaff\b|\blead\b|\bprincipal\b|"
-                r"\bdirector\b|\bVP\b|\bhead of\b|"
-                r"10\+.years|15\+.years|8\+.years|PhD.required",
+                r"\bdirector\b|\bVP\b|\bhead of\b|\bCTO\b|\bCEO\b|"
+                r"15\+.years|PhD.required",
                 re.IGNORECASE,
             )
 
@@ -380,6 +385,204 @@ async def fetch_remoteok() -> list[RawJobListing]:
     return all_listings
 
 
+async def fetch_weworkremotely() -> list[RawJobListing]:
+    """Fetch jobs from We Work Remotely RSS feeds (free, no auth, top remote board)."""
+    import time as _time
+    import xml.etree.ElementTree as ET
+
+    t0 = _time.monotonic()
+    all_listings: list[RawJobListing] = []
+    seen_urls: set[str] = set()
+
+    categories = [
+        "programming",
+        "design",
+        "devops-sysadmin",
+        "product",
+        "data",
+    ]
+
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        for category in categories:
+            try:
+                resp = await client.get(
+                    f"https://weworkremotely.com/categories/remote-{category}-jobs.rss"
+                )
+                resp.raise_for_status()
+
+                root = ET.fromstring(resp.text)
+                for item in root.findall(".//item"):
+                    url = (item.findtext("link") or "").strip()
+                    if not url or url in seen_urls:
+                        continue
+                    seen_urls.add(url)
+
+                    title = item.findtext("title") or "Unknown"
+                    # Title format is often "Company: Role"
+                    company = "Unknown"
+                    if ": " in title:
+                        company, title = title.split(": ", 1)
+
+                    desc = item.findtext("description") or ""
+                    desc = re.sub(r"<[^>]+>", " ", desc)
+                    desc = re.sub(r"&[a-z]+;", " ", desc)
+                    desc = re.sub(r"\s+", " ", desc).strip()
+
+                    all_listings.append(
+                        RawJobListing(
+                            title=title[:200],
+                            company=company[:100],
+                            description=desc[:8000],
+                            url=url,
+                            salary_text="",
+                            location="Remote",
+                            is_remote=True,
+                        )
+                    )
+
+            except Exception as e:
+                logger.warning(f"WWR fetch failed for '{category}': {e}")
+
+    logger.info(
+        f"WeWorkRemotely: fetched {len(all_listings)} listings in {_time.monotonic() - t0:.1f}s"
+    )
+    return all_listings
+
+
+async def fetch_arbeitnow() -> list[RawJobListing]:
+    """Fetch jobs from Arbeitnow API (free, no auth, EU + global remote jobs)."""
+    import time as _time
+
+    t0 = _time.monotonic()
+    all_listings: list[RawJobListing] = []
+    seen_urls: set[str] = set()
+
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        try:
+            # Arbeitnow has a simple paginated API — fetch first 2 pages
+            for page in range(1, 3):
+                resp = await client.get(
+                    "https://www.arbeitnow.com/api/job-board-api",
+                    params={"page": page},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+                for job in data.get("data", []):
+                    url = job.get("url", "")
+                    if not url or url in seen_urls:
+                        continue
+                    seen_urls.add(url)
+
+                    desc = job.get("description", "") or ""
+                    desc = re.sub(r"<[^>]+>", " ", desc)
+                    desc = re.sub(r"\s+", " ", desc).strip()
+
+                    location = job.get("location", "") or "Unknown"
+                    is_remote = job.get("remote", False)
+
+                    tags = job.get("tags", []) or []
+
+                    all_listings.append(
+                        RawJobListing(
+                            title=job.get("title", "Unknown"),
+                            company=job.get("company_name", "Unknown"),
+                            description=desc[:8000],
+                            url=url,
+                            salary_text="",
+                            location=(
+                                location if not is_remote else f"{location} (Remote)"
+                            ),
+                            is_remote=is_remote,
+                        )
+                    )
+
+        except Exception as e:
+            logger.warning(f"Arbeitnow fetch failed: {e}")
+
+    logger.info(
+        f"Arbeitnow: fetched {len(all_listings)} listings in {_time.monotonic() - t0:.1f}s"
+    )
+    return all_listings
+
+
+async def fetch_themuse() -> list[RawJobListing]:
+    """Fetch jobs from The Muse public API (free, no auth, well-known career platform)."""
+    import time as _time
+
+    t0 = _time.monotonic()
+    all_listings: list[RawJobListing] = []
+    seen_urls: set[str] = set()
+
+    categories = [
+        "Software Engineer",
+        "Data Science",
+        "Product Management",
+        "Design and UX",
+        "IT",
+    ]
+
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        for category in categories:
+            try:
+                resp = await client.get(
+                    "https://www.themuse.com/api/public/jobs",
+                    params={"category": category, "page": 0, "descending": "true"},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+                for job in data.get("results", []):
+                    # The Muse uses refs.landing_page for the job URL
+                    refs = job.get("refs", {})
+                    url = refs.get("landing_page", "")
+                    if not url or url in seen_urls:
+                        continue
+                    seen_urls.add(url)
+
+                    desc = job.get("contents", "") or ""
+                    desc = re.sub(r"<[^>]+>", " ", desc)
+                    desc = re.sub(r"&[a-z]+;", " ", desc)
+                    desc = re.sub(r"\s+", " ", desc).strip()
+
+                    company_obj = job.get("company", {})
+                    company = (
+                        company_obj.get("name", "Unknown") if company_obj else "Unknown"
+                    )
+
+                    locations = job.get("locations", [])
+                    location_str = (
+                        ", ".join(
+                            loc.get("name", "") for loc in locations if loc.get("name")
+                        )
+                        or "Unknown"
+                    )
+
+                    is_remote = bool(
+                        re.search(r"remote|flexible", location_str, re.IGNORECASE)
+                    )
+
+                    all_listings.append(
+                        RawJobListing(
+                            title=job.get("name", "Unknown"),
+                            company=company,
+                            description=desc[:8000],
+                            url=url,
+                            salary_text="",
+                            location=location_str,
+                            is_remote=is_remote,
+                        )
+                    )
+
+            except Exception as e:
+                logger.warning(f"The Muse fetch failed for '{category}': {e}")
+
+    logger.info(
+        f"The Muse: fetched {len(all_listings)} listings in {_time.monotonic() - t0:.1f}s"
+    )
+    return all_listings
+
+
 async def fetch_all_sources() -> list[RawJobListing]:
     """Fetch from all sources concurrently. Returns deduplicated listings."""
     import time as _time
@@ -390,6 +593,9 @@ async def fetch_all_sources() -> list[RawJobListing]:
         fetch_hn_whoishiring(),
         fetch_jobicy(),
         fetch_remoteok(),
+        fetch_weworkremotely(),
+        fetch_arbeitnow(),
+        fetch_themuse(),
         return_exceptions=True,
     )
 
@@ -398,7 +604,16 @@ async def fetch_all_sources() -> list[RawJobListing]:
     seen_urls: set[str] = set()
 
     for i, result in enumerate(results):
-        source_names = ["Remotive", "Himalayas", "HN", "Jobicy", "RemoteOK"]
+        source_names = [
+            "Remotive",
+            "Himalayas",
+            "HN",
+            "Jobicy",
+            "RemoteOK",
+            "WWR",
+            "Arbeitnow",
+            "TheMuse",
+        ]
         name = source_names[i] if i < len(source_names) else f"Source{i}"
         if isinstance(result, BaseException):
             logger.error(f"[FETCH] {name} FAILED: {result}")

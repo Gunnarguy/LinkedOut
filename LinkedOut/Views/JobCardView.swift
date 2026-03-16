@@ -81,6 +81,19 @@ struct JobCardView: View {
                         .foregroundStyle(.secondary)
                         .clipShape(Capsule())
                 }
+                if let matchLabel = job.requirementsMatchLabel {
+                    HStack(spacing: 2) {
+                        Image(systemName: "checklist")
+                            .font(.system(size: 8))
+                        Text(matchLabel)
+                    }
+                    .font(.caption2.weight(.semibold))
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(.indigo.opacity(0.12))
+                    .foregroundStyle(.indigo)
+                    .clipShape(Capsule())
+                }
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 6)
@@ -111,6 +124,10 @@ struct JobCardView: View {
                         .font(.caption2.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
+
+                Text("via \(job.sourceName)")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary.opacity(0.7))
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)

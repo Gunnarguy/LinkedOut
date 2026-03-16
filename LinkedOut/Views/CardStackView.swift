@@ -12,16 +12,36 @@ struct CardStackView: View {
     @EnvironmentObject var jobs: JobsViewModel
     @State private var sortByNewest = false
     @State private var showListView = false
+    @State private var showFilters = false
+    @State private var filters = JobFilters()
     @AppStorage("lastViewedTimestamp") private var lastViewedTimestamp: Double = 0
 
-    /// Sorted view of pending jobs — either by score (default) or newest first
-    private var sortedPending: [JobPayload] {
-        if sortByNewest {
-            return jobs.pendingJobs.sorted {
-                ($0.postedAt ?? .distantPast) > ($1.postedAt ?? .distantPast)
+    /// All unique tech stacks across pending jobs (for filter sheet)
+    private var availableTechStacks: [String] {
+        var counts: [String: Int] = [:]
+        for job in jobs.pendingJobs {
+            for tech in job.techStack ?? [] {
+                counts[tech, default: 0] += 1
             }
         }
-        return jobs.pendingJobs // already sorted by score from backend
+        return counts.sorted { $0.value > $1.value }.map(\.key)
+    }
+
+    /// All unique sources across pending jobs
+    private var availableSources: [String] {
+        Array(Set(jobs.pendingJobs.map(\.sourceName))).sorted()
+    }
+
+    /// Filtered + sorted pending jobs
+    private var sortedPending: [JobPayload] {
+        var result = jobs.visiblePendingJobs
+        if filters.isActive {
+            result = result.filter { filters.matches($0) }
+        }
+        if sortByNewest {
+            result.sort { ($0.postedAt ?? .distantPast) > ($1.postedAt ?? .distantPast) }
+        }
+        return result
     }
 
     /// The cutoff date: jobs added after this are "new"
@@ -78,6 +98,23 @@ struct CardStackView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: 12) {
+                        // Filter toggle
+                        Button {
+                            showFilters = true
+                        } label: {
+                            Image(systemName: filters.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                                .foregroundStyle(filters.isActive ? .orange : .primary)
+                        }
+                        .overlay(alignment: .topTrailing) {
+                            if filters.isActive {
+                                Text("\(filters.activeCount)")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .padding(3)
+                                    .background(Circle().fill(.orange))
+                                    .offset(x: 6, y: -6)
+                            }
+                        }
                         // Sort toggle
                         Button {
                             withAnimation(.spring(response: 0.3)) {
@@ -101,33 +138,36 @@ struct CardStackView: View {
             }
             .task {
                 jobs.loadCachedJobs()   // instant — show cached cards while network loads
+                // Restore lastSeenTimestamp from persisted value
+                if lastViewedTimestamp > 0 {
+                    jobs.lastSeenTimestamp = Date(timeIntervalSince1970: lastViewedTimestamp)
+                }
                 await jobs.loadPendingJobs()
                 await jobs.autoIngestIfNeeded()
                 // Mark current time so next session knows what's "new"
-                lastViewedTimestamp = Date().timeIntervalSince1970
+                let now = Date()
+                lastViewedTimestamp = now.timeIntervalSince1970
+                jobs.lastSeenTimestamp = now
             }
             .task { await jobs.loadStats() }
             .refreshable { await jobs.refreshAll() }
             .sheet(item: $jobs.selectedJob) { job in
                 JobDetailView(job: job)
             }
-            .alert("Apply to this role?", isPresented: applyAlertBinding) {
-                if let job = jobs.jobToApply {
-                    let applyURL = (job.applyUrl ?? job.sourceUrl)
-                    if let url = URL(string: applyURL) {
-                        Button("Open Application") {
-                            UIApplication.shared.open(url)
-                            Task { await jobs.confirmApply(job: job) }
-                        }
-                    }
-                    Button("Mark Applied (already applied)") {
-                        Task { await jobs.confirmApply(job: job) }
-                    }
-                    Button("Cancel", role: .cancel) {}
-                }
-            } message: {
-                if let job = jobs.jobToApply {
-                    Text("\(job.roleTitle) at \(job.companyName)")
+            .sheet(isPresented: $showFilters) {
+                FilterSheet(
+                    filters: $filters,
+                    availableTechStacks: availableTechStacks,
+                    availableSources: availableSources
+                )
+                .presentationDetents([.medium, .large])
+            }
+            .sheet(item: $jobs.jobToApply) { job in
+                ApplyReviewSheet(job: job) {
+                    jobs.jobToApply = nil
+                    Task { await jobs.confirmApply(job: job) }
+                } onCancel: {
+                    jobs.jobToApply = nil
                 }
             }
             .overlay(alignment: .top) {
@@ -149,13 +189,6 @@ struct CardStackView: View {
             .animation(.spring(response: 0.3), value: jobs.error)
             .animation(.spring(response: 0.3), value: jobs.info)
         }
-    }
-
-    private var applyAlertBinding: Binding<Bool> {
-        Binding(
-            get: { jobs.jobToApply != nil },
-            set: { if !$0 { jobs.jobToApply = nil } }
-        )
     }
 
     // MARK: - List View
@@ -197,9 +230,15 @@ struct CardStackView: View {
                     }
                 }
             } header: {
-                Text("\(sortedPending.count) jobs in queue")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                HStack {
+                    Text("\(sortedPending.count) jobs\(filters.isActive ? " (filtered)" : "")")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    if filters.isActive {
+                        Button("Clear") { filters = JobFilters() }
+                            .font(.caption2)
+                    }
+                }
             }
         }
         .listStyle(.plain)
@@ -313,7 +352,19 @@ struct CardStackView: View {
                     .frame(width: 40, height: 40)
                     .background(.orange.opacity(0.1))
                     .clipShape(Circle())
+                    .overlay(alignment: .topTrailing) {
+                        if jobs.undoCount > 0 {
+                            Text("\(jobs.undoCount)")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(3)
+                                .background(Circle().fill(.orange))
+                                .offset(x: 4, y: -4)
+                        }
+                    }
             }
+            .disabled(jobs.undoCount == 0)
+            .opacity(jobs.undoCount == 0 ? 0.4 : 1)
 
             // Reject
             Button {

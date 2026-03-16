@@ -18,6 +18,7 @@ struct MainTabView: View {
                 .tabItem {
                     Label("Discover", systemImage: "rectangle.stack")
                 }
+                .badge(jobs.newJobCount)
 
             JobMapView()
                 .tabItem {

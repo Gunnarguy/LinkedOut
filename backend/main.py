@@ -138,7 +138,7 @@ async def _run_ingest_cycle():
         prefs = _user_prefs
         total_added = 0
         batch_size = 10
-        min_builder_score = 0.45
+        min_builder_score = 0.30
 
         for i in range(0, len(new_listings), batch_size):
             batch = new_listings[i : i + batch_size]

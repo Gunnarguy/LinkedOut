@@ -433,8 +433,9 @@ Return ONLY valid JSON:
 
 
 TRIAGE_PROMPT = """\
-You are a fast job-listing triage filter. Be AGGRESSIVE about rejecting.
-The goal is a ~40% pass rate — most jobs should NOT make it through.
+You are a fast job-listing triage filter. Your job is to PASS jobs that have
+any reasonable chance of being a good fit, and only reject clear mismatches.
+Target a ~60% pass rate — let borderline jobs through for full scoring.
 
 ## Your snapshot
 AI-native builder. You orchestrate AI agents to generate all code — you do NOT
@@ -443,37 +444,41 @@ Shipped 6 projects (4 on App Store). 758 commits. Swift/iOS, Python, RAG, vector
 LLM orchestration, MCP servers, Docker. B.S. Kinesiology — NO CS degree, no
 professional SWE experience. Healthcare ops day job (Stryker/VA Palo Alto).
 Home: {preferred_locations}. Wants 100% remote.
+Max seniority comfort level: {max_seniority_level}
 
-## REJECT (dominated=false) if ANY are true:
+## REJECT (dominated=false) ONLY if clearly true:
 - Requires on-site or hybrid attendance (must be 100% remote or highly autonomous)
 - Salary band explicitly entirely below $90,000
-- Senior, Staff, Lead, Principal, Director, VP title (unless max seniority allows)
+- Director, VP, C-suite, or Head-of title (executive-level only)
+- "Staff" or "Principal" with 10+ years required and no flexibility
 - **Requires CS/engineering degree with NO "or equivalent" / "or equivalent experience"**
   This is the #1 dealbreaker. If it says "requires CS degree" with no escape hatch, REJECT.
-- Requires 5+ years professional SWE experience with no flexibility
-- Hard requires a specific stack (React, Java, Go, C++, etc.) with NO signal they
-  accept portfolio or fast learners
+- Requires 7+ years professional SWE experience with no flexibility
+- Hard requires a specific non-matching stack (Java, Go, C++, Rust) with NO signal
+  they accept portfolio or fast learners
 - Pure non-tech (sales, marketing, HR, legal, finance, design-only)
-- Pure infra / DevOps / SRE with no product surface
-- Legacy codebase maintenance, monolith migration, ticket-taking roles
-- Large enterprise / bureaucratic companies with rigid keyword-filter hiring
+- Pure infra / DevOps / SRE with no product surface at all
 - Zero overlap with AI/ML, iOS, product engineering, or healthcare tech
 
-## PASS (dominated=true) if:
+## PASS (dominated=true) if ANY are true:
+- **"Senior" in title is NOT an automatic reject** — many senior roles accept strong
+  portfolios, non-traditional backgrounds, or 2-3 years equivalent. Only reject if the
+  description explicitly demands 7+ years or deeply specialized expertise with no flexibility.
 - **Explicitly says "no CS degree required", "non-traditional welcome", or "portfolio-first"**
 - **Says "or equivalent experience" / "or equivalent projects" instead of hard degree req**
 - AI/ML roles (RAG, embeddings, agents, LLM tooling, GenAI)
 - Founding / first engineer at startups (<50 people)
 - Explicitly welcomes non-traditional backgrounds or portfolio-first hiring
-- Product engineer or generalist at small companies
+- Product engineer or generalist at small/mid companies
 - Healthcare AI / MedTech / clinical technology
 - Developer tools, AI platforms, developer experience roles
 - iOS/mobile at AI-forward companies
 - Mentions "rapid iteration," "zero-to-one," "autonomy," "AI-native"
-- Entry, junior, or mid-level (or unspecified seniority)
+- Entry, junior, mid-level, or unspecified seniority
 - Hobby projects / side projects valued, portfolio reviews mentioned
+- Remote-first culture with async work style
 
-When in doubt, REJECT. Better to miss a borderline job than waste time.
+When in doubt, PASS. Let the full scoring engine make the final call.
 
 Return ONLY valid JSON:
 {{"dominated": true/false, "reason": "one sentence why"}}
@@ -490,6 +495,9 @@ async def triage_job(raw: RawJobListing, prefs: UserPreferences | None = None) -
         else "Kalamazoo, Michigan"
     )
     triage_sys = TRIAGE_PROMPT.replace("{preferred_locations}", locations_formatted)
+    triage_sys = triage_sys.replace(
+        "{max_seniority_level}", prefs.max_seniority_level or "Senior"
+    )
     user_msg = f"Title: {raw.title}\nCompany: {raw.company}\nLocation: {raw.location}\nRemote: {raw.is_remote}\n\nDescription (first 1500 chars):\n{raw.description[:1500]}"
 
     try:

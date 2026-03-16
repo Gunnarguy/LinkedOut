@@ -322,6 +322,12 @@ struct JobListRow: View {
                         pillTag(stage, icon: "building.2", color: .teal)
                     }
 
+                    pillTag("via \(job.sourceName)", icon: "globe", color: .secondary)
+
+                    if let matchLabel = job.requirementsMatchLabel {
+                        pillTag("\(matchLabel) reqs", icon: "checklist", color: .indigo)
+                    }
+
                     if showStatus, let status = job.applicationStatus, !status.isEmpty, status != "new" {
                         pillTag(job.statusDisplay, icon: statusIcon(status), color: statusColor(status))
                     }
@@ -439,6 +445,24 @@ struct JobListRow: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
+                }
+            }
+
+            // ── Row 10: Application timestamp + follow-up hint ──
+            if showStatus, let agoLabel = ApplicationTracker.appliedAgoLabel(for: job.id) {
+                HStack(spacing: 0) {
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.caption2)
+                        .foregroundStyle(ApplicationTracker.shouldFollowUp(jobId: job.id) ? .orange : .secondary)
+                        .frame(width: 16)
+                    Text(agoLabel)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    if ApplicationTracker.shouldFollowUp(jobId: job.id) {
+                        Text(" · Follow up?")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
         }

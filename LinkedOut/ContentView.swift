@@ -9,6 +9,8 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var auth: AuthViewModel
+    @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
+    @State private var showOnboarding = false
 
     var body: some View {
         Group {
@@ -19,6 +21,15 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut, value: auth.isAuthenticated)
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingOverlay(isPresented: $showOnboarding)
+        }
+        .onChange(of: auth.isAuthenticated) { _, isAuth in
+            if isAuth && !hasSeenOnboarding {
+                showOnboarding = true
+                hasSeenOnboarding = true
+            }
+        }
     }
 }
 

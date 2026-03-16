@@ -150,6 +150,23 @@ struct JobPayload: Codable, Identifiable, Hashable {
         !(techStack ?? []).isEmpty
     }
 
+    /// Which job board this came from, derived from sourceUrl
+    var sourceName: String {
+        let url = sourceUrl.lowercased()
+        if url.contains("remotive.com") { return "Remotive" }
+        if url.contains("himalayas.app") { return "Himalayas" }
+        if url.contains("jobicy.com") { return "Jobicy" }
+        if url.contains("remoteok.com") { return "RemoteOK" }
+        if url.contains("weworkremotely.com") { return "WWR" }
+        if url.contains("arbeitnow.com") { return "Arbeitnow" }
+        if url.contains("themuse.com") { return "The Muse" }
+        if url.contains("news.ycombinator.com") || url.contains("hacker-news") { return "HN" }
+        if url.contains("lever.co") { return "Lever" }
+        if url.contains("greenhouse.io") { return "Greenhouse" }
+        if url.contains("ashbyhq.com") { return "Ashby" }
+        return "Direct"
+    }
+
     // MARK: - Date Helpers
 
     /// Relative freshness label — "Just now", "2h ago", "3d ago", etc.
@@ -176,6 +193,24 @@ struct JobPayload: Codable, Identifiable, Hashable {
             fmt.dateFormat = "MMM d, yyyy"
         }
         return fmt.string(from: date)
+    }
+
+    /// Shareable text for this job
+    var shareText: String {
+        var parts = ["\(roleTitle) at \(companyName)"]
+        if salaryFloor > 0 { parts.append(salaryDisplay) }
+        if isRemote { parts.append("Remote") }
+        parts.append(applyUrl ?? sourceUrl)
+        return parts.joined(separator: " \u{2022} ")
+    }
+
+    /// How many requirements the user likely matches (based on fit reasons count vs requirements)
+    var requirementsMatchLabel: String? {
+        guard let reqs = requirements, !reqs.isEmpty else { return nil }
+        let fitCount = fitReasons?.count ?? 0
+        // Rough heuristic: fit reasons map ~1:1 to matched requirements
+        let matched = min(fitCount, reqs.count)
+        return "\(matched)/\(reqs.count)"
     }
 }
 

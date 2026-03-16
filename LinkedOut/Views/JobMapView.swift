@@ -13,9 +13,17 @@ struct JobMapView: View {
     @EnvironmentObject var jobs: JobsViewModel
     @StateObject private var geocoder = LocationGeocoder()
     @State private var selectedPin: LocationGeocoder.GeoResult?
-    @State private var selectedJob: JobPayload?
+    @State private var previewJob: JobPayload?
+    @State private var detailJob: JobPayload?
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var showLegend = true
+
+    enum MapFilter: String, CaseIterable {
+        case all = "All"
+        case remote = "Remote"
+        case onsite = "On-site"
+    }
+    @State private var mapFilter: MapFilter = .all
 
     /// All jobs across pending + saved + applied
     private var allJobs: [JobPayload] {
@@ -29,11 +37,20 @@ struct JobMapView: View {
         return result
     }
 
+    /// Filtered pins based on the remote/onsite toggle
+    private var filteredPins: [LocationGeocoder.GeoResult] {
+        switch mapFilter {
+        case .all: return geocoder.pins
+        case .remote: return geocoder.pins.filter { $0.isRemoteHQ }
+        case .onsite: return geocoder.pins.filter { !$0.isRemoteHQ }
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ZStack(alignment: .topTrailing) {
                 Map(position: $cameraPosition, selection: $selectedPin) {
-                    ForEach(geocoder.pins) { pin in
+                    ForEach(filteredPins) { pin in
                         Annotation(pin.job.companyName, coordinate: pin.coordinate) {
                             JobMapPin(
                                 score: pin.job.builderScore,
@@ -57,6 +74,25 @@ struct JobMapView: View {
                         .transition(.opacity)
                 }
             }
+            .safeAreaInset(edge: .top) {
+                // Remote / On-site filter picker
+                Picker("Filter", selection: $mapFilter) {
+                    ForEach(MapFilter.allCases, id: \.self) { filter in
+                        Text(filter.rawValue).tag(filter)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                .padding(.vertical, 6)
+                .background(.ultraThinMaterial)
+            }
+            .safeAreaInset(edge: .bottom) {
+                // Pin preview card
+                if let job = previewJob {
+                    pinPreviewCard(job: job)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
             .navigationTitle("Map")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -71,7 +107,7 @@ struct JobMapView: View {
                         if geocoder.isGeocoding {
                             ProgressView()
                         } else {
-                            Text("\(geocoder.pins.count) pins")
+                            Text("\(filteredPins.count) pins")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -85,14 +121,77 @@ struct JobMapView: View {
                 Task { await geocoder.geocode(jobs: allJobs) }
             }
             .onChange(of: selectedPin) { _, newPin in
-                if let pin = newPin {
-                    selectedJob = pin.job
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    previewJob = newPin?.job
                 }
             }
-            .sheet(item: $selectedJob) { job in
+            .sheet(item: $detailJob) { job in
                 JobDetailView(job: job)
             }
         }
+    }
+
+    // MARK: - Pin Preview Card
+
+    private func pinPreviewCard(job: JobPayload) -> some View {
+        HStack(spacing: 12) {
+            // Score ring
+            ZStack {
+                Circle()
+                    .stroke(Color.secondary.opacity(0.2), lineWidth: 3)
+                    .frame(width: 44, height: 44)
+                Circle()
+                    .trim(from: 0, to: job.builderScore)
+                    .stroke(job.builderScore >= 0.7 ? .green : job.builderScore >= 0.5 ? .orange : .red,
+                            style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .frame(width: 44, height: 44)
+                    .rotationEffect(.degrees(-90))
+                Text("\(Int(job.builderScore * 100))")
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(job.roleTitle)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                Text(job.companyName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if !job.location.isEmpty {
+                    HStack(spacing: 3) {
+                        Image(systemName: job.isRemote ? "wifi" : "mappin")
+                            .font(.system(size: 9))
+                        Text(job.location)
+                            .font(.caption2)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+
+            Button {
+                detailJob = job
+            } label: {
+                Image(systemName: "arrow.forward.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.blue)
+            }
+
+            Button {
+                withAnimation { previewJob = nil; selectedPin = nil }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .shadow(color: .black.opacity(0.1), radius: 8, y: 2)
+        .padding(.horizontal)
+        .padding(.bottom, 4)
     }
 
     // MARK: - Legend
@@ -116,6 +215,20 @@ struct JobMapView: View {
                         .foregroundStyle(.white)
                 }
                 Text("Remote (HQ location)")
+                    .font(.caption2)
+            }
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(.orange)
+                    .frame(width: 10, height: 10)
+                Text("Score 50-69")
+                    .font(.caption2)
+            }
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(.red)
+                    .frame(width: 10, height: 10)
+                Text("Score < 50")
                     .font(.caption2)
             }
         }
