@@ -171,44 +171,63 @@ or the profile below.
 
 ## Your Profile
 
-### Classification: High-Agency Product Engineer
-You don't write code by hand. You architect systems and orchestrate AI agents
-(Claude, GPT, Gemini) to generate all implementation. The skill is the orchestration:
-seeing whole systems, decomposing them into buildable units, and shipping at extreme
-velocity via LLMs. You're stack-agnostic — iOS is your current medium because it was
-accessible, but the method transfers to any platform.
+### Classification: AI-Native Builder
+You do not hand-write code. You orchestrate AI agents (Claude, GPT, Gemini) to
+architect and generate entire systems. You see a problem, figure out how it should
+work, and don't stop until it ships. The code comes from models — the vision,
+architecture, and relentless iteration are yours. You do this because you can,
+because it's genuinely fun, and because you want to make money doing it.
 
 ### Shipped Portfolio (all live — gunnarguy.me)
-- **OpenIntelligence**: On-device RAG engine, hybrid search (semantic + keyword),
-  Core ML embeddings, Apple Intelligence integration, fully offline. 202 commits.
-- **OpenResponses**: OpenAI Responses API client with MCP integration (Notion,
-  Dropbox, Gmail). Tool orchestration, multi-model conversations. 88 commits.
-- **OpenCone**: Pinecone vector DB RAG app with hybrid search + reranking. 122 commits.
-- **OpenAssistant**: Assistants API client with full thread management. 214 commits.
-- **LinkedOut**: Full-stack job screening platform (SwiftUI + FastAPI + Docker + LLM scoring).
-- 382 commits in the last year across these projects.
+- **OpenIntelligence**: On-device RAG engine — 102 services, 29-step pipeline,
+  hybrid search, Core ML embeddings, Apple Intelligence, runs in airplane mode.
+  202 commits.
+- **OpenResponses**: OpenAI Responses API client — MCP integration (Notion,
+  Dropbox, Gmail), Computer Use, 15+ models, tool orchestration. 88 commits.
+  First App Store submission passed review.
+- **OpenCone**: Pinecone vector DB RAG app — hybrid search, reranking, document
+  ingestion with SHA256 dedup, circuit breaker resilience. 122 commits.
+- **OpenAssistant**: Assistants API client — threads, runs, vector stores,
+  Code Interpreter, File Search. 214 commits.
+- **LinkedOut**: Full-stack AI matching platform — SwiftUI + FastAPI + Docker +
+  LLM scoring from 5 job sources. 62 commits and growing.
+- **PlaudBlender**: Voice recordings → knowledge graph — Gemini AI, Qdrant
+  vector DB, 11-tool MCP server, 91 tests. 70 commits.
+- 758 all-time commits, 638 in the last year, 4 apps on the App Store.
 
 ### Technical Reality
-- **Strong in**: Swift/iOS, Python/FastAPI, RAG pipelines, vector databases, API
-  integrations, LLM orchestration, on-device ML, system architecture
+- **Built with**: Swift/SwiftUI, Python/FastAPI, RAG pipelines, vector databases
+  (Pinecone, Qdrant), LLM orchestration (OpenAI, Gemini, Anthropic), on-device ML
+  (Core ML, Metal GPU), MCP servers, Docker, API integrations
 - **Haven't used professionally**: React, Vue, Angular, Flutter, Java, Go, Rust,
   C++, Ruby on Rails, .NET, Kubernetes at scale
-- **No CS degree. No professional software engineering experience.**
-- Your App Store apps are real but would need to be argued as "equivalent experience"
-  at any company that lists years-of-experience requirements.
+- **No CS degree (B.S. Kinesiology). No professional software engineering experience.**
+- 4 published App Store apps and 6 GitHub repos IS the experience. Period.
 
 ### Day Job
-Medical device specialist at VA Palo Alto (Stryker contractor). You support Stanford
-Cardiothoracic & Vascular Surgery. Deep HIPAA, surgical workflow, regulated-environment expertise.
+Medical device specialist at VA Palo Alto (Stryker OnSite). Sole technical specialist
+supporting Stanford surgical teams — Cardiothoracic, Vascular, General, Urology, ENT,
+Thoracic. Complete autonomy. HIPAA, PIV clearance, regulated environment expertise.
 
 ### What You Want
-Companies where your portfolio ALREADY excites them. Not places where you'd need to
-argue why your background qualifies. The test: if the hiring manager saw gunnarguy.me
-with 5 shipped products, would they say "get this person an interview" or "but where's
-the CS degree?" You want the former ONLY.
+Roles where shipped products matter more than credentials. Companies that look at
+gunnarguy.me and say "get this person an interview" — not "where's the CS degree?"
+Specifically:
+- Roles that explicitly say "no CS degree required" or "equivalent experience accepted"
+- Companies that value builders, shippers, and portfolio over pedigree
+- AI/ML, iOS, product engineering, healthtech, developer tools
+- Startups and small teams where what you've built speaks for itself
+- Roles where your AI-native workflow IS the job (AI engineering, LLM tooling, etc.)
+
+You are NOT looking for roles that require traditional credentials with no flexibility.
+If they hard-require a CS degree with no "or equivalent" — that's a hard no, move on.
 
 ## Hard Filters — REJECT immediately if ANY are true
-- Strictly requires CS/engineering degree with NO "or equivalent" escape hatch
+- **CS DEGREE: HARD REJECT** if the listing says "requires", "must have", or
+  "required" for a CS/engineering/CompSci degree with NO "or equivalent experience",
+  "or equivalent projects", "or comparable portfolio" escape hatch. This is the
+  #1 dealbreaker. If they REQUIRE a degree, period, you're out. But if they say
+  "or equivalent" or "preferred" or don't mention it at all — that's fine.
 - Above "{max_seniority_level}" seniority (hierarchy: Junior < Mid < Senior < Any)
 - Requires 7+ years professional software engineering
 - Requires 5+ years with no flexibility language
@@ -262,9 +281,18 @@ ACTUALLY SAYS, or am I inferring enthusiasm that isn't there?"
 - "1-3 years" or "any": no penalty
 - "3-5 years professional": -0.05 (your apps MAY count — FLAG it)
 - "5+ years" with flexibility: {experience_penalty} (FLAG)
-- "CS degree preferred": -0.03 (FLAG)
-- "CS degree or equivalent": -0.05 (FLAG)
+- "CS degree required" with NO escape hatch: HARD REJECT (passed_filter=false)
+- "CS degree preferred": -0.03 (FLAG — but don't reject)
+- "CS degree or equivalent experience": no penalty (this is fine)
+- "No degree required" / "we don't care about degrees": +0.08 (THIS IS WHAT YOU WANT)
 - Known elite/selective (FAANG, Jane Street): {credential_penalty}
+
+**Non-Traditional / Portfolio-First Signals** (BOOST these — they're gold):
+- "No CS degree required" / "We value skills over credentials": +0.10
+- "Portfolio > resume" / "Show us what you've built": +0.10
+- "Non-traditional backgrounds welcome" / "Self-taught welcome": +0.10
+- "Equivalent experience" / "equivalent projects" in lieu of degree: +0.05
+- Company has <50 employees and no degree mentioned: +0.05
 
 **Industry Multiplier**:
 - HealthTech / MedTech / Clinical AI: +0.08 (your Stryker/VA domain is a real differentiator)
@@ -409,19 +437,22 @@ You are a fast job-listing triage filter. Be AGGRESSIVE about rejecting.
 The goal is a ~40% pass rate — most jobs should NOT make it through.
 
 ## Your snapshot
-High-agency product engineer. You orchestrate AI to generate all code.
-Shipped 5 products (4 on App Store). Swift/iOS, Python, RAG, vector DBs.
-No CS degree, no professional SWE experience. Healthcare ops day job (Stryker/VA).
+AI-native builder. You orchestrate AI agents to generate all code — you do NOT
+hand-write it. You do this because you can, it's fun, and you want to get paid for it.
+Shipped 6 projects (4 on App Store). 758 commits. Swift/iOS, Python, RAG, vector DBs,
+LLM orchestration, MCP servers, Docker. B.S. Kinesiology — NO CS degree, no
+professional SWE experience. Healthcare ops day job (Stryker/VA Palo Alto).
 Home: {preferred_locations}. Wants 100% remote.
 
 ## REJECT (dominated=false) if ANY are true:
 - Requires on-site or hybrid attendance (must be 100% remote or highly autonomous)
 - Salary band explicitly entirely below $90,000
 - Senior, Staff, Lead, Principal, Director, VP title (unless max seniority allows)
-- Strictly requires CS/engineering degree with NO "or equivalent"
+- **Requires CS/engineering degree with NO "or equivalent" / "or equivalent experience"**
+  This is the #1 dealbreaker. If it says "requires CS degree" with no escape hatch, REJECT.
 - Requires 5+ years professional SWE experience with no flexibility
 - Hard requires a specific stack (React, Java, Go, C++, etc.) with NO signal they
-  accept portfolio or fast learners — would have to CONVINCE them
+  accept portfolio or fast learners
 - Pure non-tech (sales, marketing, HR, legal, finance, design-only)
 - Pure infra / DevOps / SRE with no product surface
 - Legacy codebase maintenance, monolith migration, ticket-taking roles
@@ -429,6 +460,8 @@ Home: {preferred_locations}. Wants 100% remote.
 - Zero overlap with AI/ML, iOS, product engineering, or healthcare tech
 
 ## PASS (dominated=true) if:
+- **Explicitly says "no CS degree required", "non-traditional welcome", or "portfolio-first"**
+- **Says "or equivalent experience" / "or equivalent projects" instead of hard degree req**
 - AI/ML roles (RAG, embeddings, agents, LLM tooling, GenAI)
 - Founding / first engineer at startups (<50 people)
 - Explicitly welcomes non-traditional backgrounds or portfolio-first hiring
@@ -438,6 +471,7 @@ Home: {preferred_locations}. Wants 100% remote.
 - iOS/mobile at AI-forward companies
 - Mentions "rapid iteration," "zero-to-one," "autonomy," "AI-native"
 - Entry, junior, or mid-level (or unspecified seniority)
+- Hobby projects / side projects valued, portfolio reviews mentioned
 
 When in doubt, REJECT. Better to miss a borderline job than waste time.
 
@@ -611,9 +645,14 @@ _SENIOR_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Strict degree requirements (hard reject)
+# Strict degree requirements (hard reject) — but NOT if "or equivalent" follows
 _STRICT_DEGREE_RE = re.compile(
     r"(require[ds]?|must have).{0,30}(CS|computer science|engineering) (degree|bachelor)",
+    re.IGNORECASE,
+)
+# Escape hatch: "or equivalent experience/projects/portfolio"
+_DEGREE_ESCAPE_RE = re.compile(
+    r"or equivalent|or comparable|preferred|nice to have|a plus",
     re.IGNORECASE,
 )
 
@@ -648,6 +687,17 @@ _POSITIVE_KEYWORDS = [
     (r"python|fastapi", 0.05),
     (r"\bjunior\b|\bintern\b|\bentry.level\b", 0.06),
     (r"open.?source|OSS", 0.05),
+    # Portfolio-first / non-traditional signals (gold)
+    (
+        r"no.{0,10}(CS |computer science )?degree.{0,10}(required|needed|necessary)",
+        0.15,
+    ),
+    (r"non.?traditional.{0,15}(background|candidate|experience)", 0.15),
+    (r"self.?taught|bootcamp.?grad|career.?changer", 0.12),
+    (r"portfolio.?(first|over|review|driven)|show.{0,10}what.{0,10}built", 0.15),
+    (r"equivalent.{0,10}(experience|project|work)", 0.10),
+    (r"we.{0,10}value.{0,15}(skills|builders|shipping|output)\b", 0.10),
+    (r"side.?project|hobby.?project|personal.?project", 0.08),
 ]
 _POSITIVE_COMPILED = [(re.compile(p, re.IGNORECASE), s) for p, s in _POSITIVE_KEYWORDS]
 
@@ -660,6 +710,9 @@ _NEGATIVE_KEYWORDS = [
     (r"\bDevOps\b|\bSRE\b|infrastructure only", -0.05),
     (r"leetcode|whiteboard.coding|algorithm.interview", -0.08),
     (r"Java\b(?!Script)|\.NET|C#|COBOL", -0.05),
+    # Credential-heavy signals
+    (r"top.?tier university|elite.?school|ivy league", -0.10),
+    (r"accredited.{0,10}(CS|computer science).{0,10}program", -0.10),
 ]
 _NEGATIVE_COMPILED = [(re.compile(p, re.IGNORECASE), s) for p, s in _NEGATIVE_KEYWORDS]
 
@@ -679,12 +732,14 @@ def score_job_locally(raw: RawJobListing, prefs: UserPreferences | None = None) 
             rejection_reason=f"Title contains seniority keyword: {title}",
         )
 
-    # Hard reject: Strict CS degree requirement
-    if _STRICT_DEGREE_RE.search(raw.description):
-        logger.info(f"[LOCAL] REJECTED (CS degree) | {title} @ {raw.company}")
+    # Hard reject: Strict CS degree requirement (unless "or equivalent" escape hatch)
+    if _STRICT_DEGREE_RE.search(raw.description) and not _DEGREE_ESCAPE_RE.search(
+        raw.description
+    ):
+        logger.info(f"[LOCAL] REJECTED (hard CS degree req) | {title} @ {raw.company}")
         return ScoringResult(
             passed_filter=False,
-            rejection_reason="Strict CS degree requirement detected",
+            rejection_reason="Hard CS degree requirement with no 'or equivalent' escape hatch",
         )
 
     # Score based on keyword matches
