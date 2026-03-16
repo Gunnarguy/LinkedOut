@@ -134,7 +134,7 @@ LinkedOut/
 | --------------- | ------------------------------------------------------------------ |
 | **iOS App**     | SwiftUI, iOS 17+, MapKit, WebKit, Combine                          |
 | **Backend**     | FastAPI, Python 3.12, Pydantic v2, uvicorn                         |
-| **LLM Scoring** | Google Gemini (primary), OpenAI (fallback)                       |
+| **LLM Scoring** | Google Gemini (primary), OpenAI (fallback)                         |
 | **Job APIs**    | Remotive, Himalayas, HN Algolia, Jobicy, RemoteOK                  |
 | **Auth**        | LinkedIn OAuth 2.0                                                 |
 | **Storage**     | JSON file-backed (job_store.json, seen_urls.json, user_prefs.json) |
@@ -226,16 +226,16 @@ Add the following to your Claude Desktop `claude_desktop_config.json`:
 }
 ```
 
-*Note: Adjust `linkedout-backend-1` if your Docker container is named differently. Command assumes you are running docker via `docker compose up` in the LinkedOut directory.*
+_Note: Adjust `linkedout-backend-1` if your Docker container is named differently. Command assumes you are running docker via `docker compose up` in the LinkedOut directory._
 
 Available Tools:
+
 - `get_linkedin_auth_status` / `get_my_linkedin_profile`
 - `post_linkedin_update`
 - `get_linkedout_pipeline_stats`
 - `query_pending_jobs` / `get_job_details` / `action_job`
 - `trigger_linkedout_ingest`
 - `get_saved_jobs_to_share`
-
 
 ---
 
@@ -514,12 +514,12 @@ All settings persist locally via `@AppStorage` (UserDefaults) — they survive e
 
 ### Development (debug mode only)
 
-| Method | Path                            | Description                                |
-| ------ | ------------------------------- | ------------------------------------------ |
-| POST   | `/api/dev/seed`                 | Seed 3 mock jobs                           |
-| POST   | `/api/dev/reset-seen`           | Clear seen URLs                            |
-| POST   | `/api/dev/clear-pending`        | Clear pending queue                        |
-| GET    | `/api/dev/logs`                 | Recent log lines (query: `n`, default 100) |
+| Method | Path                     | Description                                |
+| ------ | ------------------------ | ------------------------------------------ |
+| POST   | `/api/dev/seed`          | Seed 3 mock jobs                           |
+| POST   | `/api/dev/reset-seen`    | Clear seen URLs                            |
+| POST   | `/api/dev/clear-pending` | Clear pending queue                        |
+| GET    | `/api/dev/logs`          | Recent log lines (query: `n`, default 100) |
 
 ---
 

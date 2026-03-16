@@ -1171,7 +1171,7 @@ private struct ScoringRuleRow: View {
 // MARK: - Profile Editor View
 struct ProfileEditorView: View {
     @Binding var profileText: String
-    
+
     var body: some View {
         Form {
             Section {

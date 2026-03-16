@@ -1,8 +1,0 @@
-feat: Dynamic AI Profiles and LinkedIn MCP Server
-
-- iOS: Added ProfileEditorView in Settings to let the user dynamically edit their markdown resume text.
-- iOS: Added `professionalProfile` property to UserPreferences SwiftUI model.
-- Backend: Removed hardcoded resume from `scoring_engine.py` and replaced it with dynamic property injection via Pydantic (`models.py`).
-- Backend: Added Python `mcp` server package to requirements.
-- Integration: Implemented `mcp_server.py` exposing 8 tools natively over FastMCP to Claude Desktop (LinkedIn OAuth status, Job Pipeline stats, LinkedIn updates, DB actions, get full job details, fetch pending jobs, trigger ingest fetching).
-- DB Maintenance: Purged ghost records from the deprecated local keyword scorer logic.
