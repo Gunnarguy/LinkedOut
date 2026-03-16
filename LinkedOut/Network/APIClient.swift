@@ -260,6 +260,12 @@ final class APIClient: @unchecked Sendable {
         return try await get("/api/notion/score/status")
     }
 
+    // MARK: - Telemetry
+
+    func fetchTelemetry(logLines: Int = 50) async throws -> TelemetryResponse {
+        return try await get("/api/telemetry?log_lines=\(logLines)")
+    }
+
     // MARK: - Generic HTTP
 
     private func get<T: Decodable>(_ path: String) async throws -> T {

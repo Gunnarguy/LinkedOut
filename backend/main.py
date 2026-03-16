@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -64,6 +65,28 @@ _manual_ingest_task: asyncio.Task | None = None
 _last_ingest_result: int | None = None  # Result of last manual ingest
 _ingest_lock = asyncio.Lock()  # Serialize ingest cycles so manual + periodic don't race
 
+# ── Process telemetry ────────────────────────────────────────────────────────
+import time as _time
+
+_boot_time: float = _time.time()
+
+_ingest_progress: dict = {
+    "phase": "idle",        # idle | fetching | deduping | scoring | complete | error
+    "batch": 0,
+    "total_batches": 0,
+    "fetched": 0,
+    "new_after_dedup": 0,
+    "scored": 0,
+    "queued": 0,
+    "rejected": 0,
+    "low_score": 0,
+    "errors": 0,
+    "started_at": None,
+    "last_completed_at": None,
+    "last_duration_s": None,
+    "cycles_completed": 0,
+}
+
 # User preferences — updated via API, used in ingest cycles
 _DATA_DIR = Path("/app/data") if Path("/app").exists() else Path("./data")
 _PREFS_FILE = _DATA_DIR / "user_prefs.json"
@@ -99,8 +122,12 @@ async def _run_ingest_cycle():
 
     Pipeline: Fetch → Dedup (skip seen URLs) → Flash triage → Pro scoring → Queue
     """
-    import time as _time
     cycle_start = _time.monotonic()
+    _ingest_progress.update(
+        phase="fetching", batch=0, total_batches=0, fetched=0,
+        new_after_dedup=0, scored=0, queued=0, rejected=0, low_score=0,
+        errors=0, started_at=_time.time(),
+    )
     logger.info("="*60)
     logger.info("INGEST CYCLE STARTING")
     logger.info("="*60)
@@ -108,12 +135,16 @@ async def _run_ingest_cycle():
         t0 = _time.monotonic()
         raw_listings = await fetch_all_sources()
         fetch_elapsed = _time.monotonic() - t0
+        _ingest_progress["fetched"] = len(raw_listings)
         logger.info(f"[FETCH] Got {len(raw_listings)} total listings in {fetch_elapsed:.1f}s")
         if not raw_listings:
             logger.info("[FETCH] No listings fetched from any source")
+            _ingest_progress.update(phase="complete", last_completed_at=_time.time(), last_duration_s=round(fetch_elapsed, 1))
+            _ingest_progress["cycles_completed"] += 1
             return 0
 
         # Dedup: skip URLs we've already scored OR already in store
+        _ingest_progress["phase"] = "deduping"
         dedup_urls: set[str] = set()
         new_listings: list[RawJobListing] = []
         for r in raw_listings:
@@ -124,10 +155,14 @@ async def _run_ingest_cycle():
             dedup_urls.add(r.url)
             new_listings.append(r)
         skipped = len(raw_listings) - len(new_listings)
+        _ingest_progress["new_after_dedup"] = len(new_listings)
         logger.info(f"[DEDUP] {len(new_listings)} new, {skipped} already-seen")
 
         if not new_listings:
             logger.info("[DEDUP] All listings already seen — nothing to score")
+            elapsed = _time.monotonic() - cycle_start
+            _ingest_progress.update(phase="complete", last_completed_at=_time.time(), last_duration_s=round(elapsed, 1))
+            _ingest_progress["cycles_completed"] += 1
             return 0
 
         # Log a sample of new listings
@@ -135,13 +170,18 @@ async def _run_ingest_cycle():
             logger.info(f"[SAMPLE {i}] {nl.title} @ {nl.company} — {nl.url[:80]}")
 
         # Two-tier scoring: Flash triage → Pro full scoring → local fallback
+        _ingest_progress["phase"] = "scoring"
         prefs = _user_prefs
         total_added = 0
         batch_size = 10
         min_builder_score = 0.30
+        total_batches = (len(new_listings) + batch_size - 1) // batch_size
+        _ingest_progress["total_batches"] = total_batches
 
         for i in range(0, len(new_listings), batch_size):
             batch = new_listings[i : i + batch_size]
+            batch_num = i // batch_size + 1
+            _ingest_progress["batch"] = batch_num
             t1 = _time.monotonic()
             results = await triage_and_score(batch, prefs)
             score_elapsed = _time.monotonic() - t1
@@ -149,20 +189,24 @@ async def _run_ingest_cycle():
             for raw_listing, result in zip(batch, results):
                 # Only mark as seen after we've processed it
                 store.mark_url_seen(raw_listing.url)
+                _ingest_progress["scored"] += 1
                 if result.passed_filter and result.job:
                     if result.job.builder_score >= min_builder_score:
                         store.add_pending(result.job)
                         total_added += 1
+                        _ingest_progress["queued"] += 1
                         logger.info(
                             f"[QUEUED] {result.job.role_title} @ {result.job.company_name} "
                             f"score={result.job.builder_score:.2f}"
                         )
                     else:
+                        _ingest_progress["low_score"] += 1
                         logger.info(
                             f"[LOW SCORE] {result.job.role_title} @ {result.job.company_name} "
                             f"score={result.job.builder_score:.2f} < {min_builder_score}"
                         )
                 elif not result.passed_filter:
+                    _ingest_progress["rejected"] += 1
                     logger.info(
                         f"[REJECTED] {raw_listing.title} @ {raw_listing.company} "
                         f"— {result.rejection_reason}"
@@ -172,12 +216,18 @@ async def _run_ingest_cycle():
 
             passed = sum(1 for r in results if r.passed_filter)
             logger.info(
-                f"[BATCH {i // batch_size + 1}] "
+                f"[BATCH {batch_num}/{total_batches}] "
                 f"{passed}/{len(batch)} passed → {total_added} total queued "
                 f"({score_elapsed:.1f}s)"
             )
 
         total_elapsed = _time.monotonic() - cycle_start
+        _ingest_progress.update(
+            phase="complete",
+            last_completed_at=_time.time(),
+            last_duration_s=round(total_elapsed, 1),
+        )
+        _ingest_progress["cycles_completed"] += 1
         logger.info("="*60)
         logger.info(
             f"INGEST COMPLETE: {total_added} new jobs queued "
@@ -190,6 +240,7 @@ async def _run_ingest_cycle():
 
     except Exception as e:
         total_elapsed = _time.monotonic() - cycle_start
+        _ingest_progress.update(phase="error", errors=_ingest_progress.get("errors", 0) + 1, last_duration_s=round(total_elapsed, 1))
         logger.exception(f"INGEST CYCLE FAILED after {total_elapsed:.1f}s: {e}")
         return 0
 
@@ -1331,6 +1382,108 @@ async def get_recent_logs(n: int = Query(100, ge=1, le=500)):
     """Return recent backend log lines (ring buffer, newest last)."""
     lines = list(_LOG_RING)[-n:]
     return {"count": len(lines), "logs": lines}
+
+
+# ── Telemetry: unified process observability ─────────────────────────────────
+
+
+@app.get("/api/telemetry")
+async def get_telemetry(log_lines: int = Query(50, ge=0, le=500)):
+    """Single endpoint exposing ALL backend process state for debug visibility.
+
+    Returns: server info, ingest state, rescore state, Notion sync state,
+    store stats, LLM config, and recent log lines.
+    """
+    import platform
+
+    now = _time.time()
+    uptime_s = now - _boot_time
+
+    # ── Server info ──
+    server = {
+        "boot_time": _boot_time,
+        "uptime_seconds": round(uptime_s, 1),
+        "uptime_human": _format_duration(uptime_s),
+        "python_version": platform.python_version(),
+        "hostname": platform.node(),
+        "port": settings.port,
+        "debug": settings.debug,
+        "render": bool(os.getenv("RENDER")),
+    }
+
+    # ── Ingest state ──
+    periodic_running = _ingest_task is not None and not _ingest_task.done()
+    manual_running = _manual_ingest_task is not None and not _manual_ingest_task.done()
+    ingest = {
+        "lock_held": _ingest_lock.locked(),
+        "periodic_task_alive": periodic_running,
+        "manual_task_alive": manual_running,
+        "last_manual_result": _last_ingest_result,
+        "progress": dict(_ingest_progress),
+    }
+
+    # ── Rescore state ──
+    rescore_running = _rescore_task is not None and not _rescore_task.done()
+    rescore = {
+        "task_alive": rescore_running,
+        **dict(_rescore_progress),
+    }
+
+    # ── Notion state ──
+    notion_running = _notion_sync_task is not None and not _notion_sync_task.done()
+    notion_score_running = _notion_score_task is not None and not _notion_score_task.done()
+    notion = {
+        "configured": notion_sync.configured,
+        "sync_task_alive": notion_running,
+        "last_sync_result": _notion_sync_result,
+        "score_task_alive": notion_score_running,
+        "score_progress": dict(_notion_score_progress),
+    }
+
+    # ── Store stats ──
+    stats = store.stats
+    store_info = {
+        **stats,
+        "seen_urls": len(store._seen_urls) if hasattr(store, '_seen_urls') else None,
+        "data_dir": str(_DATA_DIR),
+    }
+
+    # ── LLM config ──
+    llm = {
+        "provider": settings.llm_provider,
+        "gemini_model": settings.gemini_model,
+        "gemini_flash_model": settings.gemini_flash_model,
+        "openai_model": settings.openai_model,
+        "has_gemini_key": bool(settings.gemini_api_key),
+        "has_openai_key": bool(settings.openai_api_key),
+    }
+
+    # ── Recent logs ──
+    logs = list(_LOG_RING)[-log_lines:] if log_lines > 0 else []
+
+    return {
+        "timestamp": now,
+        "server": server,
+        "ingest": ingest,
+        "rescore": rescore,
+        "notion": notion,
+        "store": store_info,
+        "llm": llm,
+        "logs": logs,
+        "log_count": len(logs),
+    }
+
+
+def _format_duration(seconds: float) -> str:
+    """Human-readable duration string."""
+    s = int(seconds)
+    if s < 60:
+        return f"{s}s"
+    if s < 3600:
+        return f"{s // 60}m {s % 60}s"
+    h = s // 3600
+    m = (s % 3600) // 60
+    return f"{h}h {m}m"
 
 
 if __name__ == "__main__":

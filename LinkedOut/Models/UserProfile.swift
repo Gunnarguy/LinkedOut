@@ -228,3 +228,146 @@ struct NotionScoreStatus: Codable {
     let scored: Int
     let skipped: Int
 }
+
+// MARK: - Telemetry
+
+struct TelemetryResponse: Codable {
+    let timestamp: Double
+    let server: TelemetryServer
+    let ingest: TelemetryIngest
+    let rescore: TelemetryRescore
+    let notion: TelemetryNotion
+    let store: TelemetryStore
+    let llm: TelemetryLLM
+    let logs: [String]
+    let logCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case timestamp, server, ingest, rescore, notion, store, llm, logs
+        case logCount = "log_count"
+    }
+}
+
+struct TelemetryServer: Codable {
+    let bootTime: Double
+    let uptimeSeconds: Double
+    let uptimeHuman: String
+    let pythonVersion: String
+    let hostname: String
+    let port: Int
+    let debug: Bool
+    let render: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case bootTime = "boot_time"
+        case uptimeSeconds = "uptime_seconds"
+        case uptimeHuman = "uptime_human"
+        case pythonVersion = "python_version"
+        case hostname, port, debug, render
+    }
+}
+
+struct TelemetryIngest: Codable {
+    let lockHeld: Bool
+    let periodicTaskAlive: Bool
+    let manualTaskAlive: Bool
+    let lastManualResult: Int?
+    let progress: IngestProgress
+
+    enum CodingKeys: String, CodingKey {
+        case lockHeld = "lock_held"
+        case periodicTaskAlive = "periodic_task_alive"
+        case manualTaskAlive = "manual_task_alive"
+        case lastManualResult = "last_manual_result"
+        case progress
+    }
+}
+
+struct IngestProgress: Codable {
+    let phase: String
+    let batch: Int
+    let totalBatches: Int
+    let fetched: Int
+    let newAfterDedup: Int
+    let scored: Int
+    let queued: Int
+    let rejected: Int
+    let lowScore: Int
+    let errors: Int
+    let startedAt: Double?
+    let lastCompletedAt: Double?
+    let lastDurationS: Double?
+    let cyclesCompleted: Int
+
+    enum CodingKeys: String, CodingKey {
+        case phase, batch
+        case totalBatches = "total_batches"
+        case fetched
+        case newAfterDedup = "new_after_dedup"
+        case scored, queued, rejected
+        case lowScore = "low_score"
+        case errors
+        case startedAt = "started_at"
+        case lastCompletedAt = "last_completed_at"
+        case lastDurationS = "last_duration_s"
+        case cyclesCompleted = "cycles_completed"
+    }
+}
+
+struct TelemetryRescore: Codable {
+    let taskAlive: Bool
+    let running: Bool
+    let done: Int
+    let total: Int
+    let errors: Int
+
+    enum CodingKeys: String, CodingKey {
+        case taskAlive = "task_alive"
+        case running, done, total, errors
+    }
+}
+
+struct TelemetryNotion: Codable {
+    let configured: Bool
+    let syncTaskAlive: Bool
+    let scoreTaskAlive: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case configured
+        case syncTaskAlive = "sync_task_alive"
+        case scoreTaskAlive = "score_task_alive"
+    }
+}
+
+struct TelemetryStore: Codable {
+    let pending: Int
+    let applied: Int
+    let saved: Int
+    let rejected: Int
+    let seenUrls: Int?
+    let dataDir: String
+
+    enum CodingKeys: String, CodingKey {
+        case pending, applied, saved, rejected
+        case seenUrls = "seen_urls"
+        case dataDir = "data_dir"
+    }
+}
+
+struct TelemetryLLM: Codable {
+    let provider: String
+    let geminiModel: String
+    let geminiFlashModel: String
+    let openaiModel: String
+    let hasGeminiKey: Bool
+    let hasOpenaiKey: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case provider
+        case geminiModel = "gemini_model"
+        case geminiFlashModel = "gemini_flash_model"
+        case openaiModel = "openai_model"
+        case hasGeminiKey = "has_gemini_key"
+        case hasOpenaiKey = "has_openai_key"
+    }
+}

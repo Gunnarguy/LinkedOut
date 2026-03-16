@@ -13,6 +13,7 @@ struct YourHubView: View {
     @EnvironmentObject var jobs: JobsViewModel
 
     @State private var showSettings = false
+    @State private var showTelemetry = false
     @State private var navigateTo: PipelineDestination?
     @State private var notionStatus: NotionStatusResponse?
     @State private var notionSyncing = false
@@ -44,6 +45,9 @@ struct YourHubView: View {
             .task { await jobs.loadStats(); await loadNotionStatus() }
             .navigationDestination(isPresented: $showSettings) {
                 SettingsView()
+            }
+            .navigationDestination(isPresented: $showTelemetry) {
+                TelemetryView()
             }
             .navigationDestination(item: $navigateTo) { dest in
                 switch dest {
@@ -289,6 +293,41 @@ struct YourHubView: View {
             }
             .buttonStyle(.plain)
             .disabled(rescoring)
+
+            // Backend Telemetry
+            Button {
+                showTelemetry = true
+            } label: {
+                HStack(spacing: 14) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(.teal.gradient)
+                            .frame(width: 40, height: 40)
+                        Image(systemName: "waveform.path.ecg")
+                            .font(.body.bold())
+                            .foregroundStyle(.white)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Backend Telemetry")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text("Live processes, logs, LLM config, store stats")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(14)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(.quaternary, lineWidth: 0.5)
+                )
+            }
+            .buttonStyle(.plain)
         }
     }
 
