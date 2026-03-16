@@ -46,6 +46,8 @@ class JobsViewModel: ObservableObject {
         return pendingJobs.filter { job in
             if !blocked.isEmpty && blocked.contains(job.companyName.lowercased()) { return false }
             if decided.contains(job.sourceUrl) { return false }
+            // Hide jobs that fell through to the local keyword scorer
+            if job.aiPitchSummary.lowercased().contains("local keyword") { return false }
             return true
         }
     }
@@ -222,13 +224,20 @@ class JobsViewModel: ObservableObject {
         print("[VM] loadPendingJobs — starting")
 
         do {
-            pendingJobs = try await APIClient.shared.fetchPendingJobs()
-            Self.writeCache("pending", jobs: pendingJobs)
+            let fetched = try await APIClient.shared.fetchPendingJobs()
             isOffline = false
             error = nil
-            print("[VM] loadPendingJobs — got \(pendingJobs.count) jobs")
-            for (i, j) in pendingJobs.prefix(5).enumerated() {
-                print("[VM]   [\(i)] \(j.roleTitle) @ \(j.companyName) score=\(j.builderScore)")
+
+            if fetched.isEmpty && !pendingJobs.isEmpty {
+                // Server returned 0 but we have cached jobs — keep them
+                print("[VM] loadPendingJobs — server returned 0, keeping \(pendingJobs.count) cached jobs")
+            } else {
+                pendingJobs = fetched
+                Self.writeCache("pending", jobs: pendingJobs)
+                print("[VM] loadPendingJobs — got \(pendingJobs.count) jobs")
+                for (i, j) in pendingJobs.prefix(5).enumerated() {
+                    print("[VM]   [\(i)] \(j.roleTitle) @ \(j.companyName) score=\(j.builderScore)")
+                }
             }
         } catch {
             print("[VM] loadPendingJobs — ERROR: \(error)")
@@ -244,9 +253,14 @@ class JobsViewModel: ObservableObject {
     func loadAppliedJobs() async {
         print("[VM] loadAppliedJobs — starting")
         do {
-            appliedJobs = try await APIClient.shared.fetchAppliedJobs()
-            Self.writeCache("applied", jobs: appliedJobs)
-            print("[VM] loadAppliedJobs — got \(appliedJobs.count)")
+            let fetched = try await APIClient.shared.fetchAppliedJobs()
+            if fetched.isEmpty && !appliedJobs.isEmpty {
+                print("[VM] loadAppliedJobs — server returned 0, keeping \(appliedJobs.count) cached")
+            } else {
+                appliedJobs = fetched
+                Self.writeCache("applied", jobs: appliedJobs)
+                print("[VM] loadAppliedJobs — got \(appliedJobs.count)")
+            }
         } catch {
             print("[VM] loadAppliedJobs — ERROR (suppressed): \(error)")
         }
@@ -255,9 +269,14 @@ class JobsViewModel: ObservableObject {
     func loadSavedJobs() async {
         print("[VM] loadSavedJobs — starting")
         do {
-            savedJobs = try await APIClient.shared.fetchSavedJobs()
-            Self.writeCache("saved", jobs: savedJobs)
-            print("[VM] loadSavedJobs — got \(savedJobs.count)")
+            let fetched = try await APIClient.shared.fetchSavedJobs()
+            if fetched.isEmpty && !savedJobs.isEmpty {
+                print("[VM] loadSavedJobs — server returned 0, keeping \(savedJobs.count) cached")
+            } else {
+                savedJobs = fetched
+                Self.writeCache("saved", jobs: savedJobs)
+                print("[VM] loadSavedJobs — got \(savedJobs.count)")
+            }
         } catch {
             print("[VM] loadSavedJobs — ERROR (suppressed): \(error)")
         }
@@ -266,9 +285,14 @@ class JobsViewModel: ObservableObject {
     func loadRejectedJobs() async {
         print("[VM] loadRejectedJobs — starting")
         do {
-            rejectedJobs = try await APIClient.shared.fetchRejectedJobs()
-            Self.writeCache("rejected", jobs: rejectedJobs)
-            print("[VM] loadRejectedJobs — got \(rejectedJobs.count)")
+            let fetched = try await APIClient.shared.fetchRejectedJobs()
+            if fetched.isEmpty && !rejectedJobs.isEmpty {
+                print("[VM] loadRejectedJobs — server returned 0, keeping \(rejectedJobs.count) cached")
+            } else {
+                rejectedJobs = fetched
+                Self.writeCache("rejected", jobs: rejectedJobs)
+                print("[VM] loadRejectedJobs — got \(rejectedJobs.count)")
+            }
         } catch {
             print("[VM] loadRejectedJobs — ERROR (suppressed): \(error)")
         }
@@ -394,7 +418,8 @@ class JobsViewModel: ObservableObject {
 
     /// Auto-ingest once per session when the queue loads empty
     func autoIngestIfNeeded() async {
-        print("[VM] autoIngestIfNeeded — pending=\(pendingJobs.count) ingesting=\(isIngesting) loading=\(isLoading) alreadyDone=\(hasAutoIngested)")
+        let visible = visiblePendingJobs.count
+        print("[VM] autoIngestIfNeeded — pending=\(pendingJobs.count) visible=\(visible) ingesting=\(isIngesting) loading=\(isLoading) alreadyDone=\(hasAutoIngested)")
         guard pendingJobs.isEmpty && !isIngesting && !isLoading && !hasAutoIngested else {
             print("[VM] autoIngestIfNeeded — skipped (guard failed)")
             return
