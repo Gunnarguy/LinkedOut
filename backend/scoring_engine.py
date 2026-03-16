@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 import re
+import time as _time_mod
 from datetime import datetime, timezone
 
 from openai import AsyncOpenAI
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 _openai_client: AsyncOpenAI | None = None
 _gemini_client = None
+_pro_cooldown_until: float = 0  # monotonic timestamp; skip Pro until this time
 
 
 def _get_openai_client() -> AsyncOpenAI:
@@ -89,9 +91,20 @@ async def _call_llm(
     Chain: Gemini Pro → Flash (on timeout/rate-limit) → OpenAI GPT-5.4
     On Pro timeout: skip retries, immediately try Flash (Pro is unresponsive).
     On rate limit: retry with backoff, then Flash → OpenAI.
+    Pro cooldown: after a timeout, skip Pro for 5 minutes.
     """
+    global _pro_cooldown_until
     provider = settings.llm_provider.lower()
     max_retries = 3
+
+    # If Pro is in cooldown, go directly to Flash
+    if (
+        provider == "gemini"
+        and not use_flash
+        and _time_mod.monotonic() < _pro_cooldown_until
+    ):
+        logger.debug("[LLM] Pro in cooldown — using Flash directly")
+        use_flash = True
 
     for attempt in range(max_retries):
         try:
@@ -119,8 +132,10 @@ async def _call_llm(
 
             # On Pro timeout: don't waste retries, immediately fall through to Flash
             if is_timeout and provider == "gemini" and not use_flash:
+                _pro_cooldown_until = _time_mod.monotonic() + 300  # 5-min cooldown
                 logger.warning(
-                    f"[LLM] Gemini Pro timed out ({timeout}s) → trying Flash..."
+                    f"[LLM] Gemini Pro timed out ({timeout}s) → trying Flash "
+                    f"(Pro cooldown for 5 min)..."
                 )
                 try:
                     return await _call_gemini(
