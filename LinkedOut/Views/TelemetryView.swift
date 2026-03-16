@@ -136,8 +136,8 @@ struct TelemetryView: View {
                 StatusRow(label: "Last Duration", value: formatDuration(dur), icon: "stopwatch")
             }
             StatusRow(label: "Cycles Done", value: "\(p.cyclesCompleted)", icon: "repeat")
-            if let err = p.errors, err > 0 {
-                StatusRow(label: "Errors", value: "\(err)", icon: "exclamationmark.triangle", tint: .red)
+            if p.errors > 0 {
+                StatusRow(label: "Errors", value: "\(p.errors)", icon: "exclamationmark.triangle", tint: .red)
             }
         } header: {
             Label("Ingest Pipeline", systemImage: "arrow.down.doc")
