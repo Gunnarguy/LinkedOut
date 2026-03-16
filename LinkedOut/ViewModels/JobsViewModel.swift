@@ -21,6 +21,9 @@ class JobsViewModel: ObservableObject {
     @Published var error: String?
     @Published var info: String?
 
+    /// True when the last network request failed — shows offline indicator
+    @Published var isOffline = false
+
     /// The timestamp of the last time the user viewed the Discover tab
     @Published var lastSeenTimestamp: Date = .distantPast
 
@@ -75,8 +78,11 @@ class JobsViewModel: ObservableObject {
     func loadCachedJobs() {
         pendingJobs = Self.readCache("pending") ?? []
         savedJobs = Self.readCache("saved") ?? []
-        if !pendingJobs.isEmpty {
-            print("[VM] loadCachedJobs — restored \(pendingJobs.count) pending, \(savedJobs.count) saved from cache")
+        appliedJobs = Self.readCache("applied") ?? []
+        rejectedJobs = Self.readCache("rejected") ?? []
+        let total = pendingJobs.count + savedJobs.count + appliedJobs.count + rejectedJobs.count
+        if total > 0 {
+            print("[VM] loadCachedJobs — restored \(pendingJobs.count) pending, \(savedJobs.count) saved, \(appliedJobs.count) applied, \(rejectedJobs.count) rejected from cache")
         }
     }
 
@@ -94,20 +100,26 @@ class JobsViewModel: ObservableObject {
 
     func loadPendingJobs() async {
         isLoading = true
-        error = nil
         defer { isLoading = false }
         print("[VM] loadPendingJobs — starting")
 
         do {
             pendingJobs = try await APIClient.shared.fetchPendingJobs()
             Self.writeCache("pending", jobs: pendingJobs)
+            isOffline = false
+            error = nil
             print("[VM] loadPendingJobs — got \(pendingJobs.count) jobs")
             for (i, j) in pendingJobs.prefix(5).enumerated() {
                 print("[VM]   [\(i)] \(j.roleTitle) @ \(j.companyName) score=\(j.builderScore)")
             }
         } catch {
             print("[VM] loadPendingJobs — ERROR: \(error)")
-            self.error = error.localizedDescription
+            isOffline = true
+            if pendingJobs.isEmpty {
+                self.error = "Can't reach server — check that your Mac is awake and Docker is running"
+            } else {
+                self.info = "Offline — showing cached jobs"
+            }
         }
     }
 
@@ -115,6 +127,7 @@ class JobsViewModel: ObservableObject {
         print("[VM] loadAppliedJobs — starting")
         do {
             appliedJobs = try await APIClient.shared.fetchAppliedJobs()
+            Self.writeCache("applied", jobs: appliedJobs)
             print("[VM] loadAppliedJobs — got \(appliedJobs.count)")
         } catch {
             print("[VM] loadAppliedJobs — ERROR (suppressed): \(error)")
@@ -136,6 +149,7 @@ class JobsViewModel: ObservableObject {
         print("[VM] loadRejectedJobs — starting")
         do {
             rejectedJobs = try await APIClient.shared.fetchRejectedJobs()
+            Self.writeCache("rejected", jobs: rejectedJobs)
             print("[VM] loadRejectedJobs — got \(rejectedJobs.count)")
         } catch {
             print("[VM] loadRejectedJobs — ERROR (suppressed): \(error)")

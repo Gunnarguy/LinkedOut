@@ -72,6 +72,12 @@ struct CardStackView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     HStack(spacing: 12) {
+                        if jobs.isOffline {
+                            Label("Offline", systemImage: "wifi.slash")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.orange)
+                        }
+
                         // List / Card toggle
                         Button {
                             haptic()
