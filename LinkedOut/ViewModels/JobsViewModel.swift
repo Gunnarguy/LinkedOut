@@ -495,7 +495,7 @@ class JobsViewModel: ObservableObject {
 
         // Fire-and-forget network sync
         Task.detached {
-            let request = JobActionRequest(jobId: jobId, action: action)
+            let request = JobActionRequest(jobId: jobId, action: action, jobData: job)
             do {
                 let response = try await APIClient.shared.performAction(request)
                 print("[VM] background performAction — success=\(response.success) msg=\(response.message)")

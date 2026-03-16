@@ -427,7 +427,7 @@ async def get_pending_jobs(
 @app.post("/api/jobs/action", response_model=JobActionResponse)
 async def job_action(req: JobActionRequest):
     """Apply, reject, or save a job."""
-    success = store.act_on_job(req.job_id, req.action)
+    success = store.act_on_job(req.job_id, req.action, fallback_job=req.job_data)
     if not success:
         raise HTTPException(status_code=404, detail="Job not found")
     return JobActionResponse(

@@ -225,10 +225,12 @@ enum JobAction: String, Codable {
 struct JobActionRequest: Codable {
     let jobId: String
     let action: JobAction
+    let jobData: JobPayload?
 
     enum CodingKeys: String, CodingKey {
         case jobId = "job_id"
         case action
+        case jobData = "job_data"
     }
 }
 

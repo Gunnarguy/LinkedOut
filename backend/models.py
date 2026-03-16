@@ -85,6 +85,7 @@ class JobAction(str, Enum):
 class JobActionRequest(BaseModel):
     job_id: str
     action: JobAction
+    job_data: JobPayload | None = None  # Backup payload if backend lost state
 
 
 class JobActionResponse(BaseModel):

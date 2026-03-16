@@ -250,7 +250,9 @@ class JobStore:
                 return bucket[job_id]
         return None
 
-    def act_on_job(self, job_id: str, action: JobAction) -> bool:
+    def act_on_job(
+        self, job_id: str, action: JobAction, fallback_job: JobPayload | None = None
+    ) -> bool:
         # Search all buckets to find the job
         job = None
         source_bucket: dict[str, JobPayload] | None = None
@@ -269,7 +271,16 @@ class JobStore:
                 break
 
         if job is None or source_bucket is None:
-            return False
+            if fallback_job:
+                # Reconstruct state from client if backend lost it via ephemeral container reset
+                logger.warning(f"Reconstructing lost job {job_id} from client payload")
+                job = fallback_job
+                source_bucket = self._pending
+                source_name = "pending"
+                self._seen_urls.add(job.source_url)
+                self._save_seen()
+            else:
+                return False
 
         # Track undo (keep last 20)
         self._undo_stack.append((job_id, action.value, source_name))
