@@ -77,6 +77,7 @@ struct SettingsView: View {
     @AppStorage("credentialPenalty") private var credentialPenalty: Double = -0.15
     @AppStorage("portfolioBoost") private var portfolioBoost: Double = 0.10
     @AppStorage("maxSeniorityLevel") private var maxSeniorityLevel: String = "Mid"
+    @AppStorage("professionalProfile") private var professionalProfile: String = "Your professional profile markdown here..."
 
     @State private var preferredRoles: [String] = []
     @State private var preferredLocations: [String] = ["Kalamazoo, Michigan"]
@@ -142,7 +143,8 @@ struct SettingsView: View {
             experiencePenalty: experiencePenalty,
             credentialPenalty: credentialPenalty,
             portfolioBoost: portfolioBoost,
-            maxSeniorityLevel: maxSeniorityLevel
+            maxSeniorityLevel: maxSeniorityLevel,
+            professionalProfile: professionalProfile
         )
     }
 
@@ -168,6 +170,25 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
+                // ── Professional Profile ──────────────────────────────
+                Section {
+                    NavigationLink {
+                        ProfileEditorView(profileText: $professionalProfile)
+                            .onDisappear {
+                                debouncedSync()
+                            }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Edit Professional Profile")
+                            Text("Used by the AI to score your fit for jobs")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("AI Candidate Persona")
+                }
+
                 // ── How Picky Are You? ──────────────────────────────
                 Section {
                     VStack(spacing: 12) {
@@ -1144,5 +1165,26 @@ private struct ScoringRuleRow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+}
+
+// MARK: - Profile Editor View
+struct ProfileEditorView: View {
+    @Binding var profileText: String
+    
+    var body: some View {
+        Form {
+            Section {
+                TextEditor(text: $profileText)
+                    .font(.system(.body, design: .monospaced))
+                    .frame(minHeight: 400)
+            } header: {
+                Text("Your Markdown Resume")
+            } footer: {
+                Text("This exact text is injected into the AI's system prompt to evaluate job matches in the second-person voice.")
+            }
+        }
+        .navigationTitle("Professional Profile")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

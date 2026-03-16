@@ -206,56 +206,7 @@ or the profile below.
 
 ## Your Profile
 
-### Classification: AI-Native Builder
-You do not hand-write code. You orchestrate AI agents (Claude, GPT, Gemini) to
-architect and generate entire systems. You see a problem, figure out how it should
-work, and don't stop until it ships. The code comes from models — the vision,
-architecture, and relentless iteration are yours. You do this because you can,
-because it's genuinely fun, and because you want to make money doing it.
-
-### Shipped Portfolio (all live — gunnarguy.me)
-- **OpenIntelligence**: On-device RAG engine — 102 services, 29-step pipeline,
-  hybrid search, Core ML embeddings, Apple Intelligence, runs in airplane mode.
-  202 commits.
-- **OpenResponses**: OpenAI Responses API client — MCP integration (Notion,
-  Dropbox, Gmail), Computer Use, 15+ models, tool orchestration. 88 commits.
-  First App Store submission passed review.
-- **OpenCone**: Pinecone vector DB RAG app — hybrid search, reranking, document
-  ingestion with SHA256 dedup, circuit breaker resilience. 122 commits.
-- **OpenAssistant**: Assistants API client — threads, runs, vector stores,
-  Code Interpreter, File Search. 214 commits.
-- **LinkedOut**: Full-stack AI matching platform — SwiftUI + FastAPI + Docker +
-  LLM scoring from 5 job sources. 62 commits and growing.
-- **PlaudBlender**: Voice recordings → knowledge graph — Gemini AI, Qdrant
-  vector DB, 11-tool MCP server, 91 tests. 70 commits.
-- 758 all-time commits, 638 in the last year, 4 apps on the App Store.
-
-### Technical Reality
-- **Built with**: Swift/SwiftUI, Python/FastAPI, RAG pipelines, vector databases
-  (Pinecone, Qdrant), LLM orchestration (OpenAI, Gemini, Anthropic), on-device ML
-  (Core ML, Metal GPU), MCP servers, Docker, API integrations
-- **Haven't used professionally**: React, Vue, Angular, Flutter, Java, Go, Rust,
-  C++, Ruby on Rails, .NET, Kubernetes at scale
-- **No CS degree (B.S. Kinesiology). No professional software engineering experience.**
-- 4 published App Store apps and 6 GitHub repos IS the experience. Period.
-
-### Day Job
-Medical device specialist at VA Palo Alto (Stryker OnSite). Sole technical specialist
-supporting Stanford surgical teams — Cardiothoracic, Vascular, General, Urology, ENT,
-Thoracic. Complete autonomy. HIPAA, PIV clearance, regulated environment expertise.
-
-### What You Want
-Roles where shipped products matter more than credentials. Companies that look at
-gunnarguy.me and say "get this person an interview" — not "where's the CS degree?"
-Specifically:
-- Roles that explicitly say "no CS degree required" or "equivalent experience accepted"
-- Companies that value builders, shippers, and portfolio over pedigree
-- AI/ML, iOS, product engineering, healthtech, developer tools
-- Startups and small teams where what you've built speaks for itself
-- Roles where your AI-native workflow IS the job (AI engineering, LLM tooling, etc.)
-
-You are NOT looking for roles that require traditional credentials with no flexibility.
-If they hard-require a CS degree with no "or equivalent" — that's a hard no, move on.
+{prefs.professional_profile}
 
 ## Hard Filters — REJECT immediately if ANY are true
 - **CS DEGREE: HARD REJECT** if the listing says "requires", "must have", or
@@ -564,6 +515,7 @@ async def score_job(
     )
 
     system = SYSTEM_PROMPT.replace("{min_salary}", str(prefs.min_salary))
+    system = system.replace("{prefs.professional_profile}", prefs.professional_profile)
     system = system.replace("{score_cutoff}", f"{prefs.score_cutoff:.2f}")
     system = system.replace("{convincing_penalty}", f"{prefs.convincing_penalty:+.2f}")
     system = system.replace("{convincing_boost}", f"{prefs.convincing_boost:+.2f}")

@@ -190,7 +190,7 @@ async def _run_ingest_cycle():
                 if result.rejection_reason == "LLM_FAILURE_RETRY":
                     logger.warning(f"[RETRY LATER] LLM failed for {raw_listing.title} at {raw_listing.company}. Not marking as seen.")
                     continue
-                
+
                 # Only mark as seen after we've processed it
                 store.mark_url_seen(raw_listing.url)
                 _ingest_progress["scored"] += 1
@@ -284,14 +284,14 @@ async def _periodic_prune():
             if not pending:
                 await asyncio.sleep(60 * 60)
                 continue
-            
+
             for job in pending:
                 url = job.apply_url or job.source_url
                 if not url: continue
                 # Skip known resilient endpoints
                 if "ycombinator.com" in url or "algolia.com" in url or "linkedin.com" in url:
                     continue
-                
+
                 try:
                     async with httpx.AsyncClient(timeout=4.0, verify=False, follow_redirects=True) as client:
                         resp = await client.head(url)
@@ -300,9 +300,9 @@ async def _periodic_prune():
                             store.act_on_job(job.id, JobAction.reject)
                 except Exception:
                     pass
-                
+
                 await asyncio.sleep(1.0)
-                
+
             logger.info("Finished dead-link pruning cycle.")
             await asyncio.sleep(3600 * 2) # run every 2 hours
         except Exception as e:

@@ -27,6 +27,7 @@ struct UserPreferences: Codable {
     var credentialPenalty: Double       // negative, e.g. -0.15
     var portfolioBoost: Double          // positive, e.g.  0.10
     var maxSeniorityLevel: String       // "Mid", "Senior", "Any"
+    var professionalProfile: String     // AI resume chunk
 
     enum CodingKeys: String, CodingKey {
         case minSalary = "min_salary"
@@ -46,6 +47,7 @@ struct UserPreferences: Codable {
         case credentialPenalty = "credential_penalty"
         case portfolioBoost = "portfolio_boost"
         case maxSeniorityLevel = "max_seniority_level"
+        case professionalProfile = "professional_profile"
     }
 
     static let `default` = UserPreferences(
@@ -88,6 +90,7 @@ struct UserPreferences: Codable {
         experiencePenalty: -0.10,
         credentialPenalty: -0.15,
         portfolioBoost: 0.10,
-        maxSeniorityLevel: "Mid"
+        maxSeniorityLevel: "Mid",
+        professionalProfile: "Professional Profile"
     )
 }
