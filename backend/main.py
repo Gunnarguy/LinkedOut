@@ -187,6 +187,10 @@ async def _run_ingest_cycle():
             score_elapsed = _time.monotonic() - t1
 
             for raw_listing, result in zip(batch, results):
+                if result.rejection_reason == "LLM_FAILURE_RETRY":
+                    logger.warning(f"[RETRY LATER] LLM failed for {raw_listing.title} at {raw_listing.company}. Not marking as seen.")
+                    continue
+                
                 # Only mark as seen after we've processed it
                 store.mark_url_seen(raw_listing.url)
                 _ingest_progress["scored"] += 1
@@ -270,6 +274,42 @@ async def _keep_alive(interval_minutes: int = 10):
             pass
 
 
+async def _periodic_prune():
+    """Background loop to check pending jobs for 404/dead links and auto-reject them."""
+    import httpx
+    from models import JobAction
+    while True:
+        try:
+            pending = store.get_pending(limit=500, offset=0)
+            if not pending:
+                await asyncio.sleep(60 * 60)
+                continue
+            
+            for job in pending:
+                url = job.apply_url or job.source_url
+                if not url: continue
+                # Skip known resilient endpoints
+                if "ycombinator.com" in url or "algolia.com" in url or "linkedin.com" in url:
+                    continue
+                
+                try:
+                    async with httpx.AsyncClient(timeout=4.0, verify=False, follow_redirects=True) as client:
+                        resp = await client.head(url)
+                        if resp.status_code in (404, 410):
+                            logger.info(f"[PRUNE] Dead link ({resp.status_code}): {job.role_title} @ {job.company_name}")
+                            store.act_on_job(job.id, JobAction.reject)
+                except Exception:
+                    pass
+                
+                await asyncio.sleep(1.0)
+                
+            logger.info("Finished dead-link pruning cycle.")
+            await asyncio.sleep(3600 * 2) # run every 2 hours
+        except Exception as e:
+            logger.error(f"Error in dead-link pruning: {e}")
+            await asyncio.sleep(600)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup: kick off initial job ingest + keep-alive. Shutdown: cancel tasks."""
@@ -277,8 +317,10 @@ async def lifespan(app: FastAPI):
     logger.info("LinkedOut engine starting — scheduling initial job ingest...")
     _ingest_task = asyncio.create_task(_periodic_ingest())
     _keepalive_task = asyncio.create_task(_keep_alive())
+    _prune_task = asyncio.create_task(_periodic_prune())
     yield
     _keepalive_task.cancel()
+    _prune_task.cancel()
     if _ingest_task:
         _ingest_task.cancel()
         try:

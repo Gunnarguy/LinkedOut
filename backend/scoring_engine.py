@@ -676,249 +676,15 @@ async def score_job(
         return ScoringResult(passed_filter=True, job=job)
 
     except Exception as e:
-        logger.warning(f"[SCORE] LLM ERROR for {raw.title} @ {raw.company}: {type(e).__name__}: {e or '(empty)'} — falling back to local")
-        return score_job_locally(raw, prefs)
-
-
-# ── Local keyword-based scorer (no LLM needed) ──────────────────────────────
-
-# Seniority terms that are hard rejects
-_SENIOR_RE = re.compile(
-    r"\bsenior\b|\bstaff\b|\blead\b|\bprincipal\b|\bdirector\b|\bVP\b|\bhead of\b",
-    re.IGNORECASE,
-)
-
-# Strict degree requirements (hard reject) — but NOT if "or equivalent" follows
-_STRICT_DEGREE_RE = re.compile(
-    r"(require[ds]?|must have).{0,30}(CS|computer science|engineering) (degree|bachelor)",
-    re.IGNORECASE,
-)
-# Escape hatch: "or equivalent experience/projects/portfolio"
-_DEGREE_ESCAPE_RE = re.compile(
-    r"or equivalent|or comparable|preferred|nice to have|a plus",
-    re.IGNORECASE,
-)
-
-# High-value keywords (boost score) — calibrated to candidate's real stack
-_POSITIVE_KEYWORDS = [
-    # Core expertise: RAG, embeddings, search (3 shipped RAG systems)
-    (r"\bRAG\b|retrieval.augment|vector.search|embedding", 0.18),
-    (r"hybrid.search|semantic.search|rerank", 0.15),
-    (r"pinecone|weaviate|chroma|qdrant|vector.database", 0.15),
-    # Core expertise: AI/ML product building
-    (r"\bAI\b|artificial intelligence", 0.12),
-    (r"\bLLM\b|large language model|generative AI", 0.15),
-    (r"machine learning|\bML\b", 0.10),
-    (r"agent(?:ic)?|tool.use|function.calling|MCP|model.context.protocol", 0.15),
-    (r"copilot|AI.assistant|chatbot", 0.10),
-    # Core expertise: iOS + on-device ML
-    (r"\biOS\b|SwiftUI|Swift(?:UI)?|mobile engineer", 0.12),
-    (r"Core ML|on.device|edge.AI|Apple Intelligence", 0.18),
-    (r"privacy.first|privacy.preserving|on.device.inference", 0.12),
-    # Role types that fit
-    (r"product engineer", 0.12),
-    (r"founding engineer|first engineer", 0.18),
-    (r"AI.engineer|ML.engineer", 0.15),
-    # Company signals
-    (r"\bstartup\b|early.stage|seed|series A", 0.10),
-    (r"small.team|<\s*\d{1,2}\s*people", 0.08),
-    (r"developer.tools|SDK|API.platform", 0.10),
-    (r"healthcare.AI|clinical|health.?tech|medical", 0.12),
-    # General positives
-    (r"\bremote\b", 0.06),
-    (r"product.minded|ship|builder|portfolio", 0.10),
-    (r"python|fastapi", 0.05),
-    (r"\bjunior\b|\bintern\b|\bentry.level\b", 0.06),
-    (r"open.?source|OSS", 0.05),
-    # Portfolio-first / non-traditional signals (gold)
-    (
-        r"no.{0,10}(CS |computer science )?degree.{0,10}(required|needed|necessary)",
-        0.15,
-    ),
-    (r"non.?traditional.{0,15}(background|candidate|experience)", 0.15),
-    (r"self.?taught|bootcamp.?grad|career.?changer", 0.12),
-    (r"portfolio.?(first|over|review|driven)|show.{0,10}what.{0,10}built", 0.15),
-    (r"equivalent.{0,10}(experience|project|work)", 0.10),
-    (r"we.{0,10}value.{0,15}(skills|builders|shipping|output)\b", 0.10),
-    (r"side.?project|hobby.?project|personal.?project", 0.08),
-]
-_POSITIVE_COMPILED = [(re.compile(p, re.IGNORECASE), s) for p, s in _POSITIVE_KEYWORDS]
-
-# Negative keywords (reduce score)
-_NEGATIVE_KEYWORDS = [
-    (r"10\+ years|15\+ years|8\+ years", -0.20),
-    (r"PhD required", -0.15),
-    (r"\bFortune 500\b|\bFAANG\b", -0.05),
-    (r"enterprise|legacy|CRUD|mainframe|ERP", -0.08),
-    (r"\bDevOps\b|\bSRE\b|infrastructure only", -0.05),
-    (r"leetcode|whiteboard.coding|algorithm.interview", -0.08),
-    (r"Java\b(?!Script)|\.NET|C#|COBOL", -0.05),
-    # Credential-heavy signals
-    (r"top.?tier university|elite.?school|ivy league", -0.10),
-    (r"accredited.{0,10}(CS|computer science).{0,10}program", -0.10),
-]
-_NEGATIVE_COMPILED = [(re.compile(p, re.IGNORECASE), s) for p, s in _NEGATIVE_KEYWORDS]
-
-
-def score_job_locally(raw: RawJobListing, prefs: UserPreferences | None = None) -> ScoringResult:
-    """Fast keyword-based scoring — no LLM, works offline. Used as fallback."""
-    title = raw.title
-    text = f"{raw.title} {raw.company} {raw.description}"
-
-    max_level = (prefs.max_seniority_level if prefs else "Mid").lower()
-
-    # Hard reject: Senior titles (respecting max seniority setting)
-    if max_level != "any" and _SENIOR_RE.search(title):
-        logger.info(f"[LOCAL] REJECTED (senior title) | {title} @ {raw.company}")
-        return ScoringResult(
-            passed_filter=False,
-            rejection_reason=f"Title contains seniority keyword: {title}",
-        )
-
-    # Hard reject: Strict CS degree requirement (unless "or equivalent" escape hatch)
-    if _STRICT_DEGREE_RE.search(raw.description) and not _DEGREE_ESCAPE_RE.search(
-        raw.description
-    ):
-        logger.info(f"[LOCAL] REJECTED (hard CS degree req) | {title} @ {raw.company}")
-        return ScoringResult(
-            passed_filter=False,
-            rejection_reason="Hard CS degree requirement with no 'or equivalent' escape hatch",
-        )
-
-    # Score based on keyword matches
-    score = 0.35  # Base score — be generous
-
-    for pattern, boost in _POSITIVE_COMPILED:
-        if pattern.search(text):
-            score += boost
-
-    for pattern, penalty in _NEGATIVE_COMPILED:
-        if pattern.search(text):
-            score += penalty  # penalty is negative
-
-    # ── Location penalty (graduated tiers) ──
-    loc_tier = classify_location(
-        raw.location or "",
-        prefs.home_city if prefs else "Kalamazoo",
-        prefs.home_state if prefs else "Michigan",
-        raw.is_remote,
-        preferred_locations=prefs.preferred_locations if prefs else None,
-    )
-    if loc_tier == 1:
-        score += prefs.nearby_penalty if prefs else -0.03
-    elif loc_tier == 2:
-        score += prefs.regional_penalty if prefs else -0.08
-    elif loc_tier == 3:
-        score += prefs.relocation_penalty if prefs else -0.15
-    elif loc_tier == 4:
-        score += prefs.international_penalty if prefs else -0.25
-
-    score = max(0.05, min(1.0, score))
-    logger.info(
-        f"[LOCAL] PASS score={score:.2f} tier={loc_tier} | {title} @ {raw.company}"
-    )
-
-    # Extract basic info
-    tech_stack = []
-    tech_patterns = [
-        "Python",
-        "TypeScript",
-        "JavaScript",
-        "React",
-        "Swift",
-        "SwiftUI",
-        "Kotlin",
-        "Go",
-        "Rust",
-        "Java",
-        "Ruby",
-        "Rails",
-        "Django",
-        "FastAPI",
-        "Node.js",
-        "Next.js",
-        "Vue",
-        "Angular",
-        "Docker",
-        "Kubernetes",
-        "AWS",
-        "GCP",
-        "Azure",
-        "PostgreSQL",
-        "MongoDB",
-        "Redis",
-        "PyTorch",
-        "TensorFlow",
-        "LangChain",
-        "OpenAI",
-        "Pinecone",
-        "Weaviate",
-        "Chroma",
-        "Qdrant",
-        "Core ML",
-        "MLX",
-        "ONNX",
-        "RAG",
-        "MCP",
-        "LlamaIndex",
-        "Anthropic",
-        "Hugging Face",
-        "Transformers",
-        "FAISS",
-    ]
-    for tech in tech_patterns:
-        if re.search(r"\b" + re.escape(tech) + r"\b", text, re.IGNORECASE):
-            tech_stack.append(tech)
-
-    is_remote = raw.is_remote or bool(re.search(r"\bremote\b", text, re.IGNORECASE))
-
-    # Parse salary from text
-    salary_floor = 0
-    salary_max = 0
-    salary_match = re.search(r"\$(\d{2,3})[,.]?(\d{3})", raw.salary_text or text)
-    if salary_match:
-        salary_floor = int(salary_match.group(1) + salary_match.group(2))
-
-    job = JobPayload(
-        company_name=raw.company,
-        role_title=raw.title,
-        salary_floor=salary_floor,
-        salary_max=salary_max,
-        is_remote=is_remote,
-        builder_score=round(score, 2),
-        ai_pitch_summary="Scored by local keyword matcher (LLM unavailable)",
-        drafted_cover_letter="",
-        source_url=raw.url,
-        posted_at=datetime.now(timezone.utc),
-        location=raw.location or ("Remote" if is_remote else "Unknown"),
-        tags=tech_stack[:5],
-        description=raw.description[:12000],
-        company_description="",
-        company_size="Unknown",
-        company_stage="Unknown",
-        company_url="",
-        requirements=[],
-        nice_to_haves=[],
-        tech_stack=tech_stack,
-        why_interesting="",
-        red_flags=[],
-        apply_url="",
-        experience_level="Not specified",
-        job_type="Not specified",
-        benefits=[],
-        logic_fit="",
-        domain_leverage="",
-        risk_reward="",
-    )
-
-    return ScoringResult(passed_filter=True, job=job)
+        logger.warning(f"[SCORE] LLM ERROR for {raw.title} @ {raw.company}: {type(e).__name__}: {e or '(empty)'} — RETRY LATER")
+        return ScoringResult(passed_filter=False, rejection_reason="LLM_FAILURE_RETRY")
 
 
 async def score_batch(
     listings: list[RawJobListing],
     prefs: UserPreferences | None = None,
 ) -> list[ScoringResult]:
-    """Score a batch of raw listings. Falls back to local scoring on LLM failure."""
+    """Score a batch of raw listings. Uses LLM scoring and handles retries."""
     results = []
     for raw in listings:
         result = await score_job(raw, prefs)
@@ -931,9 +697,9 @@ async def triage_and_score(
     listings: list[RawJobListing],
     prefs: UserPreferences | None = None,
 ) -> list[ScoringResult]:
-    """Two-tier scoring with local fallback.
+    """Two-tier scoring.
 
-    Tries: Flash triage → Pro scoring → Local keyword scorer (if LLM fails).
+    Tries: Flash triage → Pro scoring. If LLM fails, marks for retry.
     Always returns results — never drops jobs silently.
     """
     if not listings:
@@ -992,10 +758,9 @@ async def triage_and_score(
     logger.info(f"[SCORE] Test scoring took {test_elapsed:.1f}s")
     llm_works = test_result.passed_filter or test_result.rejection_reason != ""
 
-    # Check if the test itself used local fallback (it would have ai_pitch_summary starting with "Scored by local")
+    # Check if the test itself failed due to LLM error
     if (
-        test_result.job
-        and "local keyword" in (test_result.job.ai_pitch_summary or "").lower()
+        test_result.rejection_reason == "LLM_FAILURE_RETRY"
     ):
         llm_works = False
 
@@ -1006,7 +771,7 @@ async def triage_and_score(
         # Score remaining survivors in parallel batches of 3
         sem = asyncio.Semaphore(3)
         consecutive_fallbacks = 0
-        fell_back_to_local = False
+        fell_back_to_retry = False
 
         async def _score_one(raw_listing):
             async with sem:
@@ -1015,7 +780,7 @@ async def triage_and_score(
         score_batch_size = 3
         remaining_survivors = survivors[1:]
         for i in range(0, len(remaining_survivors), score_batch_size):
-            if fell_back_to_local:
+            if fell_back_to_retry:
                 break
             batch = remaining_survivors[i : i + score_batch_size]
             batch_results = await asyncio.gather(
@@ -1025,13 +790,10 @@ async def triage_and_score(
             for raw, result in zip(batch, batch_results):
                 if isinstance(result, BaseException):
                     logger.warning(f"[SCORE] Exception scoring {raw.title}: {result}")
-                    result = score_job_locally(raw, prefs)
+                    result = ScoringResult(passed_filter=False, rejection_reason="LLM_FAILURE_RETRY")
 
-                is_local = (
-                    result.job
-                    and "local keyword" in (result.job.ai_pitch_summary or "").lower()
-                )
-                if is_local:
+                is_failure = result.rejection_reason == "LLM_FAILURE_RETRY"
+                if is_failure:
                     consecutive_fallbacks += 1
                 else:
                     consecutive_fallbacks = 0
@@ -1043,19 +805,19 @@ async def triage_and_score(
                     if rest:
                         logger.warning(
                             f"LLM failed {consecutive_fallbacks}x in a row — "
-                            f"switching to local scorer for remaining {len(rest)} listings"
+                            f"Delaying remaining {len(rest)} listings until next cycle"
                         )
                         for r in rest:
-                            results.append(score_job_locally(r, prefs))
-                    fell_back_to_local = True
+                            results.append(ScoringResult(passed_filter=False, rejection_reason="LLM_FAILURE_RETRY"))
+                    fell_back_to_retry = True
                     break
 
-            if not fell_back_to_local:
+            if not fell_back_to_retry:
                 await asyncio.sleep(0.3)
     else:
-        logger.warning("LLM scoring failed — using local keyword scorer for all")
+        logger.warning("LLM scoring completely unavailable — delaying remaining listings to next ingest cycle")
         for raw in survivors[1:]:
-            results.append(score_job_locally(raw, prefs))
+            results.append(ScoringResult(passed_filter=False, rejection_reason="LLM_FAILURE_RETRY"))
 
     passed = sum(1 for r in results if r.passed_filter)
     logger.info(f"Phase 2 complete: {passed}/{len(survivors)} passed scoring")
