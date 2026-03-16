@@ -8,9 +8,10 @@ LinkedOut is a **"Tinder for jobs"** app: a FastAPI backend fetches listings fro
 
 - **Backend**: FastAPI (Python 3.12) in Docker on port 8443
 - **iOS App**: SwiftUI, iOS 17+, MVVM, NavigationStack
-- **LLM Scoring**: Gemini Pro/Flash (primary) → OpenAI GPT-5.4 (fallback) → local keyword scorer (final fallback)
+- **LLM Scoring**: Gemini Pro/Flash (primary) → OpenAI GPT-5.4 (fallback)
 - **Storage**: JSON file-backed (`job_store.json`, `seen_urls.json`, `user_prefs.json`)
 - **Notion Sync**: Bidirectional sync with Notion database via API v2026-03-11 (`backend/notion_sync.py`)
+- **MCP Server**: FastMCP implementation bridging LinkedOut backend to Claude Desktop (`backend/mcp_server.py`) with LinkedIn OAuth integration.
 - **Deployment**: Docker locally, Render cloud (`render.yaml`)
 
 ## Key Patterns
@@ -24,7 +25,7 @@ LinkedOut is a **"Tinder for jobs"** app: a FastAPI backend fetches listings fro
 - **Scoring engine** (`backend/scoring_engine.py`) uses a two-tier pipeline: Gemini Flash triage (fast pass/fail) → Gemini Pro full scoring (Why Matrix, cover letter, etc.)
 - **Scoring prompts** use **second-person voice** ("your skills", "you built") — never third-person ("the candidate", "Gunnar")
 - **Cover letter drafts** use confident peer tone — no "excited/thrilled/passionate", no corporate filler, no groveling
-- **LLM fallback chain**: Gemini Pro → Gemini Flash → OpenAI → local keyword scorer
+- **LLM fallback chain**: Gemini Pro → Gemini Flash → OpenAI
 - All API routes are in `backend/main.py`
 
 ### iOS (SwiftUI)
@@ -75,7 +76,7 @@ curl http://localhost:8443/health
 
 | Directory               | Contents                                                               |
 | ----------------------- | ---------------------------------------------------------------------- |
-| `backend/`              | FastAPI app, scoring engine, job fetcher, models, config               |
+| `backend/`              | FastAPI app, scoring engine, job fetcher, mcp server, config           |
 | `LinkedOut/Models/`     | Swift Codable structs (`JobPayload`, `UserPreferences`, `UserProfile`) |
 | `LinkedOut/ViewModels/` | `AuthViewModel`, `JobsViewModel`                                       |
 | `LinkedOut/Views/`      | 14 SwiftUI view files                                                  |

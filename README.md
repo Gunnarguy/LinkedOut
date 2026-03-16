@@ -80,8 +80,9 @@
 ## Features
 
 - **5 job sources** aggregated and deduplicated (Remotive, Himalayas, HN Who's Hiring, Jobicy, RemoteOK)
-- **LLM-powered scoring** with Gemini Flash triage + Gemini Pro full analysis, OpenAI fallback, local keyword fallback
-- **Anti-sycophancy design** — cold analytical prompts at temperature 0.3, score deflation, forced red flags on every job
+- **LLM-powered scoring** with Gemini Flash triage + Gemini Pro full analysis, OpenAI fallback
+- **Dynamic AI Candidate Persona** — edit your Markdown resume directly in the iOS app to dynamically rebuild the AI evaluation prompt on the fly
+- **Embedded MCP Server** — includes an internal FastMCP server connecting your LinkedIn profile and Job Pipeline state directly to Claude Desktop
 - **Why Matrix** — structured `logic_fit`, `domain_leverage`, `risk_reward` assessment for every job
 - **Tinder-style swipe UI** — swipe right (apply), left (reject), up (save), with undo
 - **List/card toggle** — switch between swipe cards and a scrollable list with enriched job rows (score ring, tags, tech stack, fit reasons, red flags, AI pitch)
@@ -133,7 +134,7 @@ LinkedOut/
 | --------------- | ------------------------------------------------------------------ |
 | **iOS App**     | SwiftUI, iOS 17+, MapKit, WebKit, Combine                          |
 | **Backend**     | FastAPI, Python 3.12, Pydantic v2, uvicorn                         |
-| **LLM Scoring** | Google Gemini (primary), OpenAI (fallback), local keyword scorer   |
+| **LLM Scoring** | Google Gemini (primary), OpenAI (fallback)                       |
 | **Job APIs**    | Remotive, Himalayas, HN Algolia, Jobicy, RemoteOK                  |
 | **Auth**        | LinkedIn OAuth 2.0                                                 |
 | **Storage**     | JSON file-backed (job_store.json, seen_urls.json, user_prefs.json) |
@@ -196,6 +197,45 @@ The backend runs on **port 8443** with job data persisted to `./data/`.
    - Probes Render cloud → local Docker → LAN IP → localhost
    - Caches the result for 5 minutes
    - Re-discovers on network errors
+
+---
+
+## MCP Server Integration
+
+LinkedOut includes a **FastMCP** server that exposes your job pipeline and LinkedIn OAuth session directly to Claude Desktop (or other MCP-compatible clients). This creates a dedicated AI agent capable of reviewing pending jobs, posting to LinkedIn, returning personal insights, and triggering ingest workflows.
+
+### Claude Desktop Setup
+
+Add the following to your Claude Desktop `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "linkedout": {
+      "command": "docker",
+      "args": [
+        "exec",
+        "-i",
+        "linkedout-backend-1",
+        "python",
+        "-m",
+        "mcp_server"
+      ]
+    }
+  }
+}
+```
+
+*Note: Adjust `linkedout-backend-1` if your Docker container is named differently. Command assumes you are running docker via `docker compose up` in the LinkedOut directory.*
+
+Available Tools:
+- `get_linkedin_auth_status` / `get_my_linkedin_profile`
+- `post_linkedin_update`
+- `get_linkedout_pipeline_stats`
+- `query_pending_jobs` / `get_job_details` / `action_job`
+- `trigger_linkedout_ingest`
+- `get_saved_jobs_to_share`
+
 
 ---
 
@@ -311,10 +351,10 @@ Applied on top of the base LLM assessment:
 When the primary LLM is rate-limited or unavailable:
 
 ```
-Gemini Pro → Gemini Flash → OpenAI GPT → Local Keyword Scorer
+Gemini Flash (Triage) → Gemini Pro (Deep Score) → OpenAI GPT (Fallback)
 ```
 
-The local keyword fallback uses regex matching on tech stack, seniority, and industry signals. Baseline score: **0.45** (mediocre). No Why Matrix fields populated — jobs scored this way are flagged.
+The system uses Gemini Flash 2.5 for rapid discard of poor-fitting jobs, preserving longer latency Gemini Pro context windows strictly for legitimate potential matches.
 
 ---
 
@@ -479,7 +519,6 @@ All settings persist locally via `@AppStorage` (UserDefaults) — they survive e
 | POST   | `/api/dev/seed`                 | Seed 3 mock jobs                           |
 | POST   | `/api/dev/reset-seen`           | Clear seen URLs                            |
 | POST   | `/api/dev/clear-pending`        | Clear pending queue                        |
-| POST   | `/api/dev/purge-keyword-scored` | Remove locally-scored jobs                 |
 | GET    | `/api/dev/logs`                 | Recent log lines (query: `n`, default 100) |
 
 ---
