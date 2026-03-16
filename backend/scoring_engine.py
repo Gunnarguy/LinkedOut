@@ -45,7 +45,7 @@ def _get_gemini_client():
 
 
 async def _call_gemini(
-    system: str, user_msg: str, use_flash: bool = False, timeout: int = 120
+    system: str, user_msg: str, use_flash: bool = False, timeout: int = 30
 ) -> str:
     """Call Google Gemini (Pro or Flash). Raises on failure."""
     client = _get_gemini_client()
@@ -84,7 +84,7 @@ async def _call_openai(system: str, user_msg: str) -> str:
 
 
 async def _call_llm(
-    system: str, user_msg: str, use_flash: bool = False, timeout: int = 120
+    system: str, user_msg: str, use_flash: bool = False, timeout: int = 30
 ) -> str:
     """Route LLM call with automatic fallback chain.
 
