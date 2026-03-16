@@ -150,6 +150,7 @@ class UserPreferences(BaseModel):
         default_factory=lambda: [
             "AI Engineer",
             "AI Product Engineer",
+            "Applied AI Engineer",
             "Founding Engineer",
             "Product Engineer",
             "iOS Engineer",
@@ -158,7 +159,6 @@ class UserPreferences(BaseModel):
             "Software Engineer",
             "Full Stack Engineer",
             "Developer Experience Engineer",
-            "Applied AI Engineer",
         ]
     )
     excluded_keywords: list[str] = Field(
@@ -167,6 +167,12 @@ class UserPreferences(BaseModel):
             "Principal Engineer",
             "Engineering Manager",
             "Director of Engineering",
+            "LeetCode",
+            "whiteboard",
+            "competitive programming",
+            "10+ years",
+            "DevOps",
+            "SRE",
         ]
     )
     location_preference: str = "Remote"

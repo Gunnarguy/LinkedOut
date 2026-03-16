@@ -52,20 +52,27 @@ struct UserPreferences: Codable {
         minSalary: 90000,
         requireRemote: true,
         preferredRoles: [
-            "AI Product Engineer",
             "AI Engineer",
+            "AI Product Engineer",
+            "Applied AI Engineer",
             "Founding Engineer",
             "Product Engineer",
             "iOS Engineer",
-            "Machine Learning Engineer"
+            "Mobile Engineer",
+            "Machine Learning Engineer",
+            "Software Engineer",
+            "Full Stack Engineer",
+            "Developer Experience Engineer"
         ],
         excludedKeywords: [
+            "Staff Engineer",
+            "Principal Engineer",
+            "Engineering Manager",
+            "Director of Engineering",
             "LeetCode",
             "whiteboard",
             "competitive programming",
             "10+ years",
-            "Staff Engineer",
-            "Principal Engineer",
             "DevOps",
             "SRE"
         ],

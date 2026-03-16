@@ -59,7 +59,6 @@ private enum StrictnessPreset: String, CaseIterable, Identifiable {
 struct SettingsView: View {
     @AppStorage("minSalary") private var minSalary: Int = 90000
     @AppStorage("requireRemote") private var requireRemote: Bool = true
-    @AppStorage("locationPreference") private var locationPreference: String = "Remote"
     @AppStorage("serverURL") private var serverURL: String = "http://Gunnars-Brain-Extension.local:8443"
     @AppStorage("preferredRolesJSON") private var preferredRolesJSON: String = "[]"
     @AppStorage("excludedKeywordsJSON") private var excludedKeywordsJSON: String = "[]"
@@ -89,6 +88,8 @@ struct SettingsView: View {
     @State private var pendingSyncTask: Task<Void, Never>?
     @State private var showAdvanced = false
     @State private var showSaveToast = false
+
+    @State private var showResetConfirmation = false
 
     // ── Notion Configuration ──
     @AppStorage("notionToken") private var notionToken: String = ""
@@ -126,7 +127,7 @@ struct SettingsView: View {
             requireRemote: requireRemote,
             preferredRoles: preferredRoles,
             excludedKeywords: excludedKeywords,
-            locationPreference: locationPreference,
+            locationPreference: requireRemote ? "Remote" : "Flexible",
             preferredLocations: preferredLocations,
             scoreCutoff: scoreCutoff,
             convincingPenalty: convincingPenalty,
@@ -195,9 +196,9 @@ struct SettingsView: View {
                     Text("How Picky?")
                 } footer: {
                     if activePreset == .custom {
-                        Text("You tweaked individual weights. Tap a preset to reset them.")
+                        Text("You tweaked individual weights below. Tap a preset to reset all 10 sliders at once.")
                     } else {
-                        Text("Pick a vibe, or open Advanced to fine-tune individual weights.")
+                        Text("Presets adjust the score cutoff and all 10 penalty/boost sliders at once. Open Advanced below to adjust them individually.")
                     }
                 }
 
@@ -221,11 +222,74 @@ struct SettingsView: View {
                     Text("How example jobs score with your current settings.")
                 }
 
+                // ── Scoring Intelligence ────────────────────────────
+                Section {
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Hard rules
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Hard Rules (Always On)", systemImage: "shield.checkered")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
+
+                            ScoringRuleRow(
+                                icon: "xmark.octagon.fill",
+                                color: .red,
+                                title: "CS Degree Required → Instant Reject",
+                                detail: "If a listing says \"requires CS degree\" with no \"or equivalent\" — auto-rejected. \"Preferred\" or not mentioned is fine."
+                            )
+                            ScoringRuleRow(
+                                icon: "checkmark.seal.fill",
+                                color: .green,
+                                title: "\"Or Equivalent\" → No Penalty",
+                                detail: "\"CS degree or equivalent experience/projects\" is totally fine — your portfolio IS the equivalent."
+                            )
+                            ScoringRuleRow(
+                                icon: "star.fill",
+                                color: .blue,
+                                title: "Portfolio-First → Score Boost",
+                                detail: "\"Show us what you've built\", \"non-traditional welcome\", \"self-taught OK\" all boost the score."
+                            )
+                        }
+
+                        Divider()
+
+                        // What the AI looks for
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label("What Gets Boosted", systemImage: "arrow.up.circle.fill")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.green)
+                            Text("Shipped products valued • Non-traditional backgrounds • \"No degree required\" • Small teams • HealthTech/MedTech • AI/ML tools")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label("What Gets Penalized", systemImage: "arrow.down.circle.fill")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.red)
+                            Text("Rigid degree gates • FAANG-style hiring bars • 5+ years required • Enterprise/legacy codebases • Unfamiliar stack required")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                } header: {
+                    Text("Scoring Intelligence")
+                } footer: {
+                    Text("These rules are baked into the AI scoring engine. Sliders below fine-tune the weight of each signal.")
+                }
+
                 // ── Seniority + Salary + Location (the obvious stuff) ─
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Max Seniority Level")
-                            .font(.subheadline.weight(.semibold))
+                        HStack {
+                            Text("Max Seniority Level")
+                                .font(.subheadline.weight(.semibold))
+                            Spacer()
+                        }
+                        Text("Jobs above this level are rejected. \"Mid\" rejects Senior/Staff. \"Any\" allows all levels.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                         Picker("", selection: $maxSeniorityLevel) {
                             Text("Junior").tag("Junior")
                             Text("Mid").tag("Mid")
@@ -254,12 +318,24 @@ struct SettingsView: View {
                             step: 5_000
                         )
                         .onChange(of: minSalary) { _, _ in debouncedSync() }
+                        Text("Jobs with salary ranges entirely below this are rejected. Jobs with no listed salary are still shown.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
 
-                    Toggle("Remote Only", isOn: $requireRemote)
-                        .onChange(of: requireRemote) { _, _ in debouncedSync() }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Toggle("Remote Only", isOn: $requireRemote)
+                            .onChange(of: requireRemote) { _, _ in debouncedSync() }
+                        Text(requireRemote
+                             ? "Only remote jobs are shown. On-site and hybrid jobs are filtered out."
+                             : "All jobs shown. On-site jobs outside your locations get a distance penalty.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 } header: {
                     Text("The Basics")
+                } footer: {
+                    Text("These are hard filters — jobs that don't pass get rejected before scoring.")
                 }
 
                 // ── Acceptable Locations ────────────────────────────
@@ -330,6 +406,8 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("Preferred Roles")
+                } footer: {
+                    Text("The AI uses these as search terms when fetching new jobs, and boosts listings that match. Swipe to delete.")
                 }
 
                 Section {
@@ -357,6 +435,8 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("Excluded Keywords")
+                } footer: {
+                    Text("If any of these appear in the job title or description, the job is rejected. Swipe to delete.")
                 }
 
                 // ── Advanced: Individual Weights ────────────────────
@@ -371,6 +451,9 @@ struct SettingsView: View {
                                     .font(.callout.weight(.bold).monospaced())
                                     .foregroundStyle(scoreCutoff < 0.30 ? .green : scoreCutoff < 0.50 ? .orange : .red)
                             }
+                            Text("Any job scoring below this threshold is filtered out and you never see it.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                             Slider(value: $scoreCutoff, in: 0.10...0.60, step: 0.05)
                                 .onChange(of: scoreCutoff) { _, _ in debouncedSync() }
                             HStack {
@@ -385,53 +468,71 @@ struct SettingsView: View {
 
                         WeightSlider(
                             label: "Stack Mismatch",
-                            detail: "They require a stack you haven't used",
+                            detail: "Score penalty when the listing requires a tech stack you haven't used (e.g. React, Go, Kubernetes)",
                             value: $convincingPenalty, range: -0.40...0.0, step: 0.05, onChange: debouncedSync
                         )
                         WeightSlider(
                             label: "\"Builders Welcome\"",
-                            detail: "They say 'show us what you've built'",
+                            detail: "Score boost when the listing explicitly says something like \"show us what you\u2019ve built\" or \"any modern framework\"",
                             value: $convincingBoost, range: 0.0...0.25, step: 0.05, onChange: debouncedSync
                         )
                         WeightSlider(
                             label: "Portfolio-First",
-                            detail: "Value shipped products over credentials",
+                            detail: "Score boost when the company explicitly values shipped products, side projects, or portfolio over traditional credentials",
                             value: $portfolioBoost, range: 0.0...0.25, step: 0.05, onChange: debouncedSync
                         )
 
                         Divider()
 
+                        Text("Distance Penalties")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 4)
+                        Text("Applied to non-remote jobs based on distance from your Acceptable Locations. Remote jobs get no penalty.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .padding(.bottom, 2)
+
                         WeightSlider(
                             label: "Nearby",
-                            detail: "Same state / ~1-2hr drive",
+                            detail: "Non-remote job in the same state or ~1-2hr drive from your locations",
                             value: $nearbyPenalty, range: -0.20...0.0, step: 0.01, onChange: debouncedSync
                         )
                         WeightSlider(
                             label: "Regional",
-                            detail: "Neighboring state (OH, IN, WI, IL, MN)",
+                            detail: "Non-remote job in a neighboring state (OH, IN, WI, IL, MN)",
                             value: $regionalPenalty, range: -0.30...0.0, step: 0.01, onChange: debouncedSync
                         )
                         WeightSlider(
                             label: "Relocation",
-                            detail: "Requires moving to another US city",
+                            detail: "Non-remote job that would require moving to a different US city",
                             value: $relocationPenalty, range: -0.40...0.0, step: 0.05, onChange: debouncedSync
                         )
                         WeightSlider(
                             label: "International",
-                            detail: "Job is outside the US",
+                            detail: "Non-remote job located outside the United States",
                             value: $internationalPenalty, range: -0.50...0.0, step: 0.05, onChange: debouncedSync
                         )
 
                         Divider()
 
+                        Text("Experience & Credentials")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 4)
+                        Text("These are score penalties, not hard rejects. CS degree hard-reject is separate (see Scoring Intelligence above).")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .padding(.bottom, 2)
+
                         WeightSlider(
                             label: "Experience Stretch",
-                            detail: "Wants 5+ years professional",
+                            detail: "Score penalty when listing asks for 5+ years of professional software engineering experience",
                             value: $experiencePenalty, range: -0.30...0.0, step: 0.05, onChange: debouncedSync
                         )
                         WeightSlider(
                             label: "Credential-Heavy",
-                            detail: "FAANG / rigid HR / degree gates",
+                            detail: "Score penalty for FAANG-tier companies or listings with rigid, formal hiring processes",
                             value: $credentialPenalty, range: -0.30...0.0, step: 0.05, onChange: debouncedSync
                         )
                     }
@@ -443,23 +544,27 @@ struct SettingsView: View {
 
                 // ── Sync + Backend ──────────────────────────────────
                 Section {
-                    HStack {
-                        Label(syncLabel, systemImage: syncIcon)
-                            .foregroundStyle(syncColor)
-                        if case .syncing = syncStatus {
-                            Spacer()
-                            ProgressView()
-                        }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Server URL")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        TextField("http://hostname:8443", text: $serverURL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.URL)
+                            .font(.caption.monospaced())
+                        Text("The address of your LinkedOut backend. Auto-discovered on launch — you usually don\u2019t need to change this.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
-                    TextField("Server URL", text: $serverURL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                        .font(.caption.monospaced())
                 } header: {
-                    Text("Backend")
+                    HStack {
+                        Text("Backend")
+                        Spacer()
+                        syncBadgeInline
+                    }
                 } footer: {
-                    Text("Changes auto-sync. Scoring engine picks them up on next ingest.")
+                    Text("All settings auto-save to the backend when you change them. New scores take effect on the next job fetch.")
                 }
 
                 // ── Notion Integration ──────────────────────────────
@@ -468,7 +573,7 @@ struct SettingsView: View {
                     HStack {
                         Image(systemName: notionConnected ? "checkmark.circle.fill" : "circle.dashed")
                             .foregroundStyle(notionConnected ? .green : .secondary)
-                        Text(notionConnected ? "Connected (\(notionPropertyCount) properties)" : "Not connected")
+                        Text(notionConnected ? "Connected (\(notionPropertyCount) columns synced)" : "Not connected")
                             .font(.subheadline)
                         Spacer()
                         if notionConnecting {
@@ -485,9 +590,12 @@ struct SettingsView: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .font(.caption.monospaced())
+                        Text("Paste your Notion integration\u2019s secret token. Starts with \"ntn_\".")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
 
-                    // Database ID (pre-filled)
+                    // Database ID
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Database ID")
                             .font(.caption.weight(.semibold))
@@ -496,6 +604,9 @@ struct SettingsView: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .font(.caption.monospaced())
+                        Text("The ID from your Notion database URL. Open your database in Notion → copy the 32-character hex string from the URL.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
 
                     // Error display
@@ -529,22 +640,11 @@ struct SettingsView: View {
 
                 Section {
                     Button("Reset to Defaults") {
-                        apply(.balanced)
-                        let defaults = UserPreferences.default
-                        minSalary = defaults.minSalary
-                        requireRemote = defaults.requireRemote
-                        locationPreference = defaults.locationPreference
-                        preferredRoles = defaults.preferredRoles
-                        excludedKeywords = defaults.excludedKeywords
-                        maxSeniorityLevel = defaults.maxSeniorityLevel
-                        preferredLocations = defaults.preferredLocations
-                        serverURL = "http://Gunnars-Brain-Extension.local:8443"
-                        saveRolesToStorage()
-                        saveKeywordsToStorage()
-                        saveLocationsToStorage()
-                        debouncedSync()
+                        showResetConfirmation = true
                     }
                     .foregroundStyle(.red)
+                } footer: {
+                    Text("Resets all sliders, filters, roles, and keywords to their defaults. Does not affect Notion or backend URL.")
                 }
             }
             .navigationTitle("Settings")
@@ -555,6 +655,25 @@ struct SettingsView: View {
             }
             .onAppear { loadFromStorage() }
             .task { await checkNotionStatus() }
+            .alert("Reset All Settings?", isPresented: $showResetConfirmation) {
+                Button("Reset", role: .destructive) {
+                    apply(.balanced)
+                    let defaults = UserPreferences.default
+                    minSalary = defaults.minSalary
+                    requireRemote = defaults.requireRemote
+                    preferredRoles = defaults.preferredRoles
+                    excludedKeywords = defaults.excludedKeywords
+                    maxSeniorityLevel = defaults.maxSeniorityLevel
+                    preferredLocations = defaults.preferredLocations
+                    saveRolesToStorage()
+                    saveKeywordsToStorage()
+                    saveLocationsToStorage()
+                    debouncedSync()
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("This will reset all scoring sliders, seniority, salary, remote toggle, roles, keywords, and locations to their defaults.")
+            }
             .overlay(alignment: .top) {
                 if showSaveToast {
                     HStack(spacing: 6) {
@@ -595,6 +714,31 @@ struct SettingsView: View {
             Image(systemName: "exclamationmark.icloud.fill")
                 .foregroundStyle(.red)
                 .font(.body)
+        }
+    }
+
+    @ViewBuilder
+    private var syncBadgeInline: some View {
+        switch syncStatus {
+        case .idle:
+            Text("Synced")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        case .syncing:
+            HStack(spacing: 4) {
+                ProgressView().controlSize(.mini)
+                Text("Syncing…")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        case .synced:
+            Text("Synced ✓")
+                .font(.caption2)
+                .foregroundStyle(.green)
+        case .failed:
+            Text("Sync failed")
+                .font(.caption2)
+                .foregroundStyle(.red)
         }
     }
 
@@ -838,18 +982,21 @@ private struct ScoreSimulatorView: View {
             Scenario(emoji: "🎯", name: "AI startup — \"show us your apps\"",
                      baseScore: 0.85,
                      adjustments: ["portfolio": portfolioBoost, "builders": convincingBoost]),
+            Scenario(emoji: "🩺", name: "HealthTech, no degree mentioned",
+                     baseScore: 0.80,
+                     adjustments: ["portfolio": portfolioBoost, "healthtech": 0.08]),
             Scenario(emoji: "📍", name: "Grand Rapids office, open stack",
                      baseScore: 0.78,
                      adjustments: ["portfolio": portfolioBoost, "nearby": nearbyPenalty]),
             Scenario(emoji: "🚗", name: "Chicago hybrid, needs React",
                      baseScore: 0.70,
                      adjustments: ["convincing": convincingPenalty, "regional": regionalPenalty]),
-            Scenario(emoji: "🤔", name: "Requires React + NYC office",
-                     baseScore: 0.65,
-                     adjustments: ["convincing": convincingPenalty, "relocation": relocationPenalty]),
             Scenario(emoji: "⚠️", name: "Enterprise, 5yr req, Berlin",
                      baseScore: 0.55,
                      adjustments: ["credential": credentialPenalty, "experience": experiencePenalty, "international": internationalPenalty]),
+            Scenario(emoji: "🚫", name: "\"Requires CS degree\" (no equiv.)",
+                     baseScore: 0.0,
+                     adjustments: [:]),
         ]
     }
 
@@ -870,7 +1017,8 @@ private struct ScoreSimulatorView: View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(Array(scenarios.enumerated()), id: \.offset) { _, scenario in
                 let score = finalScore(scenario)
-                let rejected = score < scoreCutoff
+                let hardReject = scenario.baseScore == 0.0
+                let rejected = hardReject || score < scoreCutoff
                 HStack(spacing: 8) {
                     Text(scenario.emoji)
                         .font(.title3)
@@ -880,19 +1028,25 @@ private struct ScoreSimulatorView: View {
                             .foregroundStyle(rejected ? .secondary : .primary)
                             .strikethrough(rejected)
                         HStack(spacing: 4) {
-                            Text("\(Int(scenario.baseScore * 100))")
-                                .font(.caption2.monospaced())
-                                .foregroundStyle(.secondary)
-                            Image(systemName: "arrow.right")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            Text("\(Int(score * 100))")
-                                .font(.caption.weight(.bold).monospaced())
-                                .foregroundStyle(rejected ? .red : scoreColor(score))
-                            if rejected {
-                                Text("REJECTED")
+                            if hardReject {
+                                Text("HARD REJECT")
                                     .font(.caption2.weight(.bold))
                                     .foregroundStyle(.red)
+                            } else {
+                                Text("\(Int(scenario.baseScore * 100))")
+                                    .font(.caption2.monospaced())
+                                    .foregroundStyle(.secondary)
+                                Image(systemName: "arrow.right")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                Text("\(Int(score * 100))")
+                                    .font(.caption.weight(.bold).monospaced())
+                                    .foregroundStyle(rejected ? .red : scoreColor(score))
+                                if rejected {
+                                    Text("REJECTED")
+                                        .font(.caption2.weight(.bold))
+                                        .foregroundStyle(.red)
+                                }
                             }
                         }
                     }
@@ -901,9 +1055,11 @@ private struct ScoreSimulatorView: View {
                         ZStack(alignment: .leading) {
                             Capsule()
                                 .fill(Color.gray.opacity(0.15))
-                            Capsule()
-                                .fill(rejected ? .red.opacity(0.4) : scoreColor(score))
-                                .frame(width: max(0, geo.size.width * score))
+                            if !hardReject {
+                                Capsule()
+                                    .fill(rejected ? .red.opacity(0.4) : scoreColor(score))
+                                    .frame(width: max(0, geo.size.width * score))
+                            }
                         }
                     }
                     .frame(width: 60, height: 8)
@@ -921,5 +1077,31 @@ private struct ScoreSimulatorView: View {
         .animation(.easeInOut(duration: 0.2), value: credentialPenalty)
         .animation(.easeInOut(duration: 0.2), value: portfolioBoost)
         .animation(.easeInOut(duration: 0.2), value: scoreCutoff)
+    }
+}
+
+// MARK: - Scoring Rule Row
+
+private struct ScoringRuleRow: View {
+    let icon: String
+    let color: Color
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.body)
+                .foregroundStyle(color)
+                .frame(width: 22)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 }
