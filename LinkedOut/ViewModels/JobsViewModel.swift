@@ -43,12 +43,22 @@ class JobsViewModel: ObservableObject {
     var visiblePendingJobs: [JobPayload] {
         let blocked = blockedCompanies
         let decided = decidedURLs
-        return pendingJobs.filter { job in
+
+        // Filter out acted-upon/blocked jobs
+        let rawFilter = pendingJobs.filter { job in
             if !blocked.isEmpty && blocked.contains(job.companyName.lowercased()) { return false }
             if decided.contains(job.sourceUrl) { return false }
-            // Hide jobs that fell through to the local keyword scorer
-            if job.aiPitchSummary.lowercased().contains("local keyword") { return false }
             return true
+        }
+
+        // Sort explicitly: LLM-scored jobs first, then properly scored jobs by builder_score descending
+        return rawFilter.sorted { a, b in
+            let aIsLocal = a.aiPitchSummary.lowercased().contains("local keyword")
+            let bIsLocal = b.aiPitchSummary.lowercased().contains("local keyword")
+
+            if aIsLocal && !bIsLocal { return false }
+            if !aIsLocal && bIsLocal { return true }
+            return a.builderScore > b.builderScore
         }
     }
 
