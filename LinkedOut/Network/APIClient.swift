@@ -390,7 +390,6 @@ final class APIClient: @unchecked Sendable {
                     print("[API] ➡️ \(method) \(url)")
                 }
             }
-            }
             do {
                 let (data, response) = try await session.data(for: request)
                 let elapsed = String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - start) * 1000)

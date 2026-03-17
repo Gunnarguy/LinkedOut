@@ -126,16 +126,16 @@ struct LoginView: View {
         .sheet(isPresented: $auth.showOAuth) {
             if let url = auth.oauthURL {
                 OAuthWebView(url: url) { code, state in
-                    print("[LOGIN] \ud83c\udfaf OAuth sheet returned code+state \u2014 exchanging token...")
+                    print("[LOGIN] 🎯 OAuth sheet returned code+state — exchanging token...")
                     auth.showOAuth = false
                     Task { await auth.handleOAuthCallback(code: code, state: state) }
                 } onCancel: {
-                    print("[LOGIN] \ud83d\udeaa OAuth sheet cancelled")
+                    print("[LOGIN] 🚪 OAuth sheet cancelled")
                     auth.cancelOAuth()
                 }
             } else {
                 Text("OAuth URL not set")
-                    .onAppear { print("[LOGIN] \u26a0\ufe0f OAuth sheet opened but oauthURL is nil!") }
+                    .onAppear { print("[LOGIN] ⚠️ OAuth sheet opened but oauthURL is nil!") }
             }
         }
     }

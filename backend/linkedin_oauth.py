@@ -79,7 +79,7 @@ def generate_authorization_url() -> tuple[str, str]:
         "client_id": settings.linkedin_client_id,
         "redirect_uri": settings.linkedin_redirect_uri,
         "state": state,
-        "scope": "openid profile email w_member_social r_verify r_profile_basicinfo r_basicprofile",
+        "scope": "openid profile email w_member_social r_verify r_profile_basicinfo",
     }
     return f"{AUTHORIZE_URL}?{urlencode(params)}", state
 
