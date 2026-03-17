@@ -110,6 +110,9 @@ class JobsViewModel: ObservableObject {
     /// Prevents double-swipe race conditions on the same job
     @Published var processingJobIds: Set<String> = []
 
+    /// Queue of actions that failed to sync to the backend — retried on next successful network call
+    private var failedActionQueue: [(request: JobActionRequest, retries: Int)] = []
+
     // MARK: - Console Telemetry
 
     /// Latest telemetry snapshot (also used by TelemetryView)
@@ -493,7 +496,7 @@ class JobsViewModel: ObservableObject {
         recordAction(job: job, action: action)
         markURLDecided(job.sourceUrl)
 
-        // Fire-and-forget network sync
+        // Fire-and-forget network sync — queues for retry on failure
         Task.detached {
             let request = JobActionRequest(jobId: jobId, action: action, jobData: job)
             do {
@@ -501,11 +504,16 @@ class JobsViewModel: ObservableObject {
                 print("[VM] background performAction — success=\(response.success) msg=\(response.message)")
                 if response.success {
                     await self.loadStats()
+                    // Drain any previously failed actions now that the network is back
+                    await self.retryFailedActions()
                 } else {
                     print("[VM] background server rejected action on \(jobId)")
                 }
             } catch {
-                print("[VM] background performAction failed — \(error.localizedDescription) (User relies on local cache)")
+                print("[VM] background performAction failed — \(error.localizedDescription) — queued for retry")
+                await MainActor.run {
+                    self.failedActionQueue.append((request: request, retries: 0))
+                }
             }
 
             await MainActor.run {
@@ -524,6 +532,36 @@ class JobsViewModel: ObservableObject {
             Self.writeCache("pending", jobs: pendingJobs)
             Self.writeCache("applied", jobs: appliedJobs)
             Self.writeCache("saved", jobs: savedJobs)
+        }
+    }
+
+    /// Retry any queued actions that previously failed to sync
+    private func retryFailedActions() async {
+        guard !failedActionQueue.isEmpty else { return }
+        let queue = await MainActor.run { () -> [(request: JobActionRequest, retries: Int)] in
+            let q = self.failedActionQueue
+            self.failedActionQueue.removeAll()
+            return q
+        }
+        for item in queue {
+            do {
+                let response = try await APIClient.shared.performAction(item.request)
+                if response.success {
+                    print("[VM] retry succeeded for \(item.request.jobId)")
+                } else {
+                    print("[VM] retry rejected by server for \(item.request.jobId)")
+                }
+            } catch {
+                // Re-queue if under 3 retries
+                if item.retries < 3 {
+                    print("[VM] retry failed for \(item.request.jobId) — re-queuing (attempt \(item.retries + 1))")
+                    await MainActor.run {
+                        self.failedActionQueue.append((request: item.request, retries: item.retries + 1))
+                    }
+                } else {
+                    print("[VM] retry exhausted for \(item.request.jobId) — dropping")
+                }
+            }
         }
     }
 

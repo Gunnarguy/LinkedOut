@@ -77,6 +77,29 @@ struct YourHubView: View {
 
     private var profileHero: some View {
         VStack(spacing: 16) {
+            // Re-auth banner when backend session expired
+            if auth.needsReauth {
+                VStack(spacing: 8) {
+                    Label("LinkedIn session expired", systemImage: "exclamationmark.triangle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.orange)
+                    Text("Reconnect to use resume, sharing, and compose features.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    Button {
+                        Task { await auth.signInWithLinkedIn() }
+                    } label: {
+                        Label("Reconnect LinkedIn", systemImage: "arrow.triangle.2.circlepath")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.orange)
+                }
+                .padding()
+                .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+            }
+
             // Avatar
             if let profile = auth.profile {
                 if let picUrl = URL(string: profile.profilePictureUrl),

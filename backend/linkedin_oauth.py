@@ -408,6 +408,12 @@ async def refresh_access_token(person_id: str) -> AuthSession | None:
         resp.raise_for_status()
         data = resp.json()
 
+    if "access_token" not in data:
+        logger.error(
+            f"LinkedIn refresh returned invalid response (missing access_token)"
+        )
+        return None
+
     new_session = AuthSession(
         linkedin_access_token=data["access_token"],
         linkedin_refresh_token=data.get(

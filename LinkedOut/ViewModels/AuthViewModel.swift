@@ -15,6 +15,8 @@ class AuthViewModel: ObservableObject {
     @Published var profile: LinkedInProfile?
     @Published var isLoading = false
     @Published var error: String?
+    /// True when cached profile exists but backend session is invalid — LinkedIn API calls will fail
+    @Published var needsReauth = false
 
     /// Controls the OAuth WKWebView sheet
     @Published var showOAuth = false
@@ -48,18 +50,21 @@ class AuthViewModel: ObservableObject {
             if status.authenticated, let profile = status.profile {
                 self.profile = profile
                 self.isAuthenticated = true
+                self.needsReauth = false
                 cacheProfile(profile)
             } else {
-                // Backend says not authenticated — but if we have a cached profile,
-                // keep the user logged in (they may just need to re-auth for LinkedIn API calls)
+                // Backend says not authenticated — keep cached profile for display
+                // but flag that LinkedIn API calls will fail until re-auth
                 if loadCachedProfile() != nil {
                     self.isAuthenticated = true
+                    self.needsReauth = true
                 } else {
                     clearSession()
                 }
             }
         } catch {
-            // Backend not reachable — keep cached session
+            // Backend not reachable — keep cached session, don't flag re-auth
+            // (could just be temporary network issue)
             if loadCachedProfile() != nil {
                 self.isAuthenticated = true
             }
@@ -97,6 +102,7 @@ class AuthViewModel: ObservableObject {
                 self.profile = profile
                 self.storedPersonId = profile.personId
                 self.isAuthenticated = true
+                self.needsReauth = false
                 cacheProfile(profile)
             } else {
                 self.error = "Authentication failed — backend didn't create a session"
@@ -150,6 +156,7 @@ class AuthViewModel: ObservableObject {
 
     private func clearSession() {
         isAuthenticated = false
+        needsReauth = false
         profile = nil
         storedPersonId = ""
         cachedProfileJSON = ""

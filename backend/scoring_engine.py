@@ -153,7 +153,7 @@ async def _call_llm(
                 raise
 
             if is_transient and attempt < max_retries - 1:
-                wait_time = 3 * (attempt + 1)
+                wait_time = 1 * (attempt + 1)
                 logger.warning(
                     f"[LLM] {error_type} (attempt {attempt + 1}/{max_retries}): "
                     f"{error_str or '(empty)'} — retrying in {wait_time}s..."
@@ -752,12 +752,12 @@ async def triage_and_score(
 
                 results.append(result)
 
-                if consecutive_fallbacks >= 3:
+                if consecutive_fallbacks >= 5:
                     rest = remaining_survivors[i + score_batch_size :]
                     if rest:
                         logger.warning(
                             f"LLM failed {consecutive_fallbacks}x in a row — "
-                            f"Delaying remaining {len(rest)} listings until next cycle"
+                            f"marking remaining {len(rest)} listings for next cycle"
                         )
                         for r in rest:
                             results.append(ScoringResult(passed_filter=False, rejection_reason="LLM_FAILURE_RETRY"))

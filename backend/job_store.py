@@ -63,7 +63,10 @@ class JobStore:
                 logger.error(f"Failed to load seen URLs: {e}")
 
     def _save(self) -> None:
-        """Persist state to disk."""
+        """Persist state to disk with atomic write to prevent corruption."""
+        import os
+        import tempfile
+
         try:
             DATA_DIR.mkdir(parents=True, exist_ok=True)
             data = {
@@ -74,7 +77,16 @@ class JobStore:
                 ],
                 "saved": [j.model_dump(mode="json") for j in self._saved.values()],
             }
-            STORE_FILE.write_text(json.dumps(data, default=str))
+            fd, tmp_path = tempfile.mkstemp(dir=DATA_DIR, suffix=".tmp")
+            try:
+                with os.fdopen(fd, "w") as f:
+                    json.dump(data, f, default=str)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp_path, STORE_FILE)
+            except Exception:
+                os.unlink(tmp_path)
+                raise
         except Exception as e:
             logger.error(f"Failed to save store: {e}")
 

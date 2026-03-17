@@ -7,6 +7,7 @@ import json
 import logging
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form
@@ -261,18 +262,25 @@ async def _periodic_ingest(interval_hours: int = 6):
 
 
 async def _keep_alive(interval_minutes: int = 10):
-    """Self-ping to prevent Render free tier from sleeping."""
+    """Self-ping to prevent Render from sleeping."""
     import httpx
+    import os
 
-    url = f"http://localhost:{settings.port}/health"
+    # Use external hostname on Render, localhost otherwise
+    render_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+    if render_host:
+        url = f"https://{render_host}/health"
+    else:
+        url = f"http://127.0.0.1:{settings.port}/health"
+
     while True:
         await asyncio.sleep(interval_minutes * 60)
         try:
-            async with httpx.AsyncClient(timeout=5) as client:
+            async with httpx.AsyncClient(timeout=10, verify=False) as client:
                 await client.get(url)
             logger.debug("Keep-alive ping OK")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Keep-alive ping failed: {e}")
 
 
 async def _periodic_prune():
@@ -419,6 +427,14 @@ async def get_profile_resume(person_id: str = Query(...)):
     session = get_session(person_id)
     if not session:
         raise HTTPException(status_code=401, detail="Not authenticated")
+
+    # Auto-refresh expired tokens before calling LinkedIn
+    if session.expires_at and session.expires_at < datetime.now(timezone.utc):
+        session = await refresh_access_token(person_id)
+        if not session:
+            raise HTTPException(
+                status_code=401, detail="Session expired — please re-authenticate"
+            )
 
     try:
         profile = await fetch_profile(session.linkedin_access_token)
