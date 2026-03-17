@@ -337,6 +337,7 @@ class JobsViewModel: ObservableObject {
     }
 
     func refreshAll() async {
+        print("[VM] refreshAll — reloading all lists + stats")
         await loadPendingJobs()
         await loadAppliedJobs()
         await loadSavedJobs()
@@ -524,6 +525,7 @@ class JobsViewModel: ObservableObject {
 
     /// Remove a job from all local lists when the server says it's gone
     private func purgeStaleJob(id: String) {
+        print("[VM] purgeStaleJob — removing \(id) from all lists")
         withAnimation {
             pendingJobs.removeAll { $0.id == id }
             appliedJobs.removeAll { $0.id == id }
@@ -608,20 +610,25 @@ class JobsViewModel: ObservableObject {
 
     func undoLastAction() async {
         guard !recentActions.isEmpty else {
+            print("[VM] undo — nothing to undo")
             self.error = "Nothing to undo"
             return
         }
+        print("[VM] undo — requesting undo from backend...")
         do {
             let result = try await APIClient.shared.undoLastAction()
             if result.success {
                 let undone = recentActions.removeLast()
                 unmarkURLDecided(undone.sourceUrl)
+                print("[VM] undo — success: \(undone.action.rawValue) on \(undone.jobTitle)")
                 info = "Undid \(undone.action.rawValue) on \(undone.jobTitle)"
                 await refreshAll()
             } else {
+                print("[VM] undo — server rejected: \(result.message)")
                 self.error = result.message
             }
         } catch {
+            print("[VM] undo — failed: \(error.localizedDescription)")
             self.error = error.localizedDescription
         }
     }
@@ -629,25 +636,33 @@ class JobsViewModel: ObservableObject {
     // MARK: - Notes & Status
 
     func updateNotes(jobId: String, notes: String) async {
+        print("[VM] updateNotes — jobId=\(jobId) notes=\(notes.prefix(30))...")
         do {
             let updated = try await APIClient.shared.updateJobNotes(jobId: jobId, notes: notes)
             replaceJobInLists(updated)
+            print("[VM] updateNotes — success")
         } catch let apiError as APIError where apiError.is404 {
+            print("[VM] updateNotes — 404, purging stale job \(jobId)")
             purgeStaleJob(id: jobId)
             self.error = "That job is no longer on the server"
         } catch {
+            print("[VM] updateNotes — failed: \(error.localizedDescription)")
             self.error = error.localizedDescription
         }
     }
 
     func updateStatus(jobId: String, status: String) async {
+        print("[VM] updateStatus — jobId=\(jobId) status=\(status)")
         do {
             let updated = try await APIClient.shared.updateJobStatus(jobId: jobId, status: status)
             replaceJobInLists(updated)
+            print("[VM] updateStatus — success")
         } catch let apiError as APIError where apiError.is404 {
+            print("[VM] updateStatus — 404, purging stale job \(jobId)")
             purgeStaleJob(id: jobId)
             self.error = "That job is no longer on the server"
         } catch {
+            print("[VM] updateStatus — failed: \(error.localizedDescription)")
             self.error = error.localizedDescription
         }
     }

@@ -383,7 +383,8 @@ final class APIClient: @unchecked Sendable {
                 // Exponential backoff: 1s, 2s
                 try await Task.sleep(nanoseconds: UInt64(attempt) * 1_000_000_000)
             } else {
-                print("[API] ➡️ \(method) \(url)")
+                let bodySize = request.httpBody?.count ?? 0
+                print("[API] \u27a1\ufe0f \(method) \(url)\(bodySize > 0 ? " (\(bodySize)B body)" : "")\")")
             }
             do {
                 let (data, response) = try await session.data(for: request)

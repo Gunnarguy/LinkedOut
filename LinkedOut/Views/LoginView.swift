@@ -126,25 +126,33 @@ struct LoginView: View {
         .sheet(isPresented: $auth.showOAuth) {
             if let url = auth.oauthURL {
                 OAuthWebView(url: url) { code, state in
+                    print("[LOGIN] \ud83c\udfaf OAuth sheet returned code+state \u2014 exchanging token...")
                     auth.showOAuth = false
                     Task { await auth.handleOAuthCallback(code: code, state: state) }
                 } onCancel: {
+                    print("[LOGIN] \ud83d\udeaa OAuth sheet cancelled")
                     auth.cancelOAuth()
                 }
+            } else {
+                Text("OAuth URL not set")
+                    .onAppear { print("[LOGIN] \u26a0\ufe0f OAuth sheet opened but oauthURL is nil!") }
             }
         }
     }
 
     /// Auto-discover the backend, save the URL, and verify health.
     private func discoverAndCheck() async {
+        print("[LOGIN] 🔍 Discovering backend...")
         discovering = true
         backendReachable = nil
 
         if let found = await ServerDiscovery.discover() {
             serverURL = found
             backendReachable = true
+            print("[LOGIN] ✅ Backend found: \(found)")
         } else {
             backendReachable = false
+            print("[LOGIN] ❌ No backend found")
         }
 
         discovering = false

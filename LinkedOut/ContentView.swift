@@ -25,6 +25,7 @@ struct ContentView: View {
             OnboardingOverlay(isPresented: $showOnboarding)
         }
         .onChange(of: auth.isAuthenticated) { _, isAuth in
+            print("[APP] 🔀 Auth state changed: isAuthenticated=\(isAuth), needsReauth=\(auth.needsReauth), showing=\(isAuth ? "MainTabView" : "LoginView")")
             if isAuth && !hasSeenOnboarding {
                 showOnboarding = true
                 hasSeenOnboarding = true

@@ -43,6 +43,7 @@ private struct OAuthWebViewRepresentable: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let webView = WKWebView()
         webView.navigationDelegate = context.coordinator
+        print("[OAUTH-WEB] 🌐 Loading OAuth URL: \(url.absoluteString.prefix(100))...")
         webView.load(URLRequest(url: url))
         return webView
     }
@@ -64,18 +65,33 @@ private struct OAuthWebViewRepresentable: UIViewRepresentable {
             decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
         ) {
             guard let url = navigationAction.request.url else {
+                print("[OAUTH-WEB] ❓ Navigation with nil URL — allowing")
                 decisionHandler(.allow)
                 return
             }
+
+            print("[OAUTH-WEB] 🚦 Navigation: \(url.host ?? "?")\(url.path) (type=\(navigationAction.navigationType.rawValue))")
 
             // Intercept the OAuth callback redirect before the browser loads it
             if url.path.hasSuffix(callbackPath),
                let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
                let code = components.queryItems?.first(where: { $0.name == "code" })?.value,
                let state = components.queryItems?.first(where: { $0.name == "state" })?.value {
+                print("[OAUTH-WEB] 🎯 Intercepted callback! code=\(code.prefix(10))..., state=\(state.prefix(10))...")
                 decisionHandler(.cancel)
                 onResult(code, state)
                 return
+            }
+
+            // Check if this looks like a callback but is missing code/state
+            if url.path.hasSuffix(callbackPath) {
+                let params = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.map { $0.name } ?? []
+                print("[OAUTH-WEB] ⚠️ Callback path matched but missing code/state! Params: \(params)")
+                if let errorParam = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "error" })?.value {
+                    print("[OAUTH-WEB] ❌ OAuth error from LinkedIn: \(errorParam)")
+                    let desc = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "error_description" })?.value ?? "unknown"
+                    print("[OAUTH-WEB] ❌ Error description: \(desc)")
+                }
             }
 
             decisionHandler(.allow)

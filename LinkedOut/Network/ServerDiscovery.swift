@@ -51,7 +51,10 @@ struct ServerDiscovery {
         let results = await withTaskGroup(of: (Int, String, Bool).self) { group in
             for (index, candidate) in candidates.enumerated() {
                 group.addTask {
+                    let start = Date()
                     let ok = await probe(candidate)
+                    let elapsed = Int(Date().timeIntervalSince(start) * 1000)
+                    print("[DISCOVERY]   ├─ \(ok ? "✅" : "❌") \(candidate) (\(elapsed)ms)")
                     return (index, candidate, ok)
                 }
             }
@@ -64,6 +67,7 @@ struct ServerDiscovery {
 
         // Pick the highest-priority (lowest index) that responded
         guard let best = results.min(by: { $0.0 < $1.0 }) else {
+            print("[DISCOVERY] 🚨 ALL candidates failed! No backend available.")
             return nil
         }
 
@@ -76,6 +80,7 @@ struct ServerDiscovery {
 
     /// Force a fresh discovery (e.g., after network error).
     static func invalidateCache() {
+        print("[DISCOVERY] 🗑️ Cache invalidated — next discover() will probe fresh")
         cachedAt = .distantPast
     }
 

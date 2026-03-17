@@ -88,6 +88,7 @@ struct YourHubView: View {
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                     Button {
+                        print("[YourHub] 🔑 'Reconnect LinkedIn' tapped from re-auth banner")
                         Task { await auth.signInWithLinkedIn() }
                     } label: {
                         Label("Reconnect LinkedIn", systemImage: "arrow.triangle.2.circlepath")
@@ -443,6 +444,7 @@ struct YourHubView: View {
             VStack(spacing: 0) {
                 if auth.profile?.personId == "dev-user" {
                     Button {
+                        print("[YourHub] 🔗 'Connect LinkedIn' tapped from account section")
                         Task { await auth.signInWithLinkedIn() }
                     } label: {
                         HStack {
@@ -464,6 +466,7 @@ struct YourHubView: View {
                 }
 
                 Button(role: .destructive) {
+                    print("[YourHub] 🚪 Sign Out tapped")
                     auth.signOut()
                 } label: {
                     HStack {
@@ -672,49 +675,60 @@ struct YourHubView: View {
     private func loadNotionStatus() async {
         do {
             notionStatus = try await APIClient.shared.fetchNotionStatus()
+            print("[YourHub] 📝 Notion status: configured=\(notionStatus?.configured ?? false), syncRunning=\(notionStatus?.syncRunning ?? false)")
         } catch {
-            print("[YourHub] Notion status failed: \(error)")
+            print("[YourHub] ❌ Notion status failed: \(error)")
         }
     }
 
     private func triggerSync() async {
+        print("[YourHub] 🔄 Full Notion sync triggered")
         notionSyncing = true
         notionSyncMessage = "Syncing with Notion..."
         do {
             _ = try await APIClient.shared.triggerNotionSync()
+            print("[YourHub] 🔄 Notion sync started — polling...")
             // Poll until done
             try await pollNotionSync()
+            print("[YourHub] ✅ Notion sync complete")
             notionSyncMessage = "Sync complete!"
             await loadNotionStatus()
             await jobs.loadStats()
         } catch {
+            print("[YourHub] ❌ Notion sync failed: \(error.localizedDescription)")
             notionSyncMessage = "Sync failed: \(error.localizedDescription)"
         }
         notionSyncing = false
     }
 
     private func triggerPush() async {
+        print("[YourHub] ⬆️ Notion push triggered")
         notionSyncing = true
         notionSyncMessage = "Pushing to Notion..."
         do {
             _ = try await APIClient.shared.triggerNotionPush()
+            print("[YourHub] ✅ Notion push complete")
             notionSyncMessage = "Push complete"
             await loadNotionStatus()
         } catch {
+            print("[YourHub] ❌ Notion push failed: \(error.localizedDescription)")
             notionSyncMessage = "Push failed: \(error.localizedDescription)"
         }
         notionSyncing = false
     }
 
     private func triggerPull() async {
+        print("[YourHub] ⬇️ Notion pull triggered")
         notionSyncing = true
         notionSyncMessage = "Pulling from Notion..."
         do {
             _ = try await APIClient.shared.triggerNotionPull()
+            print("[YourHub] ✅ Notion pull complete")
             notionSyncMessage = "Pull complete"
             await loadNotionStatus()
             await jobs.loadStats()
         } catch {
+            print("[YourHub] ❌ Notion pull failed: \(error.localizedDescription)")
             notionSyncMessage = "Pull failed: \(error.localizedDescription)"
         }
         notionSyncing = false
@@ -734,6 +748,7 @@ struct YourHubView: View {
     // MARK: - Helpers
 
     private func triggerRescore() async {
+        print("[YourHub] 🧠 Re-score triggered")
         rescoring = true
         rescoreMessage = "Starting re-score..."
         do {
