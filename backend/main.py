@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
@@ -448,6 +449,91 @@ async def get_profile_resume(person_id: str = Query(...)):
     except Exception as e:
         logger.exception("Failed to fetch resume")
         raise HTTPException(status_code=502, detail=f"LinkedIn API error: {e}")
+
+
+@app.get("/api/profile/debug-linkedin")
+async def debug_linkedin_raw(person_id: str = Query(...)):
+    """Debug: dump raw LinkedIn API responses to see what data is available."""
+    session = get_session(person_id)
+    if not session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    token = session.linkedin_access_token
+    headers_v2 = {
+        "Authorization": f"Bearer {token}",
+        "X-RestLi-Protocol-Version": "2.0.0",
+    }
+    rest_headers = {
+        "Authorization": f"Bearer {token}",
+        "LinkedIn-Version": "202503",
+    }
+    results = {}
+    async with httpx.AsyncClient(timeout=15) as client:
+        # 1. /v2/me with projections
+        try:
+            r = await client.get(
+                "https://api.linkedin.com/v2/me"
+                "?projection=(id,localizedFirstName,localizedLastName,"
+                "localizedHeadline,vanityName,profilePicture,"
+                "positions,education,skills,certifications,languages)",
+                headers=headers_v2,
+            )
+            results["v2_me_projected"] = {"status": r.status_code, "body": r.json()}
+        except Exception as e:
+            results["v2_me_projected"] = {"error": str(e)}
+
+        # 2. /v2/me plain
+        try:
+            r = await client.get("https://api.linkedin.com/v2/me", headers=headers_v2)
+            results["v2_me_plain"] = {"status": r.status_code, "body": r.json()}
+        except Exception as e:
+            results["v2_me_plain"] = {"error": str(e)}
+
+        # 3. /rest/identityMe
+        try:
+            r = await client.get(
+                "https://api.linkedin.com/rest/identityMe", headers=rest_headers
+            )
+            results["rest_identityMe"] = {"status": r.status_code, "body": r.json()}
+        except Exception as e:
+            results["rest_identityMe"] = {"error": str(e)}
+
+        # 4. OIDC userinfo
+        try:
+            r = await client.get(
+                "https://api.linkedin.com/v2/userinfo",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            results["oidc_userinfo"] = {"status": r.status_code, "body": r.json()}
+        except Exception as e:
+            results["oidc_userinfo"] = {"error": str(e)}
+
+        # 5. /rest/me
+        try:
+            r = await client.get(
+                "https://api.linkedin.com/rest/me", headers=rest_headers
+            )
+            results["rest_me"] = {"status": r.status_code, "body": r.json()}
+        except Exception as e:
+            results["rest_me"] = {"error": str(e)}
+
+        # 6. /v2/me with all possible projections
+        try:
+            r = await client.get(
+                "https://api.linkedin.com/v2/me"
+                "?projection=(id,localizedFirstName,localizedLastName,"
+                "localizedHeadline,vanityName,maidenName,localizedMaidenName,"
+                "profilePicture(displayImage~digitalmediaAsset:playableStreams),"
+                "location,industry,summary,positions,education,skills,"
+                "certifications,languages,courses,honors,patents,"
+                "publications,projects,volunteeringExperiences)",
+                headers=headers_v2,
+            )
+            results["v2_me_full_projection"] = {"status": r.status_code, "body": r.json()}
+        except Exception as e:
+            results["v2_me_full_projection"] = {"error": str(e)}
+
+    return results
 
 
 # ── Job Routes ───────────────────────────────────────────────────────────────
