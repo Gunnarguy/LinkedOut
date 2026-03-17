@@ -129,6 +129,21 @@ class AuthViewModel: ObservableObject {
         self.storedPersonId = "dev-user"
     }
 
+    /// Pull fresh full resume data from LinkedIn API via backend
+    func fetchResume() async {
+        guard !storedPersonId.isEmpty, storedPersonId != "dev-user" else { return }
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            let profile = try await APIClient.shared.fetchResume(personId: storedPersonId)
+            self.profile = profile
+            cacheProfile(profile)
+        } catch {
+            self.error = "Failed to fetch resume: \(error.localizedDescription)"
+        }
+    }
+
     func signOut() {
         clearSession()
     }

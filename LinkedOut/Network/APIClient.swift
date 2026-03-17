@@ -163,6 +163,10 @@ final class APIClient: @unchecked Sendable {
         return try await get("/auth/status/\(personId)")
     }
 
+    func fetchResume(personId: String) async throws -> LinkedInProfile {
+        return try await get("/api/profile/resume?person_id=\(personId)")
+    }
+
     // MARK: - Share
 
     func shareToLinkedIn(personId: String, jobId: String, text: String = "") async throws -> [String: String] {

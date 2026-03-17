@@ -6,7 +6,11 @@ services:
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    plan: free
+    plan: starter
+    disk:
+      name: linkedout-data
+      mountPath: /app/data
+      sizeGB: 1
     envVars:
       - key: LINKEDIN_CLIENT_ID
         sync: false
@@ -34,3 +38,7 @@ services:
         value: "true"
       - key: DEBUG
         value: "false"
+      - key: NOTION_TOKEN
+        sync: false
+      - key: NOTION_DATABASE_ID
+        sync: false

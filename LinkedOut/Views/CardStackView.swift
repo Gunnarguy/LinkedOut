@@ -67,6 +67,13 @@ struct CardStackView: View {
                     cardStack
                 }
             }
+            .safeAreaInset(edge: .bottom) {
+                if jobs.isIngesting && !jobs.pendingJobs.isEmpty {
+                    ingestBanner
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.4), value: jobs.isIngesting)
             .navigationTitle("LinkedOut")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -474,6 +481,35 @@ struct CardStackView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private var ingestBanner: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+                .tint(.white)
+            Text(jobs.ingestProgress.isEmpty ? "Scanning & scoring..." : jobs.ingestProgress)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.white)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial.opacity(0.3))
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [.blue.opacity(0.85), .purple.opacity(0.85)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 4)
     }
 
     private func haptic() {

@@ -98,6 +98,37 @@ class JobActionResponse(BaseModel):
 # ── LinkedIn Profile Models ──────────────────────────────────────────────────
 
 
+class LinkedInPosition(BaseModel):
+    title: str = ""
+    company_name: str = ""
+    location: str = ""
+    description: str = ""
+    start_year: int | None = None
+    start_month: int | None = None
+    end_year: int | None = None
+    end_month: int | None = None
+    is_current: bool = False
+
+
+class LinkedInEducation(BaseModel):
+    school_name: str = ""
+    degree: str = ""
+    field_of_study: str = ""
+    start_year: int | None = None
+    end_year: int | None = None
+    activities: str = ""
+    grade: str = ""
+
+
+class LinkedInCertification(BaseModel):
+    name: str = ""
+    authority: str = ""
+    license_number: str = ""
+    url: str = ""
+    start_year: int | None = None
+    end_year: int | None = None
+
+
 class LinkedInProfile(BaseModel):
     person_id: str = ""
     first_name: str = ""
@@ -106,6 +137,13 @@ class LinkedInProfile(BaseModel):
     vanity_name: str = ""
     profile_picture_url: str = ""
     email: str = ""
+    profile_url: str = ""
+    verifications: list[str] = Field(default_factory=list)
+    positions: list[LinkedInPosition] = Field(default_factory=list)
+    education: list[LinkedInEducation] = Field(default_factory=list)
+    skills: list[str] = Field(default_factory=list)
+    certifications: list[LinkedInCertification] = Field(default_factory=list)
+    languages: list[str] = Field(default_factory=list)
 
 
 # ── Auth Models ──────────────────────────────────────────────────────────────

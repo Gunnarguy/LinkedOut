@@ -15,7 +15,14 @@ from urllib.parse import urlencode
 import httpx
 
 from config import settings
-from models import AuthSession, LinkedInProfile, OAuthTokenResponse
+from models import (
+    AuthSession,
+    LinkedInCertification,
+    LinkedInEducation,
+    LinkedInPosition,
+    LinkedInProfile,
+    OAuthTokenResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +79,7 @@ def generate_authorization_url() -> tuple[str, str]:
         "client_id": settings.linkedin_client_id,
         "redirect_uri": settings.linkedin_redirect_uri,
         "state": state,
-        "scope": "openid profile email w_member_social r_verify r_profile_basicinfo",
+        "scope": "openid profile email w_member_social r_verify r_profile_basicinfo r_basicprofile",
     }
     return f"{AUTHORIZE_URL}?{urlencode(params)}", state
 
@@ -104,22 +111,252 @@ async def exchange_code_for_token(code: str) -> OAuthTokenResponse:
         return OAuthTokenResponse(**data)
 
 
+def _localized(obj: dict) -> str:
+    """Extract a plain string from a LinkedIn MultiLocaleString."""
+    if isinstance(obj, str):
+        return obj
+    localized = obj.get("localized", {})
+    return next(iter(localized.values()), "") if localized else ""
+
+
+def _parse_positions(elements: list[dict]) -> list[LinkedInPosition]:
+    """Parse LinkedIn positions array into structured models."""
+    results = []
+    for el in elements:
+        start = el.get("startMonthYear", {})
+        end = el.get("endMonthYear", {})
+        loc = _localized(
+            el.get("geoPositionLocation", {}).get("displayLocationName", {})
+        ) or _localized(el.get("locationName", {}))
+        results.append(
+            LinkedInPosition(
+                title=_localized(el.get("title", {})),
+                company_name=_localized(el.get("companyName", {})),
+                location=loc,
+                description=_localized(el.get("description", {})),
+                start_year=start.get("year"),
+                start_month=start.get("month"),
+                end_year=end.get("year"),
+                end_month=end.get("month"),
+                is_current=not bool(end),
+            )
+        )
+    return results
+
+
+def _parse_education(elements: list[dict]) -> list[LinkedInEducation]:
+    """Parse LinkedIn education array."""
+    results = []
+    for el in elements:
+        fos = el.get("fieldsOfStudy", [])
+        field = _localized(fos[0].get("fieldOfStudyName", {})) if fos else ""
+        start = el.get("startMonthYear", {})
+        end = el.get("endMonthYear", {})
+        results.append(
+            LinkedInEducation(
+                school_name=_localized(el.get("schoolName", {})),
+                degree=_localized(el.get("degreeName", {})),
+                field_of_study=field,
+                start_year=start.get("year"),
+                end_year=end.get("year"),
+                activities=_localized(el.get("activities", {})),
+                grade=_localized(el.get("grade", {}).get("grade", {})),
+            )
+        )
+    return results
+
+
+def _parse_certifications(elements: list[dict]) -> list[LinkedInCertification]:
+    """Parse LinkedIn certifications array."""
+    results = []
+    for el in elements:
+        start = el.get("startMonthYear", {})
+        end = el.get("endMonthYear", {})
+        results.append(
+            LinkedInCertification(
+                name=_localized(el.get("name", {})),
+                authority=_localized(el.get("authority", {})),
+                license_number=_localized(el.get("licenseNumber", {})),
+                url=el.get("url", ""),
+                start_year=start.get("year"),
+                end_year=end.get("year"),
+            )
+        )
+    return results
+
+
 async def fetch_profile(access_token: str) -> LinkedInProfile:
-    """Fetch the authenticated member's profile via OpenID Connect userinfo."""
-    headers = {"Authorization": f"Bearer {access_token}"}
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(USERINFO_URL, headers=headers)
-        resp.raise_for_status()
-        p = resp.json()
+    """Fetch the authenticated member's full profile including resume data.
+
+    Uses Business tier r_basicprofile for positions/education/skills/certifications,
+    /rest/identityMe for profileUrl, and /rest/verificationReport for verification badges.
+    """
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "X-RestLi-Protocol-Version": "2.0.0",
+    }
+    rest_headers = {
+        "Authorization": f"Bearer {access_token}",
+        "LinkedIn-Version": "202503",
+    }
+
+    profile_data: dict = {}
+    positions: list[LinkedInPosition] = []
+    education: list[LinkedInEducation] = []
+    skills: list[str] = []
+    certifications: list[LinkedInCertification] = []
+    languages: list[str] = []
+    verifications: list[str] = []
+    profile_url = ""
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        # ── 1. /v2/me with field projections (Business tier) ──
+        try:
+            me_url = (
+                "https://api.linkedin.com/v2/me"
+                "?projection=(id,localizedFirstName,localizedLastName,"
+                "localizedHeadline,vanityName,profilePicture,"
+                "positions,education,skills,certifications,languages)"
+            )
+            resp = await client.get(me_url, headers=headers)
+            if resp.status_code == 200:
+                profile_data = resp.json()
+                logger.info(
+                    f"Fetched /v2/me with projections for {profile_data.get('localizedFirstName', '?')}"
+                )
+
+                # Parse resume sections
+                pos_elements = profile_data.get("positions", {}).get("elements", [])
+                if pos_elements:
+                    positions = _parse_positions(pos_elements)
+                    logger.info(f"  → {len(positions)} positions")
+
+                edu_elements = profile_data.get("education", {}).get("elements", [])
+                if edu_elements:
+                    education = _parse_education(edu_elements)
+                    logger.info(f"  → {len(education)} education entries")
+
+                skill_elements = profile_data.get("skills", {}).get("elements", [])
+                if skill_elements:
+                    skills = [
+                        _localized(s.get("name", {}))
+                        for s in skill_elements
+                        if _localized(s.get("name", {}))
+                    ]
+                    logger.info(f"  → {len(skills)} skills")
+
+                cert_elements = profile_data.get("certifications", {}).get(
+                    "elements", []
+                )
+                if cert_elements:
+                    certifications = _parse_certifications(cert_elements)
+                    logger.info(f"  → {len(certifications)} certifications")
+
+                lang_elements = profile_data.get("languages", {}).get("elements", [])
+                if lang_elements:
+                    languages = [
+                        _localized(l.get("name", {}))
+                        for l in lang_elements
+                        if _localized(l.get("name", {}))
+                    ]
+                    logger.info(f"  → {len(languages)} languages")
+            else:
+                logger.warning(f"/v2/me returned {resp.status_code}: {resp.text[:200]}")
+        except Exception as e:
+            logger.warning(f"/v2/me with projections failed: {e}")
+
+        # ── 2. /rest/identityMe for profileUrl ──
+        try:
+            resp = await client.get(
+                "https://api.linkedin.com/rest/identityMe",
+                headers=rest_headers,
+            )
+            if resp.status_code == 200:
+                identity = resp.json()
+                basic = identity.get("basicInfo", {})
+                profile_url = basic.get("profileUrl", "")
+                # Use identity data as fallback for basic fields
+                if not profile_data:
+                    fn_loc = basic.get("firstName", {}).get("localized", {})
+                    ln_loc = basic.get("lastName", {}).get("localized", {})
+                    profile_data["localizedFirstName"] = next(iter(fn_loc.values()), "")
+                    profile_data["localizedLastName"] = next(iter(ln_loc.values()), "")
+                    profile_data["id"] = identity.get("id", "")
+                    pic_url = (
+                        basic.get("profilePicture", {})
+                        .get("croppedImage", {})
+                        .get("downloadUrl", "")
+                    )
+                    if pic_url:
+                        profile_data["_pic_url"] = pic_url
+                    profile_data["_email"] = basic.get("primaryEmailAddress", "")
+        except Exception as e:
+            logger.warning(f"/rest/identityMe failed: {e}")
+
+        # ── 3. /rest/verificationReport ──
+        try:
+            vresp = await client.get(
+                "https://api.linkedin.com/rest/verificationReport",
+                headers=rest_headers,
+            )
+            if vresp.status_code == 200:
+                verifications = [
+                    v.get("type", "")
+                    for v in vresp.json().get("verifications", [])
+                    if v.get("type")
+                ]
+        except Exception:
+            pass
+
+        # ── 4. Get email from OIDC userinfo if we don't have it ──
+        email = profile_data.get("_email", "")
+        if not email:
+            try:
+                uresp = await client.get(
+                    USERINFO_URL, headers={"Authorization": f"Bearer {access_token}"}
+                )
+                if uresp.status_code == 200:
+                    ui = uresp.json()
+                    email = ui.get("email", "")
+                    if not profile_data.get("id"):
+                        profile_data["id"] = ui.get("sub", "")
+                    if not profile_data.get("localizedFirstName"):
+                        profile_data["localizedFirstName"] = ui.get("given_name", "")
+                    if not profile_data.get("localizedLastName"):
+                        profile_data["localizedLastName"] = ui.get("family_name", "")
+                    if not profile_data.get("_pic_url"):
+                        profile_data["_pic_url"] = ui.get("picture", "")
+            except Exception:
+                pass
+
+        # ── Build profile picture URL ──
+        pic_url = profile_data.get("_pic_url", "")
+        if not pic_url:
+            pic_elements = (
+                profile_data.get("profilePicture", {})
+                .get("displayImage~", {})
+                .get("elements", [])
+            )
+            if pic_elements:
+                identifiers = pic_elements[-1].get("identifiers", [])
+                if identifiers:
+                    pic_url = identifiers[0].get("identifier", "")
 
         return LinkedInProfile(
-            person_id=p.get("sub", ""),
-            first_name=p.get("given_name", ""),
-            last_name=p.get("family_name", ""),
-            headline="",
-            vanity_name="",
-            profile_picture_url=p.get("picture", ""),
-            email=p.get("email", ""),
+            person_id=profile_data.get("id", ""),
+            first_name=profile_data.get("localizedFirstName", ""),
+            last_name=profile_data.get("localizedLastName", ""),
+            headline=profile_data.get("localizedHeadline", ""),
+            vanity_name=profile_data.get("vanityName", ""),
+            profile_picture_url=pic_url,
+            email=email,
+            profile_url=profile_url,
+            verifications=verifications,
+            positions=positions,
+            education=education,
+            skills=skills,
+            certifications=certifications,
+            languages=languages,
         )
 
 

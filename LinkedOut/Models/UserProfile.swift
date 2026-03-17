@@ -7,6 +7,99 @@
 
 import Foundation
 
+// MARK: - LinkedIn Resume Sub-Models
+
+struct LinkedInPosition: Codable, Identifiable {
+    var id: String { "\(companyName)-\(title)-\(startYear ?? 0)" }
+    let title: String
+    let companyName: String
+    let location: String
+    let description: String
+    let startYear: Int?
+    let startMonth: Int?
+    let endYear: Int?
+    let endMonth: Int?
+    let isCurrent: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case title
+        case companyName = "company_name"
+        case location, description
+        case startYear = "start_year"
+        case startMonth = "start_month"
+        case endYear = "end_year"
+        case endMonth = "end_month"
+        case isCurrent = "is_current"
+    }
+
+    var dateRange: String {
+        let start = formatDate(month: startMonth, year: startYear)
+        if isCurrent { return "\(start) – Present" }
+        let end = formatDate(month: endMonth, year: endYear)
+        return "\(start) – \(end)"
+    }
+
+    private func formatDate(month: Int?, year: Int?) -> String {
+        guard let y = year else { return "?" }
+        guard let m = month else { return "\(y)" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM"
+        var comps = DateComponents()
+        comps.month = m
+        if let date = Calendar.current.date(from: comps) {
+            return "\(formatter.string(from: date)) \(y)"
+        }
+        return "\(m)/\(y)"
+    }
+}
+
+struct LinkedInEducation: Codable, Identifiable {
+    var id: String { "\(schoolName)-\(degree)-\(startYear ?? 0)" }
+    let schoolName: String
+    let degree: String
+    let fieldOfStudy: String
+    let startYear: Int?
+    let endYear: Int?
+    let activities: String
+    let grade: String
+
+    enum CodingKeys: String, CodingKey {
+        case schoolName = "school_name"
+        case degree
+        case fieldOfStudy = "field_of_study"
+        case startYear = "start_year"
+        case endYear = "end_year"
+        case activities, grade
+    }
+
+    var dateRange: String {
+        let s = startYear.map { "\($0)" } ?? ""
+        let e = endYear.map { "\($0)" } ?? ""
+        if s.isEmpty && e.isEmpty { return "" }
+        return "\(s) – \(e)"
+    }
+}
+
+struct LinkedInCertification: Codable, Identifiable {
+    var id: String { "\(name)-\(authority)" }
+    let name: String
+    let authority: String
+    let licenseNumber: String
+    let url: String
+    let startYear: Int?
+    let endYear: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case name, authority
+        case licenseNumber = "license_number"
+        case url
+        case startYear = "start_year"
+        case endYear = "end_year"
+    }
+}
+
+// MARK: - LinkedIn Profile
+
 struct LinkedInProfile: Codable, Identifiable {
     var id: String { personId }
     let personId: String
@@ -16,6 +109,13 @@ struct LinkedInProfile: Codable, Identifiable {
     let vanityName: String
     let profilePictureUrl: String
     let email: String
+    let profileUrl: String
+    let verifications: [String]
+    let positions: [LinkedInPosition]
+    let education: [LinkedInEducation]
+    let skills: [String]
+    let certifications: [LinkedInCertification]
+    let languages: [String]
 
     enum CodingKeys: String, CodingKey {
         case personId = "person_id"
@@ -25,10 +125,63 @@ struct LinkedInProfile: Codable, Identifiable {
         case vanityName = "vanity_name"
         case profilePictureUrl = "profile_picture_url"
         case email
+        case profileUrl = "profile_url"
+        case verifications, positions, education, skills, certifications, languages
+    }
+
+    // Defaults for backwards compatibility with cached profiles
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        personId = try c.decode(String.self, forKey: .personId)
+        firstName = try c.decode(String.self, forKey: .firstName)
+        lastName = try c.decode(String.self, forKey: .lastName)
+        headline = try c.decodeIfPresent(String.self, forKey: .headline) ?? ""
+        vanityName = try c.decodeIfPresent(String.self, forKey: .vanityName) ?? ""
+        profilePictureUrl = try c.decodeIfPresent(String.self, forKey: .profilePictureUrl) ?? ""
+        email = try c.decodeIfPresent(String.self, forKey: .email) ?? ""
+        profileUrl = try c.decodeIfPresent(String.self, forKey: .profileUrl) ?? ""
+        verifications = try c.decodeIfPresent([String].self, forKey: .verifications) ?? []
+        positions = try c.decodeIfPresent([LinkedInPosition].self, forKey: .positions) ?? []
+        education = try c.decodeIfPresent([LinkedInEducation].self, forKey: .education) ?? []
+        skills = try c.decodeIfPresent([String].self, forKey: .skills) ?? []
+        certifications = try c.decodeIfPresent([LinkedInCertification].self, forKey: .certifications) ?? []
+        languages = try c.decodeIfPresent([String].self, forKey: .languages) ?? []
+    }
+
+    // Memberwise init for dev mode
+    init(personId: String, firstName: String, lastName: String, headline: String = "",
+         vanityName: String = "", profilePictureUrl: String = "", email: String = "",
+         profileUrl: String = "", verifications: [String] = [],
+         positions: [LinkedInPosition] = [], education: [LinkedInEducation] = [],
+         skills: [String] = [], certifications: [LinkedInCertification] = [],
+         languages: [String] = []) {
+        self.personId = personId
+        self.firstName = firstName
+        self.lastName = lastName
+        self.headline = headline
+        self.vanityName = vanityName
+        self.profilePictureUrl = profilePictureUrl
+        self.email = email
+        self.profileUrl = profileUrl
+        self.verifications = verifications
+        self.positions = positions
+        self.education = education
+        self.skills = skills
+        self.certifications = certifications
+        self.languages = languages
     }
 
     var fullName: String { "\(firstName) \(lastName)" }
-    var profileUrl: String { "https://www.linkedin.com/in/\(vanityName)" }
+
+    var linkedInUrl: String {
+        if !profileUrl.isEmpty { return profileUrl }
+        if !vanityName.isEmpty { return "https://www.linkedin.com/in/\(vanityName)" }
+        return ""
+    }
+
+    var hasResumeData: Bool {
+        !positions.isEmpty || !education.isEmpty || !skills.isEmpty
+    }
 }
 
 struct AuthStatusResponse: Codable {

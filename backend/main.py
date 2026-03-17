@@ -19,6 +19,7 @@ from job_store import store
 from linkedin_api import share_to_linkedin
 from linkedin_oauth import (
     create_session,
+    fetch_profile,
     generate_authorization_url,
     get_all_sessions,
     get_session,
@@ -410,6 +411,27 @@ async def auth_status(person_id: str):
         return AuthStatusResponse(authenticated=True, profile=refreshed.profile)
 
     return AuthStatusResponse(authenticated=False)
+
+
+@app.get("/api/profile/resume")
+async def get_profile_resume(person_id: str = Query(...)):
+    """Fetch fresh full LinkedIn profile + resume data for the given user."""
+    session = get_session(person_id)
+    if not session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        profile = await fetch_profile(session.linkedin_access_token)
+        # Update the stored session with fresh data
+        from linkedin_oauth import _sessions, _save_sessions
+
+        session.profile = profile
+        _sessions[person_id] = session
+        _save_sessions()
+        return profile.model_dump()
+    except Exception as e:
+        logger.exception("Failed to fetch resume")
+        raise HTTPException(status_code=502, detail=f"LinkedIn API error: {e}")
 
 
 # ── Job Routes ───────────────────────────────────────────────────────────────

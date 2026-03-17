@@ -14,6 +14,7 @@ struct YourHubView: View {
 
     @State private var showSettings = false
     @State private var showTelemetry = false
+    @State private var showResume = false
     @State private var navigateTo: PipelineDestination?
     @State private var notionStatus: NotionStatusResponse?
     @State private var notionSyncing = false
@@ -48,6 +49,9 @@ struct YourHubView: View {
             }
             .navigationDestination(isPresented: $showTelemetry) {
                 TelemetryView()
+            }
+            .navigationDestination(isPresented: $showResume) {
+                ResumeView()
             }
             .navigationDestination(item: $navigateTo) { dest in
                 switch dest {
@@ -107,12 +111,43 @@ struct YourHubView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                if !profile.vanityName.isEmpty, let url = URL(string: profile.profileUrl) {
+                if !profile.vanityName.isEmpty, let url = URL(string: profile.linkedInUrl) {
                     Link(destination: url) {
                         Label("LinkedIn Profile", systemImage: "arrow.up.right.square")
                             .font(.caption.weight(.medium))
                     }
                 }
+
+                // Verification badges
+                if !profile.verifications.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(profile.verifications, id: \.self) { v in
+                            Label(v.replacingOccurrences(of: "_", with: " ").capitalized,
+                                  systemImage: "checkmark.seal.fill")
+                                .font(.caption2.weight(.medium))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(.green.opacity(0.12), in: Capsule())
+                                .foregroundStyle(.green)
+                        }
+                    }
+                }
+
+                // View Resume button
+                Button {
+                    showResume = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "doc.text.fill")
+                        Text(profile.hasResumeData ? "View Resume" : "Pull Resume from LinkedIn")
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.indigo)
+                .padding(.top, 4)
             } else {
                 Image(systemName: "person.crop.circle.badge.questionmark")
                     .font(.system(size: 48))
