@@ -367,8 +367,12 @@ class NotionSync:
         url = f"{NOTION_API}/v1/pages/{page_id}"
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.patch(
-                url, headers=self._headers(), json={"archived": True}
+                url, headers=self._headers(), json={"in_trash": True}
             )
+            # If it's already archived, Notion returns 400 with "Can't edit block that is archived"
+            if resp.status_code == 400 and "archived" in resp.text:
+                logger.info(f"[NOTION] Page {page_id} already archived")
+                return True
             resp.raise_for_status()
         logger.info(f"[NOTION] Archived page {page_id}")
         return True
@@ -442,10 +446,10 @@ class NotionSync:
 
         # Map bucket to status
         status_map = {
-            "pending": "Not started",
+            "pending": "Not Started",
             "applied": "Applied",
             "saved": "Saved",
-            "rejected": "Rejected",
+            "rejected": "Closed",
         }
         if PROP_STATUS in schema:
             status_val = status_map.get(bucket, bucket.title())
@@ -527,18 +531,15 @@ class NotionSync:
 
         Returns stats dict with push/pull counts.
         """
-        stats = {"pushed": 0, "updated": 0, "pulled": 0, "errors": 0}
+        stats = {"pushed": 0, "updated": 0, "pulled": 0, "errors": 0, "archived": 0}
 
-        # 1. Push all jobs from LinkedOut → Notion
-        buckets = {
-            "pending": job_store.get_pending(limit=9999),
+        # 1. Push all saved/applied jobs from LinkedOut → Notion
+        push_buckets = {
             "applied": job_store.get_applied(),
             "saved": job_store.get_saved(),
-            # DO NOT push 'rejected' jobs to keep the Notion board clean
-            # "rejected": job_store.get_rejected(),
         }
 
-        for bucket_name, jobs in buckets.items():
+        for bucket_name, jobs in push_buckets.items():
             for job in jobs:
                 try:
                     page_id = await self.push_job(job, bucket_name)
@@ -551,6 +552,23 @@ class NotionSync:
                 except Exception as e:
                     logger.error(f"[NOTION] Push failed for {job.id}: {e}")
                     stats["errors"] += 1
+
+        # 1b. Archive pending/rejected jobs that currently exist in Notion
+        archive_buckets = {
+            "pending": job_store.get_pending(limit=9999),
+            "rejected": job_store.get_rejected(),
+        }
+        for bucket_name, jobs in archive_buckets.items():
+            for job in jobs:
+                if job.notion_page_id:
+                    try:
+                        await self.archive_page(job.notion_page_id)
+                        job.notion_page_id = ""
+                        job_store.update_notion_page_id(job.id, "")
+                        stats["archived"] += 1
+                    except Exception as e:
+                        logger.error(f"[NOTION] Archive failed for {job.id}: {e}")
+                        stats["errors"] += 1
 
         # 2. Pull from Notion → update LinkedOut (status/notes changes)
         try:

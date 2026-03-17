@@ -847,15 +847,15 @@ async def notion_push():
             detail="Notion not configured. Set NOTION_TOKEN and NOTION_DATABASE_ID.",
         )
 
-    stats = {"pushed": 0, "updated": 0, "errors": 0}
-    buckets = {
-        "pending": store.get_pending(limit=9999),
+    stats = {"pushed": 0, "updated": 0, "errors": 0, "archived": 0}
+
+    # 1. Push only Saved and Applied jobs
+    push_buckets = {
         "applied": store.get_applied(),
         "saved": store.get_saved(),
-        "rejected": store.get_rejected(),
     }
 
-    for bucket_name, jobs in buckets.items():
+    for bucket_name, jobs in push_buckets.items():
         for job in jobs:
             try:
                 page_id = await notion_sync.push_job(job, bucket_name)
@@ -868,6 +868,24 @@ async def notion_push():
             except Exception as e:
                 logger.error(f"[NOTION] Push failed for {job.id}: {e}")
                 stats["errors"] += 1
+
+    # 2. Archive any passed/rejected or pending jobs that were previously in Notion
+    archive_buckets = {
+        "pending": store.get_pending(limit=9999),
+        "rejected": store.get_rejected(),
+    }
+
+    for bucket_name, jobs in archive_buckets.items():
+        for job in jobs:
+            if job.notion_page_id:
+                try:
+                    await notion_sync.archive_page(job.notion_page_id)
+                    job.notion_page_id = ""
+                    store.update_notion_page_id(job.id, "")
+                    stats["archived"] += 1
+                except Exception as e:
+                    logger.error(f"[NOTION] Archive failed for {job.id}: {e}")
+                    stats["errors"] += 1
 
     return {"status": "complete", "stats": stats}
 
