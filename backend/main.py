@@ -533,6 +533,22 @@ async def debug_linkedin_raw(person_id: str = Query(...)):
         except Exception as e:
             results["v2_me_full_projection"] = {"error": str(e)}
 
+        # 7. Try older LinkedIn-Version values for identityMe
+        for ver in ["202502", "202501", "202412", "202411", "202410", "202409", "202306"]:
+            try:
+                rh = {
+                    "Authorization": f"Bearer {token}",
+                    "LinkedIn-Version": ver,
+                }
+                r = await client.get(
+                    "https://api.linkedin.com/rest/identityMe", headers=rh
+                )
+                results[f"rest_identityMe_v{ver}"] = {"status": r.status_code, "body": r.json()}
+                if r.status_code == 200:
+                    break  # found a working version
+            except Exception as e:
+                results[f"rest_identityMe_v{ver}"] = {"error": str(e)}
+
     return results
 
 
