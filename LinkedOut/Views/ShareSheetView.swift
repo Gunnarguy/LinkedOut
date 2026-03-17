@@ -142,7 +142,7 @@ struct ShareSheetView: View {
                     .disabled(isSharing || customText.isEmpty)
                 }
             }
-            .onChange(of: selectedItem) { newItem in
+            .onChange(of: selectedItem) { _, newItem in
                 Task {
                     if let data = try? await newItem?.loadTransferable(type: Data.self) {
                         await MainActor.run {
