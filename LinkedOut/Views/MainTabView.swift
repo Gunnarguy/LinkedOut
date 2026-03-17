@@ -49,6 +49,8 @@ struct MainTabView: View {
             if let found = await ServerDiscovery.discover() {
                 serverURL = found
                 print("[MAIN] ✅ Server discovered: \(found)")
+                // Re-check auth against the discovered server (not the stale cached URL)
+                await auth.checkExistingSession()
             } else {
                 print("[MAIN] ❌ Server discovery failed — no backend available")
             }
@@ -79,7 +81,8 @@ struct MainTabView: View {
                     if let found = await ServerDiscovery.discover() {
                         serverURL = found
                         if found != previous {
-                            print("[DISCOVERY] Server changed: \(previous) → \(found) — reloading jobs")
+                            print("[DISCOVERY] Server changed: \(previous) → \(found) — reloading jobs + re-checking auth")
+                            await auth.checkExistingSession()
                             await jobs.loadPendingJobs()
                             await jobs.loadStats()
                         }

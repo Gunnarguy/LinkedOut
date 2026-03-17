@@ -37,10 +37,10 @@ class AuthViewModel: ObservableObject {
         } else {
             print("[AUTH] 🆕 No cached profile found")
         }
-        // Then verify with backend in background
+        // NOTE: Do NOT call checkExistingSession() here — MainTabView calls it
+        // after ServerDiscovery.discover() so we verify against the right backend.
         if !storedPersonId.isEmpty {
-            print("[AUTH] 🔍 Stored personId='\(storedPersonId)' — will verify session with backend")
-            Task { await checkExistingSession() }
+            print("[AUTH] 🔍 Stored personId='\(storedPersonId)' — will verify after server discovery")
         } else {
             print("[AUTH] ⚠️ No stored personId — user needs to sign in")
         }
