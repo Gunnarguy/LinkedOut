@@ -21,6 +21,7 @@ struct JobDetailView: View {
     @State private var editingNotes = false
     @State private var noteDraft: String = ""
     @State private var selectedStatus: String = "new"
+    @State private var isShowingShareSheet = false
 
     private enum ShareStatus { case idle, sharing, shared, failed }
 
@@ -83,7 +84,9 @@ struct JobDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    ShareLink(item: job.shareText) {
+                    Button {
+                        isShowingShareSheet = true
+                    } label: {
                         Image(systemName: "square.and.arrow.up")
                             .foregroundStyle(.blue)
                     }
@@ -94,6 +97,11 @@ struct JobDetailView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+            }
+            .sheet(isPresented: $isShowingShareSheet) {
+                ShareSheetView(job: job)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .onAppear {
                 noteDraft = job.notes ?? ""
@@ -695,23 +703,18 @@ struct JobDetailView: View {
 
             if auth.isAuthenticated, auth.profile?.personId != "dev-user" {
                 Button {
-                    Task { await shareToLinkedIn() }
+                    isShowingShareSheet = true
                 } label: {
-                    Label(
-                        shareStatus == .sharing ? "Sharing..." :
-                        shareStatus == .shared ? "Shared!" :
-                        shareStatus == .failed ? "Failed" :
-                        "Share to LinkedIn",
-                        systemImage: shareStatus == .shared ? "checkmark" : "square.and.arrow.up"
-                    )
-                    .font(.subheadline.weight(.medium))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(.indigo.opacity(0.1))
-                    .foregroundStyle(shareStatus == .shared ? .green : .indigo)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    Label("Post to LinkedIn", systemImage: "paperplane.circle.fill")
+                        .font(.subheadline.weight(.medium))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(
+                            LinearGradient(colors: [.indigo, .blue], startPoint: .leading, endPoint: .trailing)
+                        )
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-                .disabled(shareStatus == .sharing || shareStatus == .shared)
             }
 
             // Block company

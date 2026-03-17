@@ -13,13 +13,17 @@ from models import JobAction
 # Create the FastMCP server
 mcp = FastMCP("LinkedOut-Internal")
 
+
 @mcp.tool()
-async def post_linkedin_update(text: str, article_url: str | None = None) -> str:
+async def post_linkedin_update(
+    text: str, article_url: str | None = None, image_path: str | None = None
+) -> str:
     """Share an update to your personal LinkedIn network.
 
     Args:
         text: The text content of your LinkedIn post
         article_url: Optional URL to include as a linked article
+        image_path: Optional absolute path to a local image file to attach to the post
     """
     sessions = get_all_sessions()
     if not sessions:
@@ -33,11 +37,13 @@ async def post_linkedin_update(text: str, article_url: str | None = None) -> str
             access_token=auth_session.linkedin_access_token,
             person_id=person_id,
             text=text,
-            article_url=article_url
+            article_url=article_url,
+            image_path=image_path,
         )
         return f"Successfully posted to LinkedIn! Post ID: {result.get('id')}"
     except Exception as e:
         return f"Failed to post to LinkedIn: {str(e)}"
+
 
 @mcp.tool()
 async def get_my_linkedin_profile() -> dict:

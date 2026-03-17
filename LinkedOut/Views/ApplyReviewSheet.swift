@@ -13,8 +13,10 @@ struct ApplyReviewSheet: View {
     let onApply: () -> Void
     let onCancel: () -> Void
 
+    @EnvironmentObject var auth: AuthViewModel
     @State private var copied = false
     @State private var safariWrapper: URLWrapper? = nil
+    @State private var isShowingShareSheet = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -159,6 +161,22 @@ struct ApplyReviewSheet: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                         }
 
+                        if auth.isAuthenticated, auth.profile?.personId != "dev-user" {
+                            Button {
+                                isShowingShareSheet = true
+                            } label: {
+                                Label("Post to LinkedIn", systemImage: "paperplane.circle.fill")
+                                    .font(.subheadline.weight(.medium))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(
+                                        LinearGradient(colors: [.indigo, .blue], startPoint: .leading, endPoint: .trailing)
+                                    )
+                                    .foregroundStyle(.white)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                        }
+
                         Button {
                             onCancel()
                         } label: {
@@ -184,6 +202,11 @@ struct ApplyReviewSheet: View {
             .fullScreenCover(item: $safariWrapper) { wrapper in
                 SafariView(url: wrapper.url)
                     .ignoresSafeArea()
+            }
+            .sheet(isPresented: $isShowingShareSheet) {
+                ShareSheetView(job: job)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
         }
     }

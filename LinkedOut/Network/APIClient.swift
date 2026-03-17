@@ -173,6 +173,45 @@ final class APIClient: @unchecked Sendable {
         return try await post(url, body: Optional<String>.none)
     }
 
+    func shareToLinkedInWithMedia(personId: String, customText: String, articleUrl: String, imageData: Data) async throws -> [String: String] {
+        guard let url = URL(string: "\(baseURL)/api/share/media") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+
+        let boundary = "Boundary-\(UUID().uuidString)"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        var body = Data()
+
+        // Helper
+        func appendTextPart(name: String, value: String) {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
+            body.append("\(value)\r\n".data(using: .utf8)!)
+        }
+
+        appendTextPart(name: "person_id", value: personId)
+        appendTextPart(name: "custom_text", value: customText)
+        appendTextPart(name: "article_url", value: articleUrl)
+
+        // Image
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"image\"; filename=\"share_image.jpg\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
+        body.append(imageData)
+        body.append("\r\n".data(using: .utf8)!)
+
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+
+        request.httpBody = body
+
+        let (data, response) = try await performRequest(request)
+        return try decode(data, response: response)
+    }
+
     // MARK: - Notion Sync
 
     func configureNotion(token: String, databaseId: String) async throws -> NotionConfigureResponse {

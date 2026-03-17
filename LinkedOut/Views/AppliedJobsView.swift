@@ -10,6 +10,7 @@ import SwiftUI
 struct AppliedJobsView: View {
     @EnvironmentObject var jobs: JobsViewModel
     @State private var selectedJob: JobPayload?
+    @State private var shareJob: JobPayload?
     @State private var sortByNewest = false
 
     private var sortedApplied: [JobPayload] {
@@ -82,6 +83,14 @@ struct AppliedJobsView: View {
                                     } label: {
                                         JobListRow(job: job, showStatus: true)
                                     }
+                                    .swipeActions(edge: .leading) {
+                                        Button {
+                                            shareJob = job
+                                        } label: {
+                                            Label("Post", systemImage: "paperplane.circle.fill")
+                                        }
+                                        .tint(.indigo)
+                                    }
                                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                                 }
                             } header: {
@@ -117,6 +126,11 @@ struct AppliedJobsView: View {
             .refreshable { await jobs.loadAppliedJobs() }
             .sheet(item: $selectedJob) { job in
                 JobDetailView(job: job)
+            }
+            .sheet(item: $shareJob) { job in
+                ShareSheetView(job: job)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .overlay(alignment: .top) {
                 VStack(spacing: 4) {
@@ -156,6 +170,7 @@ struct AppliedJobsView: View {
 struct SavedJobsView: View {
     @EnvironmentObject var jobs: JobsViewModel
     @State private var selectedJob: JobPayload?
+    @State private var shareJob: JobPayload?
     @State private var sortByNewest = false
 
     private var sortedSaved: [JobPayload] {
@@ -179,6 +194,14 @@ struct SavedJobsView: View {
                         } label: {
                             JobListRow(job: job, showStatus: true)
                         }
+                        .swipeActions(edge: .leading) {
+                            Button {
+                                shareJob = job
+                            } label: {
+                                Label("Post", systemImage: "paperplane.circle.fill")
+                            }
+                            .tint(.indigo)
+                        }
                         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                     }
                     .listStyle(.plain)
@@ -201,6 +224,11 @@ struct SavedJobsView: View {
             .refreshable { await jobs.loadSavedJobs() }
             .sheet(item: $selectedJob) { job in
                 JobDetailView(job: job)
+            }
+            .sheet(item: $shareJob) { job in
+                ShareSheetView(job: job)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .overlay(alignment: .top) {
                 VStack(spacing: 4) {

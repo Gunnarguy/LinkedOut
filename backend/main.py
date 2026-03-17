@@ -9,7 +9,7 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
@@ -663,6 +663,37 @@ async def share_job(person_id: str, job_id: str, custom_text: str = ""):
         article_url=job.source_url,
     )
     return result
+
+
+@app.post("/api/share/media")
+async def share_job_with_media(
+    person_id: str = Form(...),
+    custom_text: str = Form(""),
+    article_url: str = Form(""),
+    image: UploadFile = File(...),
+):
+    """Share a custom post to LinkedIn with an attached image from the iOS app."""
+    session = get_session(person_id)
+    if not session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    # Save the attached image temporarily to pass to the API
+    temp_path = f"/tmp/{__import__('uuid').uuid4()}_{image.filename}"
+    try:
+        with open(temp_path, "wb") as f:
+            f.write(await image.read())
+
+        result = await share_to_linkedin(
+            access_token=session.linkedin_access_token,
+            person_id=session.profile.person_id,
+            text=custom_text,
+            article_url=article_url if article_url else None,
+            image_path=temp_path,
+        )
+        return result
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
 
 # ── Job Ingest ───────────────────────────────────────────────────────────────
