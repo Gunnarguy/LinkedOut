@@ -177,6 +177,18 @@ final class APIClient: @unchecked Sendable {
         return try await post(url, body: Optional<String>.none)
     }
 
+    func postToLinkedIn(personId: String, text: String, articleUrl: String? = nil) async throws -> [String: String] {
+        var url = "/api/share/post?person_id=\(personId)"
+        if let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+            url += "&text=\(encoded)"
+        }
+        if let articleUrl, !articleUrl.isEmpty,
+           let encodedUrl = articleUrl.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+            url += "&article_url=\(encodedUrl)"
+        }
+        return try await post(url, body: Optional<String>.none)
+    }
+
     func shareToLinkedInWithMedia(personId: String, customText: String, articleUrl: String, imageData: Data) async throws -> [String: String] {
         guard let url = URL(string: "\(baseURL)/api/share/media") else {
             throw APIError.invalidURL

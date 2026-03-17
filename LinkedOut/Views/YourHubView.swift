@@ -15,6 +15,7 @@ struct YourHubView: View {
     @State private var showSettings = false
     @State private var showTelemetry = false
     @State private var showResume = false
+    @State private var showComposePost = false
     @State private var navigateTo: PipelineDestination?
     @State private var notionStatus: NotionStatusResponse?
     @State private var notionSyncing = false
@@ -52,6 +53,10 @@ struct YourHubView: View {
             }
             .navigationDestination(isPresented: $showResume) {
                 ResumeView()
+            }
+            .sheet(isPresented: $showComposePost) {
+                ComposePostView()
+                    .environmentObject(auth)
             }
             .navigationDestination(item: $navigateTo) { dest in
                 switch dest {
@@ -256,6 +261,43 @@ struct YourHubView: View {
 
     private var quickActions: some View {
         VStack(spacing: 12) {
+            // Compose LinkedIn Post
+            if auth.profile?.personId != nil && auth.profile?.personId != "dev-user" {
+                Button {
+                    showComposePost = true
+                } label: {
+                    HStack(spacing: 14) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(.blue.gradient)
+                                .frame(width: 40, height: 40)
+                            Image(systemName: "square.and.pencil")
+                                .font(.body.bold())
+                                .foregroundStyle(.white)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Compose LinkedIn Post")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(.primary)
+                            Text("Share thoughts, updates, or articles")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(14)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .strokeBorder(.quaternary, lineWidth: 0.5)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
             // Preferences — the main settings CTA
             Button {
                 showSettings = true

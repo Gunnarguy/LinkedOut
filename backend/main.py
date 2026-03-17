@@ -687,6 +687,22 @@ async def share_job(person_id: str, job_id: str, custom_text: str = ""):
     return result
 
 
+@app.post("/api/share/post")
+async def share_freeform_post(person_id: str, text: str, article_url: str = ""):
+    """Post freeform text to LinkedIn — no job required."""
+    session = get_session(person_id)
+    if not session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    result = await share_to_linkedin(
+        access_token=session.linkedin_access_token,
+        person_id=session.profile.person_id,
+        text=text,
+        article_url=article_url if article_url else None,
+    )
+    return result
+
+
 @app.post("/api/share/media")
 async def share_job_with_media(
     person_id: str = Form(...),
