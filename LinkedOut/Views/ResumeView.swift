@@ -19,6 +19,9 @@ struct ResumeView: View {
     @State private var editHeadline = ""
     @State private var editSkills = ""
     @State private var editLanguages = ""
+    @State private var editPositions: [LinkedInPosition] = []
+    @State private var editEducation: [LinkedInEducation] = []
+    @State private var isSaving = false
 
     // Add new entry sheets
     @State private var showAddPosition = false
@@ -87,19 +90,32 @@ struct ResumeView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: 12) {
                     Button {
-                        withAnimation(.spring(response: 0.4)) {
-                            isEditing.toggle()
-                            if isEditing, let profile = auth.profile {
-                                editHeadline = profile.headline
-                                editSkills = profile.skills.joined(separator: ", ")
-                                editLanguages = profile.languages.joined(separator: ", ")
+                        if isEditing {
+                            // Save edits
+                            Task { await saveEdits() }
+                        } else {
+                            // Enter edit mode
+                            withAnimation(.spring(response: 0.4)) {
+                                isEditing = true
+                                if let profile = auth.profile {
+                                    editHeadline = profile.headline
+                                    editSkills = profile.skills.joined(separator: ", ")
+                                    editLanguages = profile.languages.joined(separator: ", ")
+                                    editPositions = profile.positions
+                                    editEducation = profile.education
+                                }
                             }
                         }
                     } label: {
-                        Image(systemName: isEditing ? "checkmark.circle.fill" : "pencil.circle")
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(isEditing ? .green : .indigo)
+                        if isSaving {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: isEditing ? "checkmark.circle.fill" : "pencil.circle")
+                                .symbolRenderingMode(.hierarchical)
+                                .foregroundStyle(isEditing ? .green : .indigo)
+                        }
                     }
+                    .disabled(isSaving)
 
                     Button {
                         Task { await refreshResume() }
@@ -128,6 +144,16 @@ struct ResumeView: View {
             Button("OK") { refreshError = nil }
         } message: {
             Text(refreshError ?? "")
+        }
+        .sheet(isPresented: $showAddPosition) {
+            AddPositionSheet { position in
+                editPositions.insert(position, at: 0)
+            }
+        }
+        .sheet(isPresented: $showAddEducation) {
+            AddEducationSheet { edu in
+                editEducation.insert(edu, at: 0)
+            }
         }
     }
 
@@ -290,28 +316,51 @@ struct ResumeView: View {
     // MARK: - Experience
 
     private func experienceSection(_ positions: [LinkedInPosition]) -> some View {
+        let displayPositions = isEditing ? editPositions : positions
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(title: "Experience", icon: "briefcase.fill", color: .indigo)
+            HStack {
+                sectionHeader(title: "Experience", icon: "briefcase.fill", color: .indigo)
+                if isEditing {
+                    Button { showAddPosition = true } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.indigo)
+                    }
+                }
+            }
 
-            if positions.isEmpty {
+            if displayPositions.isEmpty {
                 emptySectionPrompt(
                     icon: "building.2",
-                    message: "No work experience pulled from LinkedIn yet",
-                    hint: "Tap the refresh button to pull from LinkedIn, or LinkedIn may require higher API access."
+                    message: isEditing ? "Tap + to add your work experience" : "No work experience pulled from LinkedIn yet",
+                    hint: isEditing ? "Add positions manually — LinkedIn's free API can't export them." : "Tap the edit button to add your experience manually."
                 )
             } else {
-                ForEach(Array(positions.enumerated()), id: \.element.id) { index, pos in
+                ForEach(Array(displayPositions.enumerated()), id: \.element.id) { index, pos in
                     HStack(alignment: .top, spacing: 12) {
+                        if isEditing {
+                            Button {
+                                withAnimation { editPositions.remove(at: index) }
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                                    .foregroundStyle(.red)
+                                    .font(.body)
+                            }
+                            .padding(.top, 4)
+                        }
+
                         // Timeline
-                        VStack(spacing: 0) {
-                            Circle()
-                                .fill(pos.isCurrent ? Color.green : Color.indigo.opacity(0.5))
-                                .frame(width: 10, height: 10)
-                                .padding(.top, 6)
-                            if index < positions.count - 1 {
-                                Rectangle()
-                                    .fill(.quaternary)
-                                    .frame(width: 1.5)
+                        if !isEditing {
+                            VStack(spacing: 0) {
+                                Circle()
+                                    .fill(pos.isCurrent ? Color.green : Color.indigo.opacity(0.5))
+                                    .frame(width: 10, height: 10)
+                                    .padding(.top, 6)
+                                if index < displayPositions.count - 1 {
+                                    Rectangle()
+                                        .fill(.quaternary)
+                                        .frame(width: 1.5)
+                                }
                             }
                         }
 
@@ -362,18 +411,39 @@ struct ResumeView: View {
     // MARK: - Education
 
     private func educationSection(_ entries: [LinkedInEducation]) -> some View {
+        let displayEntries = isEditing ? editEducation : entries
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(title: "Education", icon: "graduationcap.fill", color: .blue)
+            HStack {
+                sectionHeader(title: "Education", icon: "graduationcap.fill", color: .blue)
+                if isEditing {
+                    Button { showAddEducation = true } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.blue)
+                    }
+                }
+            }
 
-            if entries.isEmpty {
+            if displayEntries.isEmpty {
                 emptySectionPrompt(
                     icon: "book.closed",
-                    message: "No education data from LinkedIn yet",
-                    hint: "Pull from LinkedIn or check your profile privacy settings."
+                    message: isEditing ? "Tap + to add your education" : "No education data from LinkedIn yet",
+                    hint: isEditing ? "Add schools manually — LinkedIn's free API can't export them." : "Tap the edit button to add your education manually."
                 )
             } else {
-                ForEach(entries) { edu in
+                ForEach(Array(displayEntries.enumerated()), id: \.element.id) { index, edu in
                     HStack(alignment: .top, spacing: 12) {
+                        if isEditing {
+                            Button {
+                                withAnimation { editEducation.remove(at: index) }
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                                    .foregroundStyle(.red)
+                                    .font(.body)
+                            }
+                            .padding(.top, 4)
+                        }
+
                         RoundedRectangle(cornerRadius: 4)
                             .fill(.blue.opacity(0.15))
                             .frame(width: 36, height: 36)
@@ -420,7 +490,7 @@ struct ResumeView: View {
                     }
                     .padding(.vertical, 4)
 
-                    if edu.id != entries.last?.id {
+                    if edu.id != displayEntries.last?.id {
                         Divider().padding(.leading, 48)
                     }
                 }
@@ -697,6 +767,44 @@ struct ResumeView: View {
 
     // MARK: - Actions
 
+    private func saveEdits() async {
+        guard let profile = auth.profile else { return }
+        isSaving = true
+        defer { isSaving = false }
+
+        let skills = editSkills
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        let languages = editLanguages
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+
+        let updated = LinkedInProfile(
+            personId: profile.personId,
+            firstName: profile.firstName,
+            lastName: profile.lastName,
+            headline: editHeadline,
+            vanityName: profile.vanityName,
+            profilePictureUrl: profile.profilePictureUrl,
+            email: profile.email,
+            profileUrl: profile.profileUrl,
+            verifications: profile.verifications,
+            positions: editPositions,
+            education: editEducation,
+            skills: skills,
+            certifications: profile.certifications,
+            languages: languages
+        )
+
+        await auth.updateProfile(updated)
+
+        withAnimation(.spring(response: 0.4)) {
+            isEditing = false
+        }
+    }
+
     private func refreshResume() async {
         isRefreshing = true
         defer { isRefreshing = false }
@@ -746,5 +854,172 @@ struct ResumeFlowLayout: Layout {
         }
 
         return (CGSize(width: maxWidth, height: y + rowHeight), positions)
+    }
+}
+
+// MARK: - Add Position Sheet
+
+private struct AddPositionSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    var onSave: (LinkedInPosition) -> Void
+
+    @State private var title = ""
+    @State private var company = ""
+    @State private var location = ""
+    @State private var description = ""
+    @State private var isCurrent = true
+    @State private var startMonth = Calendar.current.component(.month, from: Date())
+    @State private var startYear = Calendar.current.component(.year, from: Date())
+    @State private var endMonth = Calendar.current.component(.month, from: Date())
+    @State private var endYear = Calendar.current.component(.year, from: Date())
+
+    private let months = Array(1...12)
+    private var years: [Int] { Array((1990...Calendar.current.component(.year, from: Date())).reversed()) }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Role") {
+                    TextField("Job Title", text: $title)
+                    TextField("Company", text: $company)
+                    TextField("Location", text: $location)
+                }
+
+                Section("Dates") {
+                    Toggle("Current Role", isOn: $isCurrent)
+                    HStack {
+                        Text("Start")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Picker("", selection: $startMonth) {
+                            ForEach(months, id: \.self) { m in
+                                Text(DateFormatter().shortMonthSymbols[m - 1]).tag(m)
+                            }
+                        }
+                        .labelsHidden()
+                        Picker("", selection: $startYear) {
+                            ForEach(years, id: \.self) { y in Text("\(y)").tag(y) }
+                        }
+                        .labelsHidden()
+                    }
+                    if !isCurrent {
+                        HStack {
+                            Text("End")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Picker("", selection: $endMonth) {
+                                ForEach(months, id: \.self) { m in
+                                    Text(DateFormatter().shortMonthSymbols[m - 1]).tag(m)
+                                }
+                            }
+                            .labelsHidden()
+                            Picker("", selection: $endYear) {
+                                ForEach(years, id: \.self) { y in Text("\(y)").tag(y) }
+                            }
+                            .labelsHidden()
+                        }
+                    }
+                }
+
+                Section("Description") {
+                    TextField("What you did there...", text: $description, axis: .vertical)
+                        .lineLimit(3...8)
+                }
+            }
+            .navigationTitle("Add Position")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") {
+                        let pos = LinkedInPosition(
+                            title: title,
+                            companyName: company,
+                            location: location,
+                            description: description,
+                            startYear: startYear,
+                            startMonth: startMonth,
+                            endYear: isCurrent ? nil : endYear,
+                            endMonth: isCurrent ? nil : endMonth,
+                            isCurrent: isCurrent
+                        )
+                        onSave(pos)
+                        dismiss()
+                    }
+                    .disabled(title.isEmpty || company.isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+// MARK: - Add Education Sheet
+
+private struct AddEducationSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    var onSave: (LinkedInEducation) -> Void
+
+    @State private var school = ""
+    @State private var degree = ""
+    @State private var fieldOfStudy = ""
+    @State private var startYear = Calendar.current.component(.year, from: Date()) - 4
+    @State private var endYear = Calendar.current.component(.year, from: Date())
+    @State private var activities = ""
+    @State private var grade = ""
+
+    private var years: [Int] { Array((1970...Calendar.current.component(.year, from: Date()) + 6).reversed()) }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("School") {
+                    TextField("School Name", text: $school)
+                    TextField("Degree (e.g. BS, MS, MBA)", text: $degree)
+                    TextField("Field of Study", text: $fieldOfStudy)
+                }
+
+                Section("Dates") {
+                    Picker("Start Year", selection: $startYear) {
+                        ForEach(years, id: \.self) { y in Text("\(y)").tag(y) }
+                    }
+                    Picker("End Year", selection: $endYear) {
+                        ForEach(years, id: \.self) { y in Text("\(y)").tag(y) }
+                    }
+                }
+
+                Section("Details") {
+                    TextField("Activities & Societies", text: $activities, axis: .vertical)
+                        .lineLimit(2...4)
+                    TextField("GPA / Grade", text: $grade)
+                }
+            }
+            .navigationTitle("Add Education")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") {
+                        let edu = LinkedInEducation(
+                            schoolName: school,
+                            degree: degree,
+                            fieldOfStudy: fieldOfStudy,
+                            startYear: startYear,
+                            endYear: endYear,
+                            activities: activities,
+                            grade: grade
+                        )
+                        onSave(edu)
+                        dismiss()
+                    }
+                    .disabled(school.isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }

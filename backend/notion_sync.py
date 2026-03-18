@@ -446,10 +446,10 @@ class NotionSync:
 
         # Map bucket to status
         status_map = {
-            "pending": "Not Started",
+            "pending": "Not started",
             "applied": "Applied",
             "saved": "Saved",
-            "rejected": "Closed",
+            "rejected": "Rejected",
         }
         if PROP_STATUS in schema:
             status_val = status_map.get(bucket, bucket.title())

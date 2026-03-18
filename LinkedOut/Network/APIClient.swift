@@ -167,6 +167,10 @@ final class APIClient: @unchecked Sendable {
         return try await get("/api/profile/resume?person_id=\(personId)")
     }
 
+    func updateProfile(personId: String, profile: LinkedInProfile) async throws -> LinkedInProfile {
+        return try await put("/api/profile/update?person_id=\(personId)", body: profile)
+    }
+
     // MARK: - Share
 
     func shareToLinkedIn(personId: String, jobId: String, text: String = "") async throws -> [String: String] {

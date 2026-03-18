@@ -94,16 +94,40 @@ struct NotionDatabaseView: View {
                 Menu {
                     Section("Sort By") {
                         Button { sortField = "score"; sortAscending = false } label: {
-                            Label("Score (High → Low)", systemImage: sortField == "score" && !sortAscending ? "checkmark" : "")
+                            HStack {
+                                Text("Score (High → Low)")
+                                Spacer()
+                                if sortField == "score" && !sortAscending {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
                         }
                         Button { sortField = "score"; sortAscending = true } label: {
-                            Label("Score (Low → High)", systemImage: sortField == "score" && sortAscending ? "checkmark" : "")
+                            HStack {
+                                Text("Score (Low → High)")
+                                Spacer()
+                                if sortField == "score" && sortAscending {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
                         }
                         Button { sortField = "company"; sortAscending = true } label: {
-                            Label("Company A→Z", systemImage: sortField == "company" ? "checkmark" : "")
+                            HStack {
+                                Text("Company A→Z")
+                                Spacer()
+                                if sortField == "company" {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
                         }
                         Button { sortField = "status"; sortAscending = true } label: {
-                            Label("Status", systemImage: sortField == "status" ? "checkmark" : "")
+                            HStack {
+                                Text("Status")
+                                Spacer()
+                                if sortField == "status" {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
                         }
                     }
                     Section {
@@ -394,7 +418,7 @@ struct NotionJobDetailView: View {
                 if schema["Status 1"] != nil {
                     Picker("Status", selection: $editStatus) {
                         ForEach(["Not started", "Applied", "Saved", "Rejected",
-                                 "Interview", "Phone Screen", "Offer"], id: \.self) { s in
+                                 "Interview", "Contacted"], id: \.self) { s in
                             Text(s).tag(s)
                         }
                     }

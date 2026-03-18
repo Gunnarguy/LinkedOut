@@ -35,6 +35,7 @@ from models import (
     JobNotesUpdate,
     JobPayload,
     JobStatusUpdate,
+    LinkedInProfile,
     LoginURLResponse,
     RawJobListing,
     ScoringResult,
@@ -550,6 +551,46 @@ async def debug_linkedin_raw(person_id: str = Query(...)):
                 results[f"rest_identityMe_v{ver}"] = {"error": str(e)}
 
     return results
+
+
+@app.put("/api/profile/update")
+async def update_profile(
+    person_id: str = Query(...), profile_update: LinkedInProfile = None
+):
+    """Update the stored profile with user-edited data (manual resume entries).
+
+    Merges user edits with LinkedIn-fetched data. Positions, education, skills,
+    certifications, and languages from the request REPLACE stored values.
+    """
+    from linkedin_oauth import _sessions, _save_sessions
+
+    session = get_session(person_id)
+    if not session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    current = session.profile
+    if profile_update.headline:
+        current.headline = profile_update.headline
+    if profile_update.positions:
+        current.positions = profile_update.positions
+    if profile_update.education:
+        current.education = profile_update.education
+    if profile_update.skills:
+        current.skills = profile_update.skills
+    if profile_update.certifications:
+        current.certifications = profile_update.certifications
+    if profile_update.languages:
+        current.languages = profile_update.languages
+
+    session.profile = current
+    _sessions[person_id] = session
+    _save_sessions()
+    logger.info(
+        f"Profile updated for {current.first_name} {current.last_name}: "
+        f"{len(current.positions)}pos {len(current.education)}edu "
+        f"{len(current.skills)}skills {len(current.languages)}lang"
+    )
+    return current.model_dump()
 
 
 # ── Job Routes ───────────────────────────────────────────────────────────────
