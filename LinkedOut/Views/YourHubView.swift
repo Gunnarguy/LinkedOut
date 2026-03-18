@@ -83,7 +83,7 @@ struct YourHubView: View {
                     Label("LinkedIn session expired", systemImage: "exclamationmark.triangle.fill")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.orange)
-                    Text("Reconnect to use resume, sharing, and compose features.")
+                    Text("Reconnect to use sharing and compose features.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -162,13 +162,13 @@ struct YourHubView: View {
                     }
                 }
 
-                // View Resume button
+                // View Profile button
                 Button {
                     showResume = true
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "doc.text.fill")
-                        Text(profile.hasResumeData ? "View Resume" : "Pull Resume from LinkedIn")
+                        Image(systemName: "person.crop.circle")
+                        Text("View Profile")
                     }
                     .font(.subheadline.weight(.semibold))
                     .frame(maxWidth: .infinity)

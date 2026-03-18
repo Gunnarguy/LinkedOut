@@ -8,6 +8,7 @@
 
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
 
 struct ComposePostView: View {
     @Environment(\.dismiss) var dismiss
@@ -17,6 +18,11 @@ struct ComposePostView: View {
     @State private var selectedItem: PhotosPickerItem? = nil
     @State private var selectedImageData: Data? = nil
     @State private var articleURL: String = ""
+
+    // Document attachment
+    @State private var showDocumentPicker = false
+    @State private var selectedDocumentData: Data? = nil
+    @State private var selectedDocumentName: String? = nil
 
     @State private var isPosting = false
     @State private var postSuccess: Bool? = nil
@@ -139,6 +145,57 @@ struct ComposePostView: View {
                                     )
                                 }
                                 .tint(.accentColor)
+                                .disabled(selectedDocumentData != nil)
+                            }
+                        }
+
+                        // Document Picker
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Document (Optional)")
+                                .font(.headline)
+
+                            if let docName = selectedDocumentName {
+                                HStack {
+                                    Image(systemName: "doc.fill")
+                                        .foregroundStyle(.indigo)
+                                    Text(docName)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    Button {
+                                        withAnimation {
+                                            selectedDocumentData = nil
+                                            selectedDocumentName = nil
+                                        }
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                .padding(12)
+                                .background(Color(uiColor: .systemBackground).opacity(0.6))
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            } else {
+                                Button {
+                                    showDocumentPicker = true
+                                } label: {
+                                    VStack(spacing: 12) {
+                                        Image(systemName: "doc.badge.plus")
+                                            .font(.system(size: 32))
+                                        Text("Attach PDF or Document")
+                                            .font(.subheadline.weight(.medium))
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 100)
+                                    .background(Color(uiColor: .systemBackground).opacity(0.4))
+                                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [8]))
+                                            .foregroundStyle(.secondary.opacity(0.5))
+                                    )
+                                }
+                                .tint(.accentColor)
+                                .disabled(selectedImageData != nil)
                             }
                         }
 
@@ -178,7 +235,29 @@ struct ComposePostView: View {
             .onChange(of: selectedItem) { _, newItem in
                 Task {
                     if let data = try? await newItem?.loadTransferable(type: Data.self) {
-                        await MainActor.run { self.selectedImageData = data }
+                        await MainActor.run {
+                            self.selectedImageData = data
+                            // Clear document if image is selected
+                            self.selectedDocumentData = nil
+                            self.selectedDocumentName = nil
+                        }
+                    }
+                }
+            }
+            .fileImporter(
+                isPresented: $showDocumentPicker,
+                allowedContentTypes: [UTType.pdf, UTType.presentation, UTType.spreadsheet],
+                allowsMultipleSelection: false
+            ) { result in
+                if case .success(let urls) = result, let url = urls.first {
+                    guard url.startAccessingSecurityScopedResource() else { return }
+                    defer { url.stopAccessingSecurityScopedResource() }
+                    if let data = try? Data(contentsOf: url) {
+                        selectedDocumentData = data
+                        selectedDocumentName = url.lastPathComponent
+                        // Clear image if document is selected
+                        selectedImageData = nil
+                        selectedItem = nil
                     }
                 }
             }
@@ -205,6 +284,14 @@ struct ComposePostView: View {
                     customText: postText,
                     articleUrl: urlToShare,
                     imageData: imageData
+                )
+            } else if let docData = selectedDocumentData {
+                _ = try await APIClient.shared.shareDocumentToLinkedIn(
+                    personId: personId,
+                    text: postText,
+                    title: selectedDocumentName ?? "Document",
+                    documentData: docData,
+                    filename: selectedDocumentName ?? "document.pdf"
                 )
             } else {
                 _ = try await APIClient.shared.postToLinkedIn(

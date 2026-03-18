@@ -18,7 +18,25 @@ from fastapi.responses import RedirectResponse
 from config import settings
 from job_fetcher import fetch_all_sources
 from job_store import store
-from linkedin_api import share_to_linkedin
+from linkedin_api import (
+    create_article_post,
+    create_comment,
+    create_document_post,
+    create_image_post,
+    create_multi_image_post,
+    create_text_post,
+    delete_comment,
+    delete_post,
+    get_comments,
+    get_post,
+    get_reactions,
+    get_user_posts,
+    react_to_post,
+    ReactionType,
+    remove_reaction,
+    reshare_post,
+    share_to_linkedin,
+)
 from linkedin_oauth import (
     create_session,
     fetch_profile,
@@ -372,12 +390,16 @@ async def health():
 async def auth_login():
     """Generate LinkedIn OAuth authorization URL."""
     url, state = generate_authorization_url()
+    logger.info("[LI-AUTH] /auth/login issued state=%s", state[:10])
     return LoginURLResponse(authorization_url=url, state=state)
 
 
 @app.get("/auth/callback")
 async def auth_callback(code: str, state: str):
     """OAuth callback — exchanges code for token, fetches profile."""
+    logger.info(
+        "[LI-AUTH] /auth/callback received code=%s state=%s", code[:10], state[:10]
+    )
     if not validate_state(state):
         raise HTTPException(status_code=400, detail="Invalid or expired state")
 
@@ -386,6 +408,10 @@ async def auth_callback(code: str, state: str):
     except Exception as e:
         logger.exception("OAuth callback failed")
         raise HTTPException(status_code=400, detail=f"Auth failed: {e}")
+
+    logger.info(
+        "[LI-AUTH] /auth/callback success person_id=%s", session.profile.person_id
+    )
 
     # Redirect to the iOS app via deep link
     return RedirectResponse(
@@ -396,6 +422,9 @@ async def auth_callback(code: str, state: str):
 @app.post("/auth/token", response_model=AuthStatusResponse)
 async def auth_token_exchange(req: TokenExchangeRequest):
     """Mobile-friendly token exchange (code + state → session)."""
+    logger.info(
+        "[LI-AUTH] /auth/token received code=%s state=%s", req.code[:10], req.state[:10]
+    )
     if not validate_state(req.state):
         raise HTTPException(status_code=400, detail="Invalid or expired state")
 
@@ -405,6 +434,8 @@ async def auth_token_exchange(req: TokenExchangeRequest):
         logger.exception("Token exchange failed")
         raise HTTPException(status_code=400, detail=f"Auth failed: {e}")
 
+    logger.info("[LI-AUTH] /auth/token success person_id=%s", session.profile.person_id)
+
     return AuthStatusResponse(authenticated=True, profile=session.profile)
 
 
@@ -413,40 +444,61 @@ async def auth_status(person_id: str):
     """Check if a session exists and is valid."""
     session = get_session(person_id)
     if session:
+        logger.info("[LI-AUTH] /auth/status session hit person_id=%s", person_id)
         return AuthStatusResponse(authenticated=True, profile=session.profile)
 
     # Try refresh
     refreshed = await refresh_access_token(person_id)
     if refreshed:
+        logger.info(
+            "[LI-AUTH] /auth/status refresh recovered session person_id=%s", person_id
+        )
         return AuthStatusResponse(authenticated=True, profile=refreshed.profile)
 
+    logger.info("[LI-AUTH] /auth/status unauthenticated person_id=%s", person_id)
     return AuthStatusResponse(authenticated=False)
 
 
 @app.get("/api/profile/resume")
 async def get_profile_resume(person_id: str = Query(...)):
     """Fetch fresh full LinkedIn profile + resume data for the given user."""
+    logger.info("[LI-PROFILE] /api/profile/resume requested person_id=%s", person_id)
     session = get_session(person_id)
     if not session:
+        logger.warning(
+            "[LI-PROFILE] /api/profile/resume unauthorized person_id=%s", person_id
+        )
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     # Auto-refresh expired tokens before calling LinkedIn
     if session.expires_at and session.expires_at < datetime.now(timezone.utc):
+        logger.info(
+            "[LI-AUTH] /api/profile/resume session expired, attempting refresh person_id=%s",
+            person_id,
+        )
         session = await refresh_access_token(person_id)
         if not session:
+            logger.warning(
+                "[LI-AUTH] /api/profile/resume refresh failed person_id=%s", person_id
+            )
             raise HTTPException(
                 status_code=401, detail="Session expired — please re-authenticate"
             )
 
     try:
-        profile = await fetch_profile(session.linkedin_access_token)
-        # Update the stored session with fresh data
+        fresh = await fetch_profile(session.linkedin_access_token)
+
         from linkedin_oauth import _sessions, _save_sessions
 
-        session.profile = profile
+        session.profile = fresh
         _sessions[person_id] = session
         _save_sessions()
-        return profile.model_dump()
+        logger.info(
+            "[LI-PROFILE] /api/profile/resume success person_id=%s headline=%r",
+            person_id,
+            fresh.headline,
+        )
+        return fresh.model_dump()
     except Exception as e:
         logger.exception("Failed to fetch resume")
         raise HTTPException(status_code=502, detail=f"LinkedIn API error: {e}")
@@ -551,46 +603,6 @@ async def debug_linkedin_raw(person_id: str = Query(...)):
                 results[f"rest_identityMe_v{ver}"] = {"error": str(e)}
 
     return results
-
-
-@app.put("/api/profile/update")
-async def update_profile(
-    person_id: str = Query(...), profile_update: LinkedInProfile = None
-):
-    """Update the stored profile with user-edited data (manual resume entries).
-
-    Merges user edits with LinkedIn-fetched data. Positions, education, skills,
-    certifications, and languages from the request REPLACE stored values.
-    """
-    from linkedin_oauth import _sessions, _save_sessions
-
-    session = get_session(person_id)
-    if not session:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    current = session.profile
-    if profile_update.headline:
-        current.headline = profile_update.headline
-    if profile_update.positions:
-        current.positions = profile_update.positions
-    if profile_update.education:
-        current.education = profile_update.education
-    if profile_update.skills:
-        current.skills = profile_update.skills
-    if profile_update.certifications:
-        current.certifications = profile_update.certifications
-    if profile_update.languages:
-        current.languages = profile_update.languages
-
-    session.profile = current
-    _sessions[person_id] = session
-    _save_sessions()
-    logger.info(
-        f"Profile updated for {current.first_name} {current.last_name}: "
-        f"{len(current.positions)}pos {len(current.education)}edu "
-        f"{len(current.skills)}skills {len(current.languages)}lang"
-    )
-    return current.model_dump()
 
 
 # ── Job Routes ───────────────────────────────────────────────────────────────
@@ -818,16 +830,21 @@ async def rescore_status():
     return _rescore_progress
 
 
-# ── LinkedIn Sharing ─────────────────────────────────────────────────────────
+# ── LinkedIn Sharing & Social ────────────────────────────────────────────────
+
+
+def _get_li_session(person_id: str):
+    """Helper: get valid LinkedIn session or raise 401."""
+    session = get_session(person_id)
+    if not session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return session
 
 
 @app.post("/api/share")
 async def share_job(person_id: str, job_id: str, custom_text: str = ""):
-    """Share a job application to LinkedIn."""
-    session = get_session(person_id)
-    if not session:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
+    """Share a job listing to LinkedIn as an article post."""
+    session = _get_li_session(person_id)
     job = store.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -836,61 +853,269 @@ async def share_job(person_id: str, job_id: str, custom_text: str = ""):
         f"Excited about this opportunity: {job.role_title} at {job.company_name}! "
         f"#OpenToWork #LinkedOut"
     )
-
-    result = await share_to_linkedin(
+    return await create_article_post(
         access_token=session.linkedin_access_token,
         person_id=session.profile.person_id,
         text=text,
         article_url=job.source_url,
     )
-    return result
 
 
 @app.post("/api/share/post")
 async def share_freeform_post(person_id: str, text: str, article_url: str = ""):
-    """Post freeform text to LinkedIn — no job required."""
-    session = get_session(person_id)
-    if not session:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    result = await share_to_linkedin(
+    """Post freeform text to LinkedIn with optional article URL."""
+    session = _get_li_session(person_id)
+    if article_url:
+        return await create_article_post(
+            access_token=session.linkedin_access_token,
+            person_id=session.profile.person_id,
+            text=text,
+            article_url=article_url,
+        )
+    return await create_text_post(
         access_token=session.linkedin_access_token,
         person_id=session.profile.person_id,
         text=text,
-        article_url=article_url if article_url else None,
     )
-    return result
 
 
 @app.post("/api/share/media")
-async def share_job_with_media(
+async def share_with_media(
     person_id: str = Form(...),
     custom_text: str = Form(""),
     article_url: str = Form(""),
     image: UploadFile = File(...),
 ):
-    """Share a custom post to LinkedIn with an attached image from the iOS app."""
-    session = get_session(person_id)
-    if not session:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    # Save the attached image temporarily to pass to the API
+    """Post to LinkedIn with an image attachment."""
+    session = _get_li_session(person_id)
     temp_path = f"/tmp/{__import__('uuid').uuid4()}_{image.filename}"
     try:
         with open(temp_path, "wb") as f:
             f.write(await image.read())
-
-        result = await share_to_linkedin(
+        return await create_image_post(
             access_token=session.linkedin_access_token,
             person_id=session.profile.person_id,
             text=custom_text,
-            article_url=article_url if article_url else None,
             image_path=temp_path,
         )
-        return result
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
+
+
+@app.post("/api/share/document")
+async def share_with_document(
+    person_id: str = Form(...),
+    text: str = Form(""),
+    title: str = Form(""),
+    document: UploadFile = File(...),
+):
+    """Post to LinkedIn with a document (PDF, slides) attachment."""
+    session = _get_li_session(person_id)
+    temp_path = f"/tmp/{__import__('uuid').uuid4()}_{document.filename}"
+    try:
+        with open(temp_path, "wb") as f:
+            f.write(await document.read())
+        return await create_document_post(
+            access_token=session.linkedin_access_token,
+            person_id=session.profile.person_id,
+            text=text,
+            doc_path=temp_path,
+            doc_title=title,
+        )
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
+@app.post("/api/share/reshare")
+async def reshare(person_id: str, post_urn: str, text: str = ""):
+    """Reshare an existing LinkedIn post with optional commentary."""
+    session = _get_li_session(person_id)
+    return await reshare_post(
+        access_token=session.linkedin_access_token,
+        person_id=session.profile.person_id,
+        original_post_urn=post_urn,
+        text=text,
+    )
+
+
+# ── LinkedIn Posts Management ────────────────────────────────────────────────
+
+
+@app.get("/api/linkedin/posts")
+async def list_user_posts(person_id: str, count: int = 20, start: int = 0):
+    """Get the authenticated user's LinkedIn posts."""
+    session = _get_li_session(person_id)
+    return await get_user_posts(
+        access_token=session.linkedin_access_token,
+        person_id=session.profile.person_id,
+        count=count,
+        start=start,
+    )
+
+
+@app.get("/api/linkedin/posts/{post_urn:path}")
+async def get_single_post(person_id: str, post_urn: str):
+    """Get a single LinkedIn post by URN."""
+    session = _get_li_session(person_id)
+    return await get_post(
+        access_token=session.linkedin_access_token,
+        post_urn=post_urn,
+    )
+
+
+@app.delete("/api/linkedin/posts/{post_urn:path}")
+async def delete_user_post(person_id: str, post_urn: str):
+    """Delete one of your LinkedIn posts."""
+    session = _get_li_session(person_id)
+    return await delete_post(
+        access_token=session.linkedin_access_token,
+        post_urn=post_urn,
+    )
+
+
+# ── LinkedIn Comments ────────────────────────────────────────────────────────
+
+
+@app.post("/api/linkedin/comments")
+async def add_comment(person_id: str, post_urn: str, text: str):
+    """Add a comment to a LinkedIn post."""
+    session = _get_li_session(person_id)
+    return await create_comment(
+        access_token=session.linkedin_access_token,
+        person_id=session.profile.person_id,
+        post_urn=post_urn,
+        text=text,
+    )
+
+
+@app.get("/api/linkedin/comments")
+async def list_comments(person_id: str, post_urn: str, count: int = 20, start: int = 0):
+    """Get comments on a LinkedIn post."""
+    session = _get_li_session(person_id)
+    return await get_comments(
+        access_token=session.linkedin_access_token,
+        post_urn=post_urn,
+        count=count,
+        start=start,
+    )
+
+
+@app.delete("/api/linkedin/comments/{comment_id}")
+async def remove_comment(person_id: str, post_urn: str, comment_id: str):
+    """Delete a comment from a LinkedIn post."""
+    session = _get_li_session(person_id)
+    return await delete_comment(
+        access_token=session.linkedin_access_token,
+        post_urn=post_urn,
+        comment_id=comment_id,
+    )
+
+
+# ── LinkedIn Reactions ───────────────────────────────────────────────────────
+
+
+@app.post("/api/linkedin/reactions")
+async def add_reaction(person_id: str, post_urn: str, reaction: str = "LIKE"):
+    """React to a LinkedIn post (LIKE, CELEBRATE, SUPPORT, LOVE, INSIGHTFUL, FUNNY)."""
+    session = _get_li_session(person_id)
+    try:
+        rt = ReactionType(reaction)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid reaction type: {reaction}. Valid: LIKE, CELEBRATE, SUPPORT, LOVE, INSIGHTFUL, FUNNY",
+        )
+    return await react_to_post(
+        access_token=session.linkedin_access_token,
+        person_id=session.profile.person_id,
+        post_urn=post_urn,
+        reaction=rt,
+    )
+
+
+@app.delete("/api/linkedin/reactions")
+async def remove_reaction_endpoint(person_id: str, post_urn: str):
+    """Remove your reaction from a LinkedIn post."""
+    session = _get_li_session(person_id)
+    return await remove_reaction(
+        access_token=session.linkedin_access_token,
+        person_id=session.profile.person_id,
+        post_urn=post_urn,
+    )
+
+
+@app.get("/api/linkedin/reactions")
+async def list_reactions(
+    person_id: str, post_urn: str, count: int = 20, start: int = 0
+):
+    """Get reactions on a LinkedIn post."""
+    session = _get_li_session(person_id)
+    return await get_reactions(
+        access_token=session.linkedin_access_token,
+        post_urn=post_urn,
+        count=count,
+        start=start,
+    )
+
+
+# ── LinkedIn API Capabilities ────────────────────────────────────────────────
+
+
+@app.get("/api/linkedin/capabilities")
+async def linkedin_capabilities():
+    """Return available LinkedIn API capabilities for the current OAuth scopes.
+
+    Helps the iOS app know what features are available.
+    """
+    return {
+        "scopes": [
+            "openid",
+            "profile",
+            "email",
+            "w_member_social",
+            "r_verify",
+            "r_profile_basicinfo",
+        ],
+        "profile": {
+            "basic_info": True,
+            "headline": True,
+            "email": True,
+            "picture": True,
+            "verifications": True,
+            "positions": False,
+            "education": False,
+            "skills": False,
+            "note": "Positions/education/skills require r_fullprofile which LinkedIn has closed to new applications. Your professional profile is embedded in the AI scorer.",
+        },
+        "posting": {
+            "text_post": True,
+            "article_post": True,
+            "image_post": True,
+            "multi_image_post": True,
+            "document_post": True,
+            "reshare": True,
+            "delete_post": True,
+            "get_own_posts": True,
+        },
+        "social": {
+            "comment": True,
+            "delete_comment": True,
+            "get_comments": True,
+            "react": True,
+            "remove_reaction": True,
+            "get_reactions": True,
+            "reaction_types": [
+                "LIKE",
+                "CELEBRATE",
+                "SUPPORT",
+                "LOVE",
+                "INSIGHTFUL",
+                "FUNNY",
+            ],
+        },
+    }
 
 
 # ── Job Ingest ───────────────────────────────────────────────────────────────

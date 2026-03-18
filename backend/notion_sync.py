@@ -444,9 +444,9 @@ class NotionSync:
         if PROP_ROLE in schema and schema[PROP_ROLE] == "rich_text":
             props[PROP_ROLE] = self._make_rich_text(job.role_title)
 
-        # Map bucket to status
+        # Map bucket to status (must match Notion DB options exactly)
         status_map = {
-            "pending": "Not started",
+            "pending": "Not Started",
             "applied": "Applied",
             "saved": "Saved",
             "rejected": "Rejected",
@@ -521,6 +521,46 @@ class NotionSync:
 
         if PROP_COMPANY_STAGE in schema and schema[PROP_COMPANY_STAGE] == "rich_text":
             props[PROP_COMPANY_STAGE] = self._make_rich_text(job.company_stage)
+
+        # ── Additional Notion-only columns ───────────────────────────────
+
+        if PROP_DATE_APPLIED in schema and schema[PROP_DATE_APPLIED] == "date":
+            if bucket == "applied":
+                # Use current timestamp as applied date
+                props[PROP_DATE_APPLIED] = {
+                    "date": {"start": datetime.now(timezone.utc).date().isoformat()}
+                }
+
+        if PROP_COVER_LETTER in schema and schema[PROP_COVER_LETTER] == "rich_text":
+            props[PROP_COVER_LETTER] = self._make_rich_text(job.drafted_cover_letter)
+
+        if PROP_ENTHUSIASM in schema and schema[PROP_ENTHUSIASM] == "rich_text":
+            # Map score to enthusiasm label
+            score = job.builder_score
+            label = (
+                "🔥 Very High"
+                if score >= 0.9
+                else (
+                    "💪 High"
+                    if score >= 0.75
+                    else "👍 Medium" if score >= 0.5 else "🤔 Low"
+                )
+            )
+            props[PROP_ENTHUSIASM] = self._make_rich_text(label)
+
+        if PROP_GAPS in schema and schema[PROP_GAPS] == "rich_text":
+            gaps_text = "\n".join(job.dealbreaker_warnings or [])
+            if gaps_text:
+                props[PROP_GAPS] = self._make_rich_text(gaps_text)
+
+        if PROP_GAINS in schema and schema[PROP_GAINS] == "rich_text":
+            gains_text = "\n".join(job.fit_reasons or [])
+            if gains_text:
+                props[PROP_GAINS] = self._make_rich_text(gains_text)
+
+        if PROP_ICE_BREAKER in schema and schema[PROP_ICE_BREAKER] == "rich_text":
+            if job.why_interesting:
+                props[PROP_ICE_BREAKER] = self._make_rich_text(job.why_interesting)
 
         return props
 

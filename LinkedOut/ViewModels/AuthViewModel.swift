@@ -195,21 +195,6 @@ class AuthViewModel: ObservableObject {
         clearSession()
     }
 
-    /// Save user-edited profile fields back to the backend
-    func updateProfile(_ updated: LinkedInProfile) async {
-        guard !storedPersonId.isEmpty, storedPersonId != "dev-user" else { return }
-        print("[AUTH] 💾 Saving profile edits for personId='\(storedPersonId)'...")
-        do {
-            let saved = try await APIClient.shared.updateProfile(personId: storedPersonId, profile: updated)
-            self.profile = saved
-            cacheProfile(saved)
-            print("[AUTH] ✅ Profile saved — \(saved.positions.count) positions, \(saved.skills.count) skills")
-        } catch {
-            print("[AUTH] ❌ Profile update failed: \(error.localizedDescription)")
-            self.error = "Failed to save profile: \(error.localizedDescription)"
-        }
-    }
-
     private func clearSession() {
         print("[AUTH] 🧹 Clearing session — isAuthenticated=false, needsReauth=false, personId cleared")
         isAuthenticated = false

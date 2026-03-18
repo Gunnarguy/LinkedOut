@@ -119,6 +119,7 @@ class JobsViewModel: ObservableObject {
     @Published var telemetry: TelemetryResponse?
 
     private var telemetryTask: Task<Void, Never>?
+    private var lastTelemetryLogs: [String] = []
 
     /// Start polling backend telemetry and printing to Xcode console.
     /// Called once from app startup; safe to call multiple times.
@@ -142,12 +143,61 @@ class JobsViewModel: ObservableObject {
     /// Single fetch + console print. Can be called on-demand too.
     func fetchAndLogTelemetry() async {
         do {
-            let t = try await APIClient.shared.fetchTelemetry(logLines: 0)
+            let t = try await APIClient.shared.fetchTelemetry(logLines: 80)
             self.telemetry = t
             printTelemetry(t)
+            printInterestingTelemetryLogs(t.logs)
         } catch {
             print("[TELEM] ❌ Failed to fetch: \(error.localizedDescription)")
         }
+    }
+
+    private func printInterestingTelemetryLogs(_ logs: [String]) {
+        let newLogs = newTelemetryLogs(from: logs)
+        let interesting = newLogs.filter { line in
+            let lower = line.lowercased()
+            return lower.contains("[li-")
+                || lower.contains("linkedin")
+                || lower.contains("oauth")
+                || lower.contains("identityme")
+                || lower.contains("userinfo")
+                || lower.contains("verificationreport")
+                || lower.contains("/auth/")
+                || lower.contains("/api/profile/resume")
+        }
+
+        guard !interesting.isEmpty else { return }
+
+        print("┌─── LINKEDIN BACKEND LOGS ───────────────────────")
+        for line in interesting.suffix(12) {
+            print("│ \(line)")
+        }
+        print("└─────────────────────────────────────────────────")
+    }
+
+    private func newTelemetryLogs(from logs: [String]) -> [String] {
+        guard !lastTelemetryLogs.isEmpty else {
+            lastTelemetryLogs = logs
+            return logs
+        }
+
+        let overlap = telemetryOverlapCount(previous: lastTelemetryLogs, current: logs)
+        let newLogs = Array(logs.dropFirst(overlap))
+        lastTelemetryLogs = logs
+        return newLogs
+    }
+
+    private func telemetryOverlapCount(previous: [String], current: [String]) -> Int {
+        let maxOverlap = min(previous.count, current.count)
+        guard maxOverlap > 0 else { return 0 }
+
+        for count in stride(from: maxOverlap, through: 1, by: -1) {
+            if Array(previous.suffix(count)) == Array(current.prefix(count)) {
+                return count
+            }
+        }
+
+        return 0
     }
 
     private func printTelemetry(_ t: TelemetryResponse) {

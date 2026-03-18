@@ -524,3 +524,72 @@ struct TelemetryLLM: Codable {
         case hasOpenaiKey = "has_openai_key"
     }
 }
+
+// MARK: - LinkedIn Capabilities
+
+struct LinkedInCapabilities: Codable {
+    let scopes: [String]
+    let profile: ProfileCapabilities
+    let posting: PostingCapabilities
+    let social: SocialCapabilities
+
+    struct ProfileCapabilities: Codable {
+        let basicInfo: Bool
+        let headline: Bool
+        let email: Bool
+        let picture: Bool
+        let verifications: Bool
+        let positions: Bool
+        let education: Bool
+        let skills: Bool
+        let note: String
+
+        enum CodingKeys: String, CodingKey {
+            case basicInfo = "basic_info"
+            case headline, email, picture, verifications, positions, education, skills, note
+        }
+    }
+
+    struct PostingCapabilities: Codable {
+        let textPost: Bool
+        let articlePost: Bool
+        let imagePost: Bool
+        let multiImagePost: Bool
+        let documentPost: Bool
+        let reshare: Bool
+        let deletePost: Bool
+        let getOwnPosts: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case textPost = "text_post"
+            case articlePost = "article_post"
+            case imagePost = "image_post"
+            case multiImagePost = "multi_image_post"
+            case documentPost = "document_post"
+            case reshare
+            case deletePost = "delete_post"
+            case getOwnPosts = "get_own_posts"
+        }
+    }
+
+    struct SocialCapabilities: Codable {
+        let comment: Bool
+        let deleteComment: Bool
+        let getComments: Bool
+        let react: Bool
+        let removeReaction: Bool
+        let getReactions: Bool
+        let reactionTypes: [String]
+
+        enum CodingKeys: String, CodingKey {
+            case comment
+            case deleteComment = "delete_comment"
+            case getComments = "get_comments"
+            case react
+            case removeReaction = "remove_reaction"
+            case getReactions = "get_reactions"
+            case reactionTypes = "reaction_types"
+        }
+    }
+
+}

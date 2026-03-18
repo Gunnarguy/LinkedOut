@@ -167,10 +167,6 @@ final class APIClient: @unchecked Sendable {
         return try await get("/api/profile/resume?person_id=\(personId)")
     }
 
-    func updateProfile(personId: String, profile: LinkedInProfile) async throws -> LinkedInProfile {
-        return try await put("/api/profile/update?person_id=\(personId)", body: profile)
-    }
-
     // MARK: - Share
 
     func shareToLinkedIn(personId: String, jobId: String, text: String = "") async throws -> [String: String] {
@@ -230,6 +226,111 @@ final class APIClient: @unchecked Sendable {
 
         let (data, response) = try await performRequest(request)
         return try decode(data, response: response)
+    }
+
+    func reshareOnLinkedIn(personId: String, postUrn: String, text: String = "") async throws -> [String: Any] {
+        var url = "/api/share/reshare?person_id=\(personId)&post_urn=\(encode(postUrn))"
+        if !text.isEmpty, let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+            url += "&text=\(encoded)"
+        }
+        return try await postRaw(url)
+    }
+
+    func shareDocumentToLinkedIn(personId: String, text: String, title: String, documentData: Data, filename: String) async throws -> [String: Any] {
+        guard let url = URL(string: "\(baseURL)/api/share/document") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        let boundary = "Boundary-\(UUID().uuidString)"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        var body = Data()
+        func appendText(_ name: String, _ value: String) {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
+            body.append("\(value)\r\n".data(using: .utf8)!)
+        }
+        appendText("person_id", personId)
+        appendText("text", text)
+        appendText("title", title)
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"document\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: application/octet-stream\r\n\r\n".data(using: .utf8)!)
+        body.append(documentData)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+
+        let (data, response) = try await performRequest(request)
+        return try decodeRaw(data, response: response)
+    }
+
+    // MARK: - LinkedIn Posts Management
+
+    func fetchLinkedInPosts(personId: String, count: Int = 20, start: Int = 0) async throws -> [String: Any] {
+        return try await getRaw("/api/linkedin/posts?person_id=\(personId)&count=\(count)&start=\(start)")
+    }
+
+    func fetchLinkedInPost(personId: String, postUrn: String) async throws -> [String: Any] {
+        return try await getRaw("/api/linkedin/posts/\(encode(postUrn))?person_id=\(personId)")
+    }
+
+    func deleteLinkedInPost(personId: String, postUrn: String) async throws -> [String: Any] {
+        guard let url = URL(string: "\(baseURL)/api/linkedin/posts/\(encode(postUrn))?person_id=\(personId)") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        let (data, response) = try await performRequest(request)
+        return try decodeRaw(data, response: response)
+    }
+
+    // MARK: - LinkedIn Comments
+
+    func addLinkedInComment(personId: String, postUrn: String, text: String) async throws -> [String: Any] {
+        let encodedText = encode(text)
+        let encodedUrn = encode(postUrn)
+        return try await postRaw("/api/linkedin/comments?person_id=\(personId)&post_urn=\(encodedUrn)&text=\(encodedText)")
+    }
+
+    func fetchLinkedInComments(personId: String, postUrn: String) async throws -> [String: Any] {
+        return try await getRaw("/api/linkedin/comments?person_id=\(personId)&post_urn=\(encode(postUrn))")
+    }
+
+    func deleteLinkedInComment(personId: String, postUrn: String, commentId: String) async throws -> [String: Any] {
+        guard let url = URL(string: "\(baseURL)/api/linkedin/comments/\(commentId)?person_id=\(personId)&post_urn=\(encode(postUrn))") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        let (data, response) = try await performRequest(request)
+        return try decodeRaw(data, response: response)
+    }
+
+    // MARK: - LinkedIn Reactions
+
+    func addLinkedInReaction(personId: String, postUrn: String, reaction: String = "LIKE") async throws -> [String: Any] {
+        return try await postRaw("/api/linkedin/reactions?person_id=\(personId)&post_urn=\(encode(postUrn))&reaction=\(reaction)")
+    }
+
+    func removeLinkedInReaction(personId: String, postUrn: String) async throws -> [String: Any] {
+        guard let url = URL(string: "\(baseURL)/api/linkedin/reactions?person_id=\(personId)&post_urn=\(encode(postUrn))") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        let (data, response) = try await performRequest(request)
+        return try decodeRaw(data, response: response)
+    }
+
+    func fetchLinkedInReactions(personId: String, postUrn: String) async throws -> [String: Any] {
+        return try await getRaw("/api/linkedin/reactions?person_id=\(personId)&post_urn=\(encode(postUrn))")
+    }
+
+    // MARK: - LinkedIn Capabilities
+
+    func fetchLinkedInCapabilities() async throws -> LinkedInCapabilities {
+        return try await get("/api/linkedin/capabilities")
     }
 
     // MARK: - Notion Sync
@@ -466,5 +567,37 @@ final class APIClient: @unchecked Sendable {
             print("[API]    Raw body: \(raw)")
             throw APIError.decodingError(error)
         }
+    }
+
+    // MARK: - Raw JSON Helpers (for LinkedIn social endpoints returning dynamic JSON)
+
+    private func getRaw(_ path: String) async throws -> [String: Any] {
+        guard let url = URL(string: "\(baseURL)\(path)") else {
+            throw APIError.invalidURL
+        }
+        let (data, response) = try await performRequest(URLRequest(url: url))
+        return try decodeRaw(data, response: response)
+    }
+
+    private func postRaw(_ path: String) async throws -> [String: Any] {
+        guard let url = URL(string: "\(baseURL)\(path)") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        let (data, response) = try await performRequest(request)
+        return try decodeRaw(data, response: response)
+    }
+
+    private func decodeRaw(_ data: Data, response: URLResponse) throws -> [String: Any] {
+        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            let body = String(data: data, encoding: .utf8) ?? "Unknown error"
+            throw APIError.httpError(statusCode: http.statusCode, body: body)
+        }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+    }
+
+    private func encode(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
     }
 }

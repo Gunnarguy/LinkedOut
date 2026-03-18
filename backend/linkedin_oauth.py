@@ -17,9 +17,6 @@ import httpx
 from config import settings
 from models import (
     AuthSession,
-    LinkedInCertification,
-    LinkedInEducation,
-    LinkedInPosition,
     LinkedInProfile,
     OAuthTokenResponse,
 )
@@ -81,6 +78,11 @@ def generate_authorization_url() -> tuple[str, str]:
         "state": state,
         "scope": "openid profile email w_member_social r_verify r_profile_basicinfo",
     }
+    logger.info(
+        "[LI-AUTH] Generated authorization URL state=%s redirect=%s",
+        state[:10],
+        settings.linkedin_redirect_uri,
+    )
     return f"{AUTHORIZE_URL}?{urlencode(params)}", state
 
 
@@ -88,12 +90,19 @@ def validate_state(state: str) -> bool:
     """Check that the state token is known and not expired."""
     expiry = _pending_states.pop(state, None)
     if expiry is None:
+        logger.warning("[LI-AUTH] Rejected OAuth state=%s (missing)", state[:10])
         return False
-    return datetime.now(timezone.utc) < expiry
+    is_valid = datetime.now(timezone.utc) < expiry
+    if not is_valid:
+        logger.warning("[LI-AUTH] Rejected OAuth state=%s (expired)", state[:10])
+    else:
+        logger.info("[LI-AUTH] Accepted OAuth state=%s", state[:10])
+    return is_valid
 
 
 async def exchange_code_for_token(code: str) -> OAuthTokenResponse:
     """Exchange the authorization code for an access token."""
+    logger.info("[LI-AUTH] Exchanging authorization code=%s...", code[:10])
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             TOKEN_URL,
@@ -108,6 +117,11 @@ async def exchange_code_for_token(code: str) -> OAuthTokenResponse:
         )
         resp.raise_for_status()
         data = resp.json()
+        logger.info(
+            "[LI-AUTH] Token exchange OK expires_in=%s has_refresh=%s",
+            data.get("expires_in"),
+            bool(data.get("refresh_token")),
+        )
         return OAuthTokenResponse(**data)
 
 
@@ -119,96 +133,24 @@ def _localized(obj: dict) -> str:
     return next(iter(localized.values()), "") if localized else ""
 
 
-def _parse_positions(elements: list[dict]) -> list[LinkedInPosition]:
-    """Parse LinkedIn positions array into structured models."""
-    results = []
-    for el in elements:
-        start = el.get("startMonthYear", {})
-        end = el.get("endMonthYear", {})
-        loc = _localized(
-            el.get("geoPositionLocation", {}).get("displayLocationName", {})
-        ) or _localized(el.get("locationName", {}))
-        results.append(
-            LinkedInPosition(
-                title=_localized(el.get("title", {})),
-                company_name=_localized(el.get("companyName", {})),
-                location=loc,
-                description=_localized(el.get("description", {})),
-                start_year=start.get("year"),
-                start_month=start.get("month"),
-                end_year=end.get("year"),
-                end_month=end.get("month"),
-                is_current=not bool(end),
-            )
-        )
-    return results
-
-
-def _parse_education(elements: list[dict]) -> list[LinkedInEducation]:
-    """Parse LinkedIn education array."""
-    results = []
-    for el in elements:
-        fos = el.get("fieldsOfStudy", [])
-        field = _localized(fos[0].get("fieldOfStudyName", {})) if fos else ""
-        start = el.get("startMonthYear", {})
-        end = el.get("endMonthYear", {})
-        results.append(
-            LinkedInEducation(
-                school_name=_localized(el.get("schoolName", {})),
-                degree=_localized(el.get("degreeName", {})),
-                field_of_study=field,
-                start_year=start.get("year"),
-                end_year=end.get("year"),
-                activities=_localized(el.get("activities", {})),
-                grade=_localized(el.get("grade", {}).get("grade", {})),
-            )
-        )
-    return results
-
-
-def _parse_certifications(elements: list[dict]) -> list[LinkedInCertification]:
-    """Parse LinkedIn certifications array."""
-    results = []
-    for el in elements:
-        start = el.get("startMonthYear", {})
-        end = el.get("endMonthYear", {})
-        results.append(
-            LinkedInCertification(
-                name=_localized(el.get("name", {})),
-                authority=_localized(el.get("authority", {})),
-                license_number=_localized(el.get("licenseNumber", {})),
-                url=el.get("url", ""),
-                start_year=start.get("year"),
-                end_year=end.get("year"),
-            )
-        )
-    return results
-
-
 async def fetch_profile(access_token: str) -> LinkedInProfile:
     """Fetch the authenticated member's profile from LinkedIn.
 
-    Strategy (consumer-tier scopes):
-      1. /rest/identityMe (v202501) — headline, profileUrl, name, picture, email
-      2. /v2/userinfo (OIDC) — name, email, picture as fallback
-      3. /v2/me with projections — attempts full profile (needs r_basicprofile)
-      4. /rest/verificationReport (v202501) — verification badges
+    Consumer-tier scopes (openid profile email w_member_social r_verify r_profile_basicinfo)
+    only provide basic identity data. Positions, education, skills require r_fullprofile
+    which LinkedIn has CLOSED to new applications.
+
+    Strategy:
+      1. /rest/identityMe (v202501) — name, headline, picture, email (r_profile_basicinfo)
+      2. /v2/userinfo (OIDC) — fallback for name/email/picture
+      3. /rest/verificationReport — verification badges (r_verify)
     """
     rest_headers = {
         "Authorization": f"Bearer {access_token}",
         "LinkedIn-Version": "202501",
     }
-    v2_headers = {
-        "Authorization": f"Bearer {access_token}",
-        "X-RestLi-Protocol-Version": "2.0.0",
-    }
 
     profile_data: dict = {}
-    positions: list[LinkedInPosition] = []
-    education: list[LinkedInEducation] = []
-    skills: list[str] = []
-    certifications: list[LinkedInCertification] = []
-    languages: list[str] = []
     verifications: list[str] = []
     profile_url = ""
     headline = ""
@@ -244,12 +186,16 @@ async def fetch_profile(access_token: str) -> LinkedInProfile:
                 email = basic.get("primaryEmailAddress", "")
 
                 logger.info(
-                    f"Fetched /rest/identityMe: {profile_data.get('localizedFirstName')} "
-                    f"{profile_data.get('localizedLastName')} — headline='{headline}'"
+                    "Fetched /rest/identityMe: %s %s — headline=%r",
+                    profile_data.get("localizedFirstName"),
+                    profile_data.get("localizedLastName"),
+                    headline,
                 )
             else:
                 logger.warning(
-                    f"/rest/identityMe returned {resp.status_code}: {resp.text[:300]}"
+                    "/rest/identityMe returned %s: %s",
+                    resp.status_code,
+                    resp.text[:300],
                 )
         except Exception as e:
             logger.warning(f"/rest/identityMe failed: {e}")
@@ -272,72 +218,14 @@ async def fetch_profile(access_token: str) -> LinkedInProfile:
                 if not pic_url:
                     pic_url = ui.get("picture", "")
                 logger.info(
-                    f"OIDC userinfo OK — email={bool(email)}, pic={bool(pic_url)}"
+                    "OIDC userinfo OK — email=%s, pic=%s",
+                    bool(email),
+                    bool(pic_url),
                 )
         except Exception as e:
             logger.warning(f"/v2/userinfo failed: {e}")
 
-        # ── 3. /v2/me with field projections (needs r_basicprofile — Business tier) ──
-        try:
-            me_url = (
-                "https://api.linkedin.com/v2/me"
-                "?projection=(id,localizedFirstName,localizedLastName,"
-                "localizedHeadline,vanityName,profilePicture,"
-                "positions,education,skills,certifications,languages)"
-            )
-            resp = await client.get(me_url, headers=v2_headers)
-            if resp.status_code == 200:
-                me_data = resp.json()
-                logger.info(f"Fetched /v2/me — keys: {list(me_data.keys())}")
-
-                # Override with richer data if available
-                if me_data.get("localizedHeadline") and not headline:
-                    headline = me_data["localizedHeadline"]
-                if me_data.get("vanityName"):
-                    profile_data["vanityName"] = me_data["vanityName"]
-
-                # Parse resume sections from /v2/me (Business tier only)
-                pos_elements = me_data.get("positions", {}).get("elements", [])
-                if pos_elements:
-                    positions = _parse_positions(pos_elements)
-                    logger.info(f"  → {len(positions)} positions from /v2/me")
-
-                edu_elements = me_data.get("education", {}).get("elements", [])
-                if edu_elements:
-                    education = _parse_education(edu_elements)
-                    logger.info(f"  → {len(education)} education entries")
-
-                skill_elements = me_data.get("skills", {}).get("elements", [])
-                if skill_elements:
-                    skills = [
-                        _localized(s.get("name", {}))
-                        for s in skill_elements
-                        if _localized(s.get("name", {}))
-                    ]
-                    logger.info(f"  → {len(skills)} skills")
-
-                cert_elements = me_data.get("certifications", {}).get("elements", [])
-                if cert_elements:
-                    certifications = _parse_certifications(cert_elements)
-                    logger.info(f"  → {len(certifications)} certifications")
-
-                lang_elements = me_data.get("languages", {}).get("elements", [])
-                if lang_elements:
-                    languages = [
-                        _localized(l.get("name", {}))
-                        for l in lang_elements
-                        if _localized(l.get("name", {}))
-                    ]
-                    logger.info(f"  → {len(languages)} languages")
-            else:
-                logger.info(
-                    f"/v2/me returned {resp.status_code} — "
-                    "positions/education/skills require Business tier (r_basicprofile)"
-                )
-        except Exception as e:
-            logger.warning(f"/v2/me failed: {e}")
-
-        # ── 4. /rest/verificationReport ──
+        # ── 3. /rest/verificationReport — verification badges (r_verify) ──
         try:
             vresp = await client.get(
                 "https://api.linkedin.com/rest/verificationReport",
@@ -349,11 +237,21 @@ async def fetch_profile(access_token: str) -> LinkedInProfile:
                     for v in vresp.json().get("verifications", [])
                     if v.get("type")
                 ]
-                logger.info(f"Verifications: {verifications}")
+                logger.info(
+                    "/rest/verificationReport verifications=%s",
+                    verifications,
+                )
             else:
-                logger.info(f"/rest/verificationReport returned {vresp.status_code}")
+                logger.info(
+                    "/rest/verificationReport returned %s",
+                    vresp.status_code,
+                )
         except Exception:
             pass
+
+        # Note: Positions, education, skills, certifications, languages
+        # require r_fullprofile or r_basicprofile scopes which LinkedIn has
+        # CLOSED to new consumer applications. Use manual entry or PDF import.
 
         return LinkedInProfile(
             person_id=profile_data.get("id", ""),
@@ -365,16 +263,12 @@ async def fetch_profile(access_token: str) -> LinkedInProfile:
             email=email,
             profile_url=profile_url,
             verifications=verifications,
-            positions=positions,
-            education=education,
-            skills=skills,
-            certifications=certifications,
-            languages=languages,
         )
 
 
 async def create_session(code: str) -> AuthSession:
     """Full OAuth callback handler: exchange code → fetch profile → store session."""
+    logger.info("[LI-AUTH] Creating session from authorization code")
     token = await exchange_code_for_token(code)
     profile = await fetch_profile(token.access_token)
     session = AuthSession(
@@ -385,6 +279,13 @@ async def create_session(code: str) -> AuthSession:
     )
     _sessions[profile.person_id] = session
     _save_sessions()
+    logger.info(
+        "[LI-AUTH] Session stored person_id=%s name=%s %s expires_at=%s",
+        profile.person_id,
+        profile.first_name,
+        profile.last_name,
+        session.expires_at.isoformat() if session.expires_at else None,
+    )
     return session
 
 
@@ -405,8 +306,15 @@ async def refresh_access_token(person_id: str) -> AuthSession | None:
     """Use refresh token to get new access token."""
     session = _sessions.get(person_id)
     if not session or not session.linkedin_refresh_token:
+        logger.info(
+            "[LI-AUTH] Refresh skipped person_id=%s has_session=%s has_refresh=%s",
+            person_id,
+            bool(session),
+            bool(session and session.linkedin_refresh_token),
+        )
         return None
 
+    logger.info("[LI-AUTH] Refreshing access token for person_id=%s", person_id)
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             TOKEN_URL,
@@ -437,4 +345,10 @@ async def refresh_access_token(person_id: str) -> AuthSession | None:
     )
     _sessions[person_id] = new_session
     _save_sessions()
+    logger.info(
+        "[LI-AUTH] Refresh OK person_id=%s expires_in=%s has_refresh=%s",
+        person_id,
+        data.get("expires_in"),
+        bool(new_session.linkedin_refresh_token),
+    )
     return new_session
