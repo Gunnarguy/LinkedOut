@@ -429,11 +429,11 @@ All checks are rate-limited to **1 request per second**. Up to 500 jobs are chec
 
 The iOS app supports **3 sort modes**, selectable via a dropdown menu in both the card stack and list views:
 
-| Mode             | Primary Key        | Tiebreak 1       | Tiebreak 2          | Icon    | Color  |
-| ---------------- | ------------------ | ---------------- | ------------------- | ------- | ------ |
-| **Best Match**   | `builder_score` ↓  | `posted_at` ↓    | `role_title` A→Z    | star    | blue   |
-| **Newest**       | `posted_at` ↓      | `builder_score` ↓| `role_title` A→Z    | clock   | orange |
-| **Highest Pay**  | `salary_floor` ↓   | `builder_score` ↓| `role_title` A→Z    | dollar  | green  |
+| Mode            | Primary Key       | Tiebreak 1        | Tiebreak 2       | Icon   | Color  |
+| --------------- | ----------------- | ----------------- | ---------------- | ------ | ------ |
+| **Best Match**  | `builder_score` ↓ | `posted_at` ↓     | `role_title` A→Z | star   | blue   |
+| **Newest**      | `posted_at` ↓     | `builder_score` ↓ | `role_title` A→Z | clock  | orange |
+| **Highest Pay** | `salary_floor` ↓  | `builder_score` ↓ | `role_title` A→Z | dollar | green  |
 
 Sort mode is shared across `CardStackView` and `PendingJobsListView` via the `JobsViewModel`. All sorting uses deterministic multi-key comparators so the order never shuffles between renders.
 
@@ -443,13 +443,13 @@ Sort mode is shared across `CardStackView` and `PendingJobsListView` via the `Jo
 
 Several mechanisms prevent good jobs from being lost:
 
-| Protection                   | Detail                                                                |
-| ---------------------------- | --------------------------------------------------------------------- |
-| **High-salience threshold**  | Jobs with `builder_score ≥ 0.60` **never expire**, even after 30 days |
-| **Extended TTL**             | Standard jobs expire after **30 days** (was 14)                        |
-| **Seen URL expiry**          | `seen_urls` entries expire after **30 days** so jobs can be re-scored  |
-| **Timestamped seen URLs**    | `seen_urls.json` stores `{url: ISO_timestamp}` instead of flat list    |
-| **Minimum score threshold**  | Only jobs below `0.20` are silently dropped during ingest              |
+| Protection                  | Detail                                                                |
+| --------------------------- | --------------------------------------------------------------------- |
+| **High-salience threshold** | Jobs with `builder_score ≥ 0.60` **never expire**, even after 30 days |
+| **Extended TTL**            | Standard jobs expire after **30 days** (was 14)                       |
+| **Seen URL expiry**         | `seen_urls` entries expire after **30 days** so jobs can be re-scored |
+| **Timestamped seen URLs**   | `seen_urls.json` stores `{url: ISO_timestamp}` instead of flat list   |
+| **Minimum score threshold** | Only jobs below `0.20` are silently dropped during ingest             |
 
 ---
 
@@ -792,11 +792,11 @@ LinkedOut/
 
 Three periodic tasks run on the backend:
 
-| Task                 | Interval   | Description                                                        |
-| -------------------- | ---------- | ------------------------------------------------------------------ |
-| **Periodic Ingest**  | 6 hours    | Fetches from all 5 job APIs, deduplicates, scores, stores. Also runs `expire_old_jobs()` and `expire_stale_seen_urls()` each cycle |
-| **Smart Pruner**     | 2 hours    | 3-tier job freshness: HEAD checks → page content scan → HN thread analysis. Rate limited 1 req/sec |
-| **Keep-Alive Ping**  | 10 minutes | Self-pings `/health` to prevent Render from sleeping the instance   |
+| Task                | Interval   | Description                                                                                                                        |
+| ------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **Periodic Ingest** | 6 hours    | Fetches from all 5 job APIs, deduplicates, scores, stores. Also runs `expire_old_jobs()` and `expire_stale_seen_urls()` each cycle |
+| **Smart Pruner**    | 2 hours    | 3-tier job freshness: HEAD checks → page content scan → HN thread analysis. Rate limited 1 req/sec                                 |
+| **Keep-Alive Ping** | 10 minutes | Self-pings `/health` to prevent Render from sleeping the instance                                                                  |
 
 All tasks start on app boot via the FastAPI `lifespan` context manager and are gracefully cancelled on shutdown.
 
