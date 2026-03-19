@@ -27,6 +27,9 @@ LinkedOut is a **"Tinder for jobs"** app: a FastAPI backend fetches listings fro
 - **Cover letter drafts** use confident peer tone — no "excited/thrilled/passionate", no corporate filler, no groveling
 - **LLM fallback chain**: Gemini Pro → Gemini Flash → OpenAI
 - **Session persistence** (`backend/linkedin_oauth.py`) — OAuth sessions save to `data/sessions.json`, survive Docker rebuilds; `restore_session()` re-creates server-side session from cached iOS profile
+- **Smart pruner** (`backend/main.py` `_periodic_prune`) — 3-tier job freshness: Tier 1 HTTP HEAD (404/410), Tier 2 page content scan (regex for "position filled" signals, first 20KB, HTML/text only), Tier 3 HN thread analysis (Algolia API re-fetch + OP reply check + Gemini Flash LLM judge for ambiguous threads). Rate limited 1 req/sec, skips LinkedIn (auth-walled). Runs every 2 hours.
+- **Job eviction protection** (`backend/job_store.py`) — `HIGH_SALIENCE_THRESHOLD = 0.60` (never expire), 30-day TTL for standard jobs, `seen_urls` as timestamped dict with 30-day expiry, `min_builder_score = 0.20` ingest floor
+- **Background tasks** — 3 periodic tasks via `lifespan`: ingest (6h), prune (2h), keep-alive ping (10m)
 - All API routes are in `backend/main.py`
 
 ### iOS (SwiftUI)
@@ -39,6 +42,8 @@ LinkedOut is a **"Tinder for jobs"** app: a FastAPI backend fetches listings fro
 - **5 tabs** in `MainTabView`: Discover, Map, Applied, Saved, You
 - **`YourHubView`** is the unified "You" tab — tappable stat cards navigate to `PendingJobsListView`, `EmbeddedAppliedJobsView`, `EmbeddedSavedJobsView`, `RejectedJobsView`
 - **`CardStackView`** supports list/card toggle — list mode uses `JobListRow` (enriched rows with score ring, tags, tech stack, fit reasons)
+- **Sort system** — `JobSortMode` enum (`.score`, `.newest`, `.salary`) in `JobsViewModel` with deterministic multi-key tiebreakers. Sort picker `Menu` in both `CardStackView` and `PendingJobsListView`. Sort mode is `@Published` and shared.
+- **Auto-paginating fetch** — `APIClient.fetchPendingJobs()` loops in 100-item pages until a page returns < 100 items. Works with any backend limit.
 - **Session auto-restore**: `AuthViewModel.checkExistingSession()` detects backend mismatches (e.g. Docker rebuild) and calls `POST /auth/restore` with cached profile — seamless reconnection
 - **Rescore flow**: `ProfileEditorView` → "Save & Rescore All Jobs" → `JobsViewModel.rescoreAllJobs()` → `POST /api/jobs/rescore` + polling `/api/jobs/rescore/status`
 - **Xcode uses `PBXFileSystemSynchronizedRootGroup`** — new `.swift` files added to the `LinkedOut/` directory tree are auto-discovered; no manual Xcode project file editing needed
@@ -47,12 +52,14 @@ LinkedOut is a **"Tinder for jobs"** app: a FastAPI backend fetches listings fro
 ### Data Flow
 
 1. Backend fetches from 5 job APIs → deduplicates → LLM scores → stores in `pending` bucket
-2. iOS polls `/api/ingest/status` during active ingests, fetches `/api/jobs/pending` when ready
+2. iOS polls `/api/ingest/status` during active ingests, fetches `/api/jobs/pending` (auto-paginated in 100-item pages) when ready
 3. User swipes → `POST /api/jobs/action` moves job to `applied`/`rejected`/`saved` bucket
 4. All state changes round-trip to backend; iOS caches locally for responsiveness
 5. Profile edit → save preferences → rescore all pending jobs → updated scores and match signals
 6. Auth sessions persist to `sessions.json`; iOS auto-restores session on backend restart via `POST /auth/restore`
 7. Notion sync (manual): push all LinkedOut jobs → Notion pages, pull Notion changes → LinkedOut
+8. Smart pruner (every 2h): HEAD checks → page content scan → HN thread analysis → removes stale/filled jobs
+9. Job eviction (every 6h): expire jobs >30 days old (except high-salience ≥ 0.60), expire seen URLs >30 days
 
 ### Notion Integration
 

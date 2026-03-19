@@ -100,6 +100,10 @@
 - **Auto server discovery** — iOS app probes Render cloud, local Docker, LAN, and localhost
 - **3-layer URL dedup** — fetch-time, ingest-time, and store-time protection against duplicates
 - **Concurrency-safe ingest** — `asyncio.Lock` prevents overlapping periodic and manual ingest cycles
+- **Smart content-aware pruner** — 3-tier job freshness system: HTTP HEAD checks, page content scanning for "position filled" signals, and HN thread analysis via Algolia API + Gemini Flash LLM judge
+- **3 sort modes** — Best Match (score), Newest (date), Highest Pay (salary) with deterministic multi-key tiebreakers
+- **Auto-paginating fetch** — iOS fetches jobs in 100-item pages, works with any backend limit
+- **Job eviction protection** — high-salience jobs (score ≥ 0.60) never expire, extended 30-day TTL, seen URLs as timestamped dict with 30-day expiry
 
 ---
 
@@ -387,6 +391,68 @@ Three layers prevent duplicate jobs:
 
 ---
 
+## Job Freshness & Smart Pruning
+
+A background task runs every **2 hours** to check whether pending jobs are still live. The pruner uses a conservative 3-tier approach to avoid false positives:
+
+### Tier 1: Dead Link Detection (HTTP HEAD)
+
+Sends a HEAD request to each job's source URL. If the server returns **404** or **410**, the job is pruned. LinkedIn and HN URLs are skipped (they always return 200).
+
+### Tier 2: Page Content Scanning
+
+For non-HN, non-LinkedIn URLs, fetches the first **20KB** of the page and scans for filled/closed signals:
+
+- "this position has been filled"
+- "no longer accepting applications"
+- "this job listing has expired"
+- "this listing is no longer active"
+- "applications closed"
+
+Only `text/html` and `text/plain` content types are scanned. Transient HTTP errors (4xx/5xx) do not trigger removal.
+
+### Tier 3: HN Thread Analysis (Hacker News–Specific)
+
+For HN "Who's Hiring" comment URLs:
+
+1. Extracts the comment ID from the URL
+2. Re-fetches the comment via the **Algolia HN API** (`hn.algolia.com/api/v1/items/{id}`)
+3. Checks **OP (original poster) replies** for filled language ("position filled", "no longer hiring", "hiring is closed")
+4. If OP hasn't confirmed but **3+ replies** contain suggestive keywords → calls **Gemini Flash** as an LLM judge
+5. LLM prompt is conservative: only flags "filled" with strong explicit evidence
+
+All checks are rate-limited to **1 request per second**. Up to 500 jobs are checked per cycle.
+
+---
+
+## iOS Sorting
+
+The iOS app supports **3 sort modes**, selectable via a dropdown menu in both the card stack and list views:
+
+| Mode             | Primary Key        | Tiebreak 1       | Tiebreak 2          | Icon    | Color  |
+| ---------------- | ------------------ | ---------------- | ------------------- | ------- | ------ |
+| **Best Match**   | `builder_score` ↓  | `posted_at` ↓    | `role_title` A→Z    | star    | blue   |
+| **Newest**       | `posted_at` ↓      | `builder_score` ↓| `role_title` A→Z    | clock   | orange |
+| **Highest Pay**  | `salary_floor` ↓   | `builder_score` ↓| `role_title` A→Z    | dollar  | green  |
+
+Sort mode is shared across `CardStackView` and `PendingJobsListView` via the `JobsViewModel`. All sorting uses deterministic multi-key comparators so the order never shuffles between renders.
+
+---
+
+## Job Eviction Protection
+
+Several mechanisms prevent good jobs from being lost:
+
+| Protection                   | Detail                                                                |
+| ---------------------------- | --------------------------------------------------------------------- |
+| **High-salience threshold**  | Jobs with `builder_score ≥ 0.60` **never expire**, even after 30 days |
+| **Extended TTL**             | Standard jobs expire after **30 days** (was 14)                        |
+| **Seen URL expiry**          | `seen_urls` entries expire after **30 days** so jobs can be re-scored  |
+| **Timestamped seen URLs**    | `seen_urls.json` stores `{url: ISO_timestamp}` instead of flat list    |
+| **Minimum score threshold**  | Only jobs below `0.20` are silently dropped during ingest              |
+
+---
+
 ## Location Intelligence
 
 A 5-tier classification system scores job locations relative to your preferred locations:
@@ -434,6 +500,8 @@ Tinder-style card gestures with physics-based animation:
 - **Animation**: `easeOut(duration: 0.3)` on release
 - **Stack depth**: Top 3 cards visible (scaled at 1.0, 0.96, 0.92)
 - **Undo**: Restores the last swipe action
+- **Sort picker**: Menu dropdown with 3 modes (Best Match / Newest / Highest Pay) — shared with list view
+- **Auto-pagination**: Fetches all jobs in 100-item pages — seamlessly loads 100+ jobs
 
 ### Server Discovery
 
@@ -717,6 +785,40 @@ LinkedOut/
 ├── .gitignore               # Ignores .env, data/, __pycache__, xcuserdata/
 └── docs/                    # LinkedIn API reference docs
 ```
+
+---
+
+## Background Tasks
+
+Three periodic tasks run on the backend:
+
+| Task                 | Interval   | Description                                                        |
+| -------------------- | ---------- | ------------------------------------------------------------------ |
+| **Periodic Ingest**  | 6 hours    | Fetches from all 5 job APIs, deduplicates, scores, stores. Also runs `expire_old_jobs()` and `expire_stale_seen_urls()` each cycle |
+| **Smart Pruner**     | 2 hours    | 3-tier job freshness: HEAD checks → page content scan → HN thread analysis. Rate limited 1 req/sec |
+| **Keep-Alive Ping**  | 10 minutes | Self-pings `/health` to prevent Render from sleeping the instance   |
+
+All tasks start on app boot via the FastAPI `lifespan` context manager and are gracefully cancelled on shutdown.
+
+---
+
+## Roadmap
+
+- [x] 5 job source aggregation + 3-layer dedup
+- [x] LLM scoring with Why Matrix + anti-sycophancy prompts
+- [x] Tinder-style swipe UI with card/list toggle
+- [x] LinkedIn OAuth + session persistence
+- [x] Bidirectional Notion sync
+- [x] MCP server for Claude Desktop
+- [x] Dynamic AI candidate persona + rescore flow
+- [x] Smart content-aware job pruner (3-tier: HEAD + page scan + HN thread LLM)
+- [x] 3-mode sort system (Best Match / Newest / Highest Pay)
+- [x] Auto-paginating iOS fetch (100-item pages)
+- [x] Job eviction protection (high-salience threshold, 30-day TTL, seen URL expiry)
+- [ ] Push notifications for high-score new jobs
+- [ ] Auto-apply workflow (one-tap application submission)
+- [ ] Interview prep — LLM-generated prep notes per company
+- [ ] Analytics dashboard — score distribution, apply rate, source quality
 
 ---
 
