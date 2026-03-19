@@ -306,9 +306,155 @@ async def _keep_alive(interval_minutes: int = 10):
 
 
 async def _periodic_prune():
-    """Background loop to check pending jobs for 404/dead links and auto-reject them."""
+    """Background loop: dead-link detection + content-aware 'position filled' detection.
+
+    Three-tier approach per job:
+      1. HTTP HEAD — catch 404/410 (page gone)
+      2. Page content scan — regex for "position filled / no longer accepting / expired"
+      3. HN comment analysis — re-fetch Algolia replies, Gemini Flash judges if filled
+    """
     import httpx
+    import re as _re
     from models import JobAction
+    from scoring_engine import _call_gemini
+
+    # Keywords that strongly indicate a listing is dead / filled.
+    # Must be very specific to avoid false positives on pages that merely
+    # MENTION these phrases in unrelated text (e.g., "we filled 10 roles last year").
+    _FILLED_PATTERNS = _re.compile(
+        r"this\s+(?:position|role|job)\s+(?:has\s+been|is(?:\s+now)?)\s+(?:filled|closed|removed|archived)"
+        r"|no\s+longer\s+accept(?:ing)?\s+applications"
+        r"|position\s+(?:has\s+been\s+)?filled"
+        r"|this\s+job\s+(?:listing\s+)?(?:has\s+)?expired"
+        r"|this\s+listing\s+is\s+no\s+longer\s+(?:active|available)"
+        r"|sorry[,!]?\s+this\s+(?:position|job|role)\s+(?:has\s+been|is)\s+(?:filled|closed)"
+        r"|applications?\s+(?:are\s+)?closed"
+        r"|this\s+job\s+has\s+been\s+removed",
+        _re.IGNORECASE,
+    )
+
+    # HN-specific: patterns in replies that suggest the poster closed the role.
+    # Only match when the ORIGINAL POSTER says these things (checked separately).
+    _HN_FILLED_PATTERNS = _re.compile(
+        r"(?:position|role|roles?)\s+(?:has\s+been|is|are)?\s*filled"
+        r"|no\s+longer\s+(?:hiring|looking|open)"
+        r"|we(?:'ve|'re|\s+have)\s+(?:filled|closed)\s+(?:this|the)\s+(?:role|position)"
+        r"|hiring\s+(?:is\s+)?closed"
+        r"|not\s+(?:currently\s+)?(?:hiring|looking)\s+(?:for\s+this|anymore)",
+        _re.IGNORECASE,
+    )
+
+    async def _check_page_content(client: httpx.AsyncClient, url: str) -> str | None:
+        """GET the page and scan for 'position filled' language. Returns reason or None."""
+        try:
+            resp = await client.get(url, timeout=6.0)
+            if resp.status_code in (404, 410):
+                return f"HTTP {resp.status_code}"
+            if resp.status_code >= 400:
+                return None  # Don't prune on 403/429/500 — transient
+            # Only scan text/html responses (skip PDFs, redirects to login, etc.)
+            content_type = resp.headers.get("content-type", "")
+            if "text/html" not in content_type and "text/plain" not in content_type:
+                return None
+            # Scan first 20KB for filled signals — don't load giant pages
+            body = resp.text[:20_000]
+            match = _FILLED_PATTERNS.search(body)
+            if match:
+                return f"page says: {match.group(0)[:80]}"
+        except Exception:
+            pass
+        return None
+
+    async def _check_hn_comment(
+        client: httpx.AsyncClient, job: JobPayload
+    ) -> str | None:
+        """Re-fetch HN comment via Algolia and check if OP said it's filled."""
+        # Extract comment ID from URL like https://news.ycombinator.com/item?id=12345
+        match = _re.search(r"item\?id=(\d+)", job.source_url)
+        if not match:
+            return None
+        comment_id = match.group(1)
+
+        try:
+            resp = await client.get(
+                f"https://hn.algolia.com/api/v1/items/{comment_id}",
+                timeout=6.0,
+            )
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            original_author = data.get("author", "")
+
+            # Check replies from the original poster specifically
+            for child in data.get("children", []):
+                reply_author = child.get("author", "")
+                reply_text = child.get("text", "") or ""
+                reply_text = _re.sub(r"<[^>]+>", " ", reply_text)
+
+                if reply_author == original_author and _HN_FILLED_PATTERNS.search(
+                    reply_text
+                ):
+                    snippet = reply_text[:120].strip()
+                    return f"OP ({original_author}) replied: {snippet}"
+
+            # If there are many replies (5+) from non-OP, use Gemini Flash
+            # for nuanced judgment — but only if OP hasn't clearly said anything.
+            non_op_replies = []
+            for child in data.get("children", []):
+                reply_text = child.get("text", "") or ""
+                reply_text = _re.sub(r"<[^>]+>", " ", reply_text)
+                if reply_text.strip():
+                    author = child.get("author", "anon")
+                    non_op_replies.append(f"{author}: {reply_text.strip()[:200]}")
+
+            if len(non_op_replies) >= 3:
+                # Only call Gemini if replies contain suggestive language
+                replies_text = "\n".join(non_op_replies[:10])
+                if _re.search(
+                    r"fill|clos|hired|no longer|stopped", replies_text, _re.IGNORECASE
+                ):
+                    return await _llm_judge_hn_thread(
+                        job.role_title, job.company_name, original_author, replies_text
+                    )
+        except Exception as e:
+            logger.debug(f"[PRUNE] HN check failed for {comment_id}: {e}")
+        return None
+
+    async def _llm_judge_hn_thread(
+        role: str, company: str, op_author: str, replies: str
+    ) -> str | None:
+        """Use Gemini Flash to judge if an HN thread indicates the position is filled.
+        Returns reason string if filled, None if still open or unclear."""
+        prompt = (
+            f"Job posting: {role} at {company}\n"
+            f"Original poster: {op_author}\n\n"
+            f"Replies to this HN 'Who is hiring?' comment:\n{replies}\n\n"
+            "Based ONLY on these replies, is there clear evidence the position "
+            "has been filled, closed, or is no longer available?\n\n"
+            "Be CONSERVATIVE — only say filled if there's strong evidence. "
+            "People asking questions or expressing interest does NOT mean it's filled. "
+            "Only the original poster confirming it's filled, or multiple people "
+            "confirming they were told it's closed, counts as evidence.\n\n"
+            'Respond with JSON: {"filled": true/false, "reason": "brief explanation"}'
+        )
+        try:
+            raw = await _call_gemini(
+                system="You judge whether HN job postings are still active. Be conservative — when in doubt, say NOT filled.",
+                user_msg=prompt,
+                use_flash=True,
+                timeout=10,
+            )
+            import json
+
+            result = json.loads(raw)
+            if result.get("filled") is True:
+                reason = result.get("reason", "LLM judged filled")
+                return f"HN thread: {reason[:100]}"
+        except Exception as e:
+            logger.debug(f"[PRUNE] LLM judge failed for {role} @ {company}: {e}")
+        return None
+
+    # ── Main prune loop ──────────────────────────────────────────────
     while True:
         try:
             pending = store.get_pending(limit=500, offset=0)
@@ -316,28 +462,50 @@ async def _periodic_prune():
                 await asyncio.sleep(60 * 60)
                 continue
 
-            for job in pending:
-                url = job.apply_url or job.source_url
-                if not url: continue
-                # Skip known resilient endpoints
-                if "ycombinator.com" in url or "algolia.com" in url or "linkedin.com" in url:
-                    continue
+            pruned = 0
+            checked = 0
 
-                try:
-                    async with httpx.AsyncClient(timeout=4.0, verify=False, follow_redirects=True) as client:
-                        resp = await client.head(url)
-                        if resp.status_code in (404, 410):
-                            logger.info(f"[PRUNE] Dead link ({resp.status_code}): {job.role_title} @ {job.company_name}")
-                            store.act_on_job(job.id, JobAction.reject)
-                except Exception:
-                    pass
+            async with httpx.AsyncClient(verify=False, follow_redirects=True) as client:
+                for job in pending:
+                    url = job.apply_url or job.source_url
+                    if not url:
+                        continue
+                    checked += 1
+                    reason = None
 
-                await asyncio.sleep(1.0)
+                    is_hn = "news.ycombinator.com" in url
+                    is_linkedin = "linkedin.com" in url
 
-            logger.info("Finished dead-link pruning cycle.")
-            await asyncio.sleep(3600 * 2) # run every 2 hours
+                    # Tier 1: Simple HEAD check (skip HN and LinkedIn — always 200)
+                    if not is_hn and not is_linkedin:
+                        try:
+                            head_resp = await client.head(url, timeout=4.0)
+                            if head_resp.status_code in (404, 410):
+                                reason = f"HTTP {head_resp.status_code}"
+                        except Exception:
+                            pass
+
+                    # Tier 2: Content-aware page scan (skip HN — handled separately)
+                    if not reason and not is_hn and not is_linkedin:
+                        reason = await _check_page_content(client, url)
+
+                    # Tier 3: HN comment/reply analysis
+                    if not reason and is_hn:
+                        reason = await _check_hn_comment(client, job)
+
+                    if reason:
+                        logger.info(
+                            f"[PRUNE] {job.role_title} @ {job.company_name} — {reason}"
+                        )
+                        store.act_on_job(job.id, JobAction.reject)
+                        pruned += 1
+
+                    await asyncio.sleep(1.0)  # Rate limit: 1 check/sec
+
+            logger.info(f"[PRUNE] Cycle complete: checked={checked} pruned={pruned}")
+            await asyncio.sleep(3600 * 2)  # Run every 2 hours
         except Exception as e:
-            logger.error(f"Error in dead-link pruning: {e}")
+            logger.error(f"[PRUNE] Error in pruning cycle: {e}")
             await asyncio.sleep(600)
 
 
