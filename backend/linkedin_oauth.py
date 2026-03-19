@@ -352,3 +352,27 @@ async def refresh_access_token(person_id: str) -> AuthSession | None:
         bool(new_session.linkedin_refresh_token),
     )
     return new_session
+
+
+def restore_session(profile: LinkedInProfile) -> AuthSession:
+    """Restore a session from a cached profile (no LinkedIn tokens).
+
+    Used when the iOS app has a cached profile but the backend has no session
+    (e.g. after Docker rebuild, server switch). The user's identity is preserved
+    but LinkedIn API calls requiring a token will need re-auth.
+    """
+    session = AuthSession(
+        linkedin_access_token="",
+        linkedin_refresh_token="",
+        profile=profile,
+        expires_at=datetime.now(timezone.utc),  # already expired — no token
+    )
+    _sessions[profile.person_id] = session
+    _save_sessions()
+    logger.info(
+        "[LI-AUTH] Session restored from cached profile person_id=%s name=%s %s",
+        profile.person_id,
+        profile.first_name,
+        profile.last_name,
+    )
+    return session

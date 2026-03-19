@@ -16,13 +16,18 @@ STORE_FILE = DATA_DIR / "job_store.json"
 SEEN_FILE = DATA_DIR / "seen_urls.json"
 
 
+# Jobs scoring at or above this threshold are "high salience" and
+# protected from age-based expiry.  They clearly describe *you*.
+HIGH_SALIENCE_THRESHOLD = 0.60
+
+
 class JobStore:
     def __init__(self) -> None:
         self._pending: dict[str, JobPayload] = {}
         self._applied: dict[str, JobPayload] = {}
         self._rejected: dict[str, JobPayload] = {}
         self._saved: dict[str, JobPayload] = {}
-        self._seen_urls: set[str] = set()
+        self._seen_urls: dict[str, str] = {}  # url → ISO timestamp when first seen
         self._url_index: set[str] = set()  # fast URL lookup across all buckets
         self._undo_stack: list[tuple[str, str, str]] = (
             []
@@ -57,7 +62,16 @@ class JobStore:
 
         if SEEN_FILE.exists():
             try:
-                self._seen_urls = set(json.loads(SEEN_FILE.read_text()))
+                raw_seen = json.loads(SEEN_FILE.read_text())
+                if isinstance(raw_seen, list):
+                    # Migrate from old flat list format → timestamped dict
+                    now_iso = datetime.now(timezone.utc).isoformat()
+                    self._seen_urls = {url: now_iso for url in raw_seen}
+                    logger.info(f"Migrated {len(self._seen_urls)} seen URLs from list to timestamped dict")
+                elif isinstance(raw_seen, dict):
+                    self._seen_urls = raw_seen
+                else:
+                    self._seen_urls = {}
                 logger.info(f"Loaded {len(self._seen_urls)} seen URLs")
             except Exception as e:
                 logger.error(f"Failed to load seen URLs: {e}")
@@ -91,10 +105,10 @@ class JobStore:
             logger.error(f"Failed to save store: {e}")
 
     def _save_seen(self) -> None:
-        """Persist seen URLs to disk."""
+        """Persist seen URLs (with timestamps) to disk."""
         try:
             DATA_DIR.mkdir(parents=True, exist_ok=True)
-            SEEN_FILE.write_text(json.dumps(list(self._seen_urls)))
+            SEEN_FILE.write_text(json.dumps(self._seen_urls))
         except Exception as e:
             logger.error(f"Failed to save seen URLs: {e}")
 
@@ -166,9 +180,11 @@ class JobStore:
             self._save()
         self._rebuild_url_index()
         # Sync seen_urls with what's actually in the store
+        now_iso = datetime.now(timezone.utc).isoformat()
         for bucket in (self._pending, self._applied, self._saved, self._rejected):
             for job in bucket.values():
-                self._seen_urls.add(job.source_url)
+                if job.source_url not in self._seen_urls:
+                    self._seen_urls[job.source_url] = now_iso
         self._save_seen()
 
     # ── URL dedup ────────────────────────────────────────────────────────
@@ -177,7 +193,8 @@ class JobStore:
         return url in self._seen_urls
 
     def mark_url_seen(self, url: str) -> None:
-        self._seen_urls.add(url)
+        if url not in self._seen_urls:
+            self._seen_urls[url] = datetime.now(timezone.utc).isoformat()
 
     def flush_seen(self) -> None:
         self._save_seen()
@@ -187,6 +204,28 @@ class JobStore:
         self._seen_urls.clear()
         self._save_seen()
 
+    def expire_stale_seen_urls(self, max_age_days: int = 30) -> int:
+        """Remove seen URLs older than max_age_days IF they aren't stored in any bucket.
+        This lets discarded jobs be re-evaluated with updated preferences/models."""
+        cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+        stored_urls = self._url_index  # URLs that are actually in a bucket
+        to_remove = []
+        for url, ts_str in self._seen_urls.items():
+            if url in stored_urls:
+                continue  # job is stored — keep it seen
+            try:
+                seen_at = datetime.fromisoformat(ts_str)
+                if seen_at < cutoff:
+                    to_remove.append(url)
+            except (ValueError, TypeError):
+                to_remove.append(url)  # bad timestamp → allow re-fetch
+        for url in to_remove:
+            del self._seen_urls[url]
+        if to_remove:
+            self._save_seen()
+            logger.info(f"Expired {len(to_remove)} stale seen URLs older than {max_age_days} days")
+        return len(to_remove)
+
     def clear_pending(self) -> int:
         """Clear all pending jobs. Returns count of jobs cleared."""
         count = len(self._pending)
@@ -194,18 +233,27 @@ class JobStore:
         self._save()
         return count
 
-    def expire_old_jobs(self, max_age_days: int = 14) -> int:
-        """Remove pending jobs older than max_age_days. Returns count removed."""
+    def expire_old_jobs(self, max_age_days: int = 30) -> int:
+        """Remove pending jobs older than max_age_days.
+        High-salience jobs (score >= HIGH_SALIENCE_THRESHOLD) are NEVER expired.
+        Jobs with no posted_at are kept (not silently deleted).
+        Returns count removed."""
         cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
         to_remove = []
         for jid, job in self._pending.items():
-            if not job.posted_at or job.posted_at < cutoff:
+            # Never expire high-salience jobs — these are your best matches
+            if job.builder_score >= HIGH_SALIENCE_THRESHOLD:
+                continue
+            # Keep jobs with no posted_at rather than silently deleting them
+            if not job.posted_at:
+                continue
+            if job.posted_at < cutoff:
                 to_remove.append(jid)
         for jid in to_remove:
             self._pending.pop(jid)
         if to_remove:
             self._save()
-            logger.info(f"Expired {len(to_remove)} jobs older than {max_age_days} days")
+            logger.info(f"Expired {len(to_remove)} low-score jobs older than {max_age_days} days")
         return len(to_remove)
 
     def purge_keyword_scored(self) -> int:
@@ -217,7 +265,7 @@ class JobStore:
         ]
         for jid in to_remove:
             job = self._pending.pop(jid)
-            self._seen_urls.discard(job.source_url)
+            self._seen_urls.pop(job.source_url, None)
         if to_remove:
             self._save()
             self._save_seen()
@@ -246,7 +294,7 @@ class JobStore:
                     self._url_index.add(job.source_url)
                     return
         self._pending[job.id] = job
-        self._seen_urls.add(job.source_url)
+        self.mark_url_seen(job.source_url)
         self._url_index.add(job.source_url)
         self._save()
         self._save_seen()
@@ -289,7 +337,7 @@ class JobStore:
                 job = fallback_job
                 source_bucket = self._pending
                 source_name = "pending"
-                self._seen_urls.add(job.source_url)
+                self.mark_url_seen(job.source_url)
                 self._save_seen()
             else:
                 return False

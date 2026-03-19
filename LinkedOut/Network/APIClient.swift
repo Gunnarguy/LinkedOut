@@ -75,8 +75,17 @@ final class APIClient: @unchecked Sendable {
 
     // MARK: - Jobs
 
-    func fetchPendingJobs(limit: Int = 20, offset: Int = 0) async throws -> [JobPayload] {
-        return try await get("/api/jobs/pending?limit=\(limit)&offset=\(offset)")
+    func fetchPendingJobs() async throws -> [JobPayload] {
+        let pageSize = 100
+        var all: [JobPayload] = []
+        var offset = 0
+        while true {
+            let page: [JobPayload] = try await get("/api/jobs/pending?limit=\(pageSize)&offset=\(offset)")
+            all.append(contentsOf: page)
+            if page.count < pageSize { break }
+            offset += pageSize
+        }
+        return all
     }
 
     func performAction(_ request: JobActionRequest) async throws -> JobActionResponse {
@@ -161,6 +170,10 @@ final class APIClient: @unchecked Sendable {
 
     func checkAuthStatus(personId: String) async throws -> AuthStatusResponse {
         return try await get("/auth/status/\(personId)")
+    }
+
+    func restoreSession(profile: LinkedInProfile) async throws -> AuthStatusResponse {
+        return try await post("/auth/restore", body: profile)
     }
 
     func fetchResume(personId: String) async throws -> LinkedInProfile {

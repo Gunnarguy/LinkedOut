@@ -65,12 +65,27 @@ class AuthViewModel: ObservableObject {
                 cacheProfile(profile)
                 print("[AUTH] ✅ Session valid — \(profile.firstName) \(profile.lastName)")
             } else {
-                // Backend says not authenticated — keep cached profile for display
-                // but flag that LinkedIn API calls will fail until re-auth
-                if loadCachedProfile() != nil {
-                    self.isAuthenticated = true
-                    self.needsReauth = true
-                    print("[AUTH] ⚠️ Backend says NOT authenticated — using cached profile, needsReauth=true")
+                // Backend says not authenticated — try to restore from cached profile
+                if let cached = loadCachedProfile(), !cached.personId.isEmpty {
+                    print("[AUTH] 🔄 Backend has no session — restoring from cached profile...")
+                    do {
+                        let restored = try await APIClient.shared.restoreSession(profile: cached)
+                        if restored.authenticated {
+                            self.profile = restored.profile ?? cached
+                            self.isAuthenticated = true
+                            self.needsReauth = true  // no live LinkedIn token — API calls need re-auth
+                            print("[AUTH] ✅ Session restored on backend — \(cached.firstName) \(cached.lastName) (needsReauth for LinkedIn API)")
+                        } else {
+                            self.isAuthenticated = true
+                            self.needsReauth = true
+                            print("[AUTH] ⚠️ Restore returned not-authenticated — using cached profile, needsReauth=true")
+                        }
+                    } catch {
+                        // Restore failed — still keep cached profile for display
+                        self.isAuthenticated = true
+                        self.needsReauth = true
+                        print("[AUTH] ⚠️ Restore failed: \(error.localizedDescription) — using cached profile, needsReauth=true")
+                    }
                 } else {
                     print("[AUTH] 🚫 Backend says NOT authenticated and NO cached profile — clearing session")
                     clearSession()

@@ -57,6 +57,7 @@ private enum StrictnessPreset: String, CaseIterable, Identifiable {
 }
 
 struct SettingsView: View {
+    @EnvironmentObject var jobs: JobsViewModel
     @AppStorage("minSalary") private var minSalary: Int = 90000
     @AppStorage("requireRemote") private var requireRemote: Bool = true
     @AppStorage("serverURL") private var serverURL: String = "http://Gunnars-Brain-Extension.local:8443"
@@ -173,10 +174,18 @@ struct SettingsView: View {
                 // ── Professional Profile ──────────────────────────────
                 Section {
                     NavigationLink {
-                        ProfileEditorView(profileText: $professionalProfile)
-                            .onDisappear {
-                                debouncedSync()
+                        ProfileEditorView(
+                            profileText: $professionalProfile,
+                            onSyncAndRescore: {
+                                pendingSyncTask?.cancel()
+                                await syncPreferences()
+                                await jobs.rescoreAllJobs()
                             }
+                        )
+                        .environmentObject(jobs)
+                        .onDisappear {
+                            debouncedSync()
+                        }
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Edit Professional Profile")
@@ -1171,6 +1180,10 @@ private struct ScoringRuleRow: View {
 // MARK: - Profile Editor View
 struct ProfileEditorView: View {
     @Binding var profileText: String
+    @EnvironmentObject var jobs: JobsViewModel
+    var onSyncAndRescore: (() async -> Void)?
+
+    @State private var showRescoreConfirm = false
 
     var body: some View {
         Form {
@@ -1183,8 +1196,42 @@ struct ProfileEditorView: View {
             } footer: {
                 Text("This exact text is injected into the AI's system prompt to evaluate job matches in the second-person voice.")
             }
+
+            Section {
+                Button {
+                    showRescoreConfirm = true
+                } label: {
+                    HStack {
+                        if jobs.isRescoring {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text(jobs.rescoreProgress)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                            Text("Save & Rescore All Jobs")
+                        }
+                        Spacer()
+                    }
+                }
+                .disabled(jobs.isRescoring)
+            } header: {
+                Text("Apply Changes")
+            } footer: {
+                Text("Saves your profile to the backend and rescores all pending jobs with the updated persona.")
+            }
         }
         .navigationTitle("Professional Profile")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Rescore All Jobs?", isPresented: $showRescoreConfirm) {
+            Button("Rescore", role: .destructive) {
+                Task {
+                    await onSyncAndRescore?()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will save your updated profile and rescore all \(jobs.pendingJobs.count) pending jobs. Scores, fit reasons, and cover letters will be regenerated.")
+        }
     }
 }

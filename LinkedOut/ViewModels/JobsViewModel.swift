@@ -18,6 +18,8 @@ class JobsViewModel: ObservableObject {
     @Published var stats: StatsResponse?
     @Published var isLoading = false
     @Published var isIngesting = false
+    @Published var isRescoring = false
+    @Published var rescoreProgress: String = ""
     @Published var error: String?
     @Published var info: String?
 
@@ -491,6 +493,72 @@ class JobsViewModel: ObservableObject {
         hasAutoIngested = true
         print("[VM] autoIngestIfNeeded — queue empty, triggering auto-ingest")
         await ingestNewJobs()
+    }
+
+    // MARK: - Rescore
+
+    /// Rescore all pending jobs with updated preferences/profile
+    func rescoreAllJobs() async {
+        guard !isRescoring else { return }
+        isRescoring = true
+        rescoreProgress = "Starting rescore..."
+        error = nil
+        info = nil
+        defer {
+            isRescoring = false
+            rescoreProgress = ""
+        }
+        print("[VM] rescoreAllJobs — starting")
+
+        do {
+            let kickoff = try await APIClient.shared.rescoreJobs(buckets: ["pending"])
+            print("[VM] rescoreAllJobs — kickoff status=\(kickoff.status) total=\(kickoff.total ?? 0)")
+            let total = kickoff.total ?? 0
+            if total == 0 {
+                info = "No pending jobs to rescore"
+                return
+            }
+
+            rescoreProgress = "Rescoring \(total) jobs..."
+
+            // Poll for completion
+            var pollCount = 0
+            let maxPolls = 300 // ~10 min
+            while pollCount < maxPolls {
+                try await Task.sleep(nanoseconds: 2_000_000_000) // 2s
+                pollCount += 1
+
+                let status = try await APIClient.shared.fetchRescoreStatus()
+                let done = status.done ?? 0
+                let statusTotal = status.total ?? total
+                let errors = status.errors ?? 0
+
+                if status.running == true {
+                    rescoreProgress = "Rescoring \(done)/\(statusTotal)..."
+                    if pollCount % 3 == 0 {
+                        await fetchAndLogTelemetry()
+                    }
+                } else {
+                    // Rescore finished
+                    print("[VM] rescoreAllJobs — done: \(done)/\(statusTotal), errors=\(errors)")
+                    pendingJobs = try await APIClient.shared.fetchPendingJobs()
+                    Self.writeCache("pending", jobs: pendingJobs)
+                    await loadStats()
+                    info = "Rescored \(done) jobs" + (errors > 0 ? " (\(errors) errors)" : "")
+                    return
+                }
+            }
+
+            // Timed out
+            print("[VM] rescoreAllJobs — polling timed out")
+            pendingJobs = try await APIClient.shared.fetchPendingJobs()
+            Self.writeCache("pending", jobs: pendingJobs)
+            await loadStats()
+            info = "Rescore still running — pull to refresh for latest"
+        } catch {
+            print("[VM] rescoreAllJobs — ERROR: \(error)")
+            self.error = error.localizedDescription
+        }
     }
 
     // MARK: - Swipe Actions

@@ -44,6 +44,7 @@ from linkedin_oauth import (
     get_all_sessions,
     get_session,
     refresh_access_token,
+    restore_session,
     validate_state,
 )
 from models import (
@@ -196,7 +197,7 @@ async def _run_ingest_cycle():
         prefs = _user_prefs
         total_added = 0
         batch_size = 10
-        min_builder_score = 0.30
+        min_builder_score = 0.20
         total_batches = (len(new_listings) + batch_size - 1) // batch_size
         _ingest_progress["total_batches"] = total_batches
 
@@ -275,7 +276,8 @@ async def _periodic_ingest(interval_hours: int = 6):
     """Run ingest cycle on a schedule. Also expires stale jobs."""
     while True:
         async with _ingest_lock:
-            store.expire_old_jobs(max_age_days=14)
+            store.expire_old_jobs(max_age_days=30)
+            store.expire_stale_seen_urls(max_age_days=30)
             result = await _run_ingest_cycle()
         logger.info(f"Next ingest in {interval_hours} hours")
         await asyncio.sleep(interval_hours * 3600)
@@ -459,6 +461,27 @@ async def auth_status(person_id: str):
     return AuthStatusResponse(authenticated=False)
 
 
+@app.post("/auth/restore", response_model=AuthStatusResponse)
+async def auth_restore(profile: LinkedInProfile):
+    """Restore a session from a cached profile pushed by the iOS app.
+
+    Used when the backend has no session (e.g. after Docker rebuild or server
+    switch) but the iOS app still has a valid cached profile. Creates a session
+    stub so /auth/status returns authenticated. LinkedIn API calls that need
+    a live token will still require re-auth.
+    """
+    if not profile.person_id:
+        raise HTTPException(status_code=400, detail="person_id is required")
+    session = restore_session(profile)
+    logger.info(
+        "[LI-AUTH] /auth/restore success person_id=%s name=%s %s",
+        profile.person_id,
+        profile.first_name,
+        profile.last_name,
+    )
+    return AuthStatusResponse(authenticated=True, profile=session.profile)
+
+
 @app.get("/api/profile/resume")
 async def get_profile_resume(person_id: str = Query(...)):
     """Fetch fresh full LinkedIn profile + resume data for the given user."""
@@ -610,7 +633,7 @@ async def debug_linkedin_raw(person_id: str = Query(...)):
 
 @app.get("/api/jobs/pending", response_model=list[JobPayload])
 async def get_pending_jobs(
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(200, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):
     """Get pending (unreviewed) jobs, sorted by builder_score descending."""
@@ -1146,7 +1169,8 @@ async def ingest_refresh():
     async def _do_manual_ingest():
         global _last_ingest_result
         async with _ingest_lock:
-            store.expire_old_jobs(max_age_days=14)
+            store.expire_old_jobs(max_age_days=30)
+            store.expire_stale_seen_urls(max_age_days=30)
             _last_ingest_result = await _run_ingest_cycle()
 
     _manual_ingest_task = asyncio.create_task(_do_manual_ingest())

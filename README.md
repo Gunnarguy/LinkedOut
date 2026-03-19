@@ -64,10 +64,13 @@
   - [API Reference](#api-reference)
     - [Health](#health)
     - [Authentication](#authentication)
+    - [Profile](#profile)
     - [Jobs](#jobs)
     - [Scoring \& Ingestion](#scoring--ingestion)
     - [Preferences](#preferences)
-    - [LinkedIn](#linkedin)
+    - [LinkedIn Social](#linkedin-social)
+    - [Notion Sync](#notion-sync)
+    - [Telemetry](#telemetry)
     - [Development (debug mode only)](#development-debug-mode-only)
   - [Data Models](#data-models)
     - [JobPayload](#jobpayload)
@@ -81,8 +84,10 @@
 
 - **5 job sources** aggregated and deduplicated (Remotive, Himalayas, HN Who's Hiring, Jobicy, RemoteOK)
 - **LLM-powered scoring** with Gemini Flash triage + Gemini Pro full analysis, OpenAI fallback
-- **Dynamic AI Candidate Persona** — edit your Markdown resume directly in the iOS app to dynamically rebuild the AI evaluation prompt on the fly
+- **Dynamic AI Candidate Persona** — edit your professional profile in the iOS app to reshape the AI evaluation prompt and re-score all pending jobs instantly
+- **Session persistence** — OAuth sessions survive Docker rebuilds; iOS auto-restores cached profile to the backend seamlessly
 - **Embedded MCP Server** — includes an internal FastMCP server connecting your LinkedIn profile and Job Pipeline state directly to Claude Desktop
+- **Notion sync** — bidirectional sync with a Notion database (push jobs, pull status changes, runtime config from iOS)
 - **Why Matrix** — structured `logic_fit`, `domain_leverage`, `risk_reward` assessment for every job
 - **Tinder-style swipe UI** — swipe right (apply), left (reject), up (save), with undo
 - **List/card toggle** — switch between swipe cards and a scrollable list with enriched job rows (score ring, tags, tech stack, fit reasons, red flags, AI pitch)
@@ -111,17 +116,19 @@ LinkedOut/
 │   ├── models.py          # Pydantic models (JobPayload, UserPreferences, etc.)
 │   ├── config.py          # pydantic-settings environment config
 │   ├── linkedin_api.py    # LinkedIn API client (profile, sharing)
-│   ├── linkedin_oauth.py  # OAuth 2.0 flow
+│   ├── linkedin_oauth.py  # OAuth 2.0 flow + session persistence
+│   ├── notion_sync.py     # Bidirectional Notion database sync
+│   ├── mcp_server.py      # FastMCP server for Claude Desktop
 │   ├── Dockerfile         # Python 3.12-slim + uvicorn
-│   └── requirements.txt   # 8 dependencies
+│   └── requirements.txt   # Dependencies
 ├── LinkedOut/             # SwiftUI iOS app
 │   ├── LinkedOutApp.swift # App entry point (@main)
 │   ├── ContentView.swift  # Auth-gated root view
 │   ├── Models/            # Codable structs matching backend
 │   ├── ViewModels/        # AuthViewModel, JobsViewModel
-│   ├── Views/             # All SwiftUI views (14 files)
+│   ├── Views/             # All SwiftUI views (22 files)
 │   ├── Network/           # APIClient (actor), ServerDiscovery
-│   └── Utils/             # ScoreRing, SwipeHintOverlay, LocationGeocoder
+│   └── Utils/             # ScoreRing, SwipeHintOverlay, LocationGeocoder, ApplicationTracker
 ├── LinkedOut.xcodeproj/   # Xcode project
 ├── docker-compose.yml     # Local dev: port 8443, volume mount
 ├── render.yaml            # Render Blueprint (one-click deploy)
@@ -130,15 +137,15 @@ LinkedOut/
 
 ### Tech Stack
 
-| Layer           | Technology                                                         |
-| --------------- | ------------------------------------------------------------------ |
-| **iOS App**     | SwiftUI, iOS 17+, MapKit, WebKit, Combine                          |
-| **Backend**     | FastAPI, Python 3.12, Pydantic v2, uvicorn                         |
-| **LLM Scoring** | Google Gemini (primary), OpenAI (fallback)                         |
-| **Job APIs**    | Remotive, Himalayas, HN Algolia, Jobicy, RemoteOK                  |
-| **Auth**        | LinkedIn OAuth 2.0                                                 |
-| **Storage**     | JSON file-backed (job_store.json, seen_urls.json, user_prefs.json) |
-| **Deployment**  | Docker on Render (free tier)                                       |
+| Layer           | Technology                                                                        |
+| --------------- | --------------------------------------------------------------------------------- |
+| **iOS App**     | SwiftUI, iOS 17+, MapKit, WebKit, Combine                                         |
+| **Backend**     | FastAPI, Python 3.12, Pydantic v2, uvicorn                                        |
+| **LLM Scoring** | Google Gemini (primary), OpenAI (fallback)                                        |
+| **Job APIs**    | Remotive, Himalayas, HN Algolia, Jobicy, RemoteOK                                 |
+| **Auth**        | LinkedIn OAuth 2.0                                                                |
+| **Storage**     | JSON file-backed (job_store.json, seen_urls.json, user_prefs.json, sessions.json) |
+| **Deployment**  | Docker on Render (free tier)                                                      |
 
 ---
 
@@ -468,12 +475,19 @@ All settings persist locally via `@AppStorage` (UserDefaults) — they survive e
 
 ### Authentication
 
-| Method | Path                       | Description                       |
-| ------ | -------------------------- | --------------------------------- |
-| GET    | `/auth/login`              | Get LinkedIn OAuth URL            |
-| GET    | `/auth/callback`           | OAuth callback (redirects to app) |
-| POST   | `/auth/token`              | Exchange auth code for profile    |
-| GET    | `/auth/status/{person_id}` | Check session validity            |
+| Method | Path                       | Description                               |
+| ------ | -------------------------- | ----------------------------------------- |
+| GET    | `/auth/login`              | Get LinkedIn OAuth URL                    |
+| GET    | `/auth/callback`           | OAuth callback (redirects to app)         |
+| POST   | `/auth/token`              | Exchange auth code for profile            |
+| GET    | `/auth/status/{person_id}` | Check session validity                    |
+| POST   | `/auth/restore`            | Restore cached profile to backend session |
+
+### Profile
+
+| Method | Path                  | Description                          |
+| ------ | --------------------- | ------------------------------------ |
+| GET    | `/api/profile/resume` | Fetch full LinkedIn profile + resume |
 
 ### Jobs
 
@@ -487,17 +501,20 @@ All settings persist locally via `@AppStorage` (UserDefaults) — they survive e
 | GET    | `/api/jobs/stats`           | Pipeline statistics                     |
 | POST   | `/api/jobs/action`          | Apply/reject/save a job                 |
 | POST   | `/api/jobs/undo`            | Undo last action                        |
+| POST   | `/api/jobs/import`          | Bulk-import pre-scored jobs             |
 | PUT    | `/api/jobs/{job_id}/notes`  | Update job notes                        |
 | PUT    | `/api/jobs/{job_id}/status` | Update application status               |
 
 ### Scoring & Ingestion
 
-| Method | Path                  | Description               |
-| ------ | --------------------- | ------------------------- |
-| POST   | `/api/score`          | Score a single listing    |
-| POST   | `/api/score/batch`    | Score a batch of listings |
-| POST   | `/api/ingest/refresh` | Trigger background ingest |
-| GET    | `/api/ingest/status`  | Check ingest status       |
+| Method | Path                       | Description                              |
+| ------ | -------------------------- | ---------------------------------------- |
+| POST   | `/api/score`               | Score a single listing                   |
+| POST   | `/api/score/batch`         | Score a batch of listings                |
+| POST   | `/api/jobs/rescore`        | Re-score all pending jobs (non-blocking) |
+| GET    | `/api/jobs/rescore/status` | Re-score progress                        |
+| POST   | `/api/ingest/refresh`      | Trigger background ingest                |
+| GET    | `/api/ingest/status`       | Check ingest status                      |
 
 ### Preferences
 
@@ -506,20 +523,52 @@ All settings persist locally via `@AppStorage` (UserDefaults) — they survive e
 | GET    | `/api/preferences` | Get current preferences |
 | PUT    | `/api/preferences` | Update preferences      |
 
-### LinkedIn
+### LinkedIn Social
 
-| Method | Path         | Description                                          |
-| ------ | ------------ | ---------------------------------------------------- |
-| POST   | `/api/share` | Share job to LinkedIn (query: `person_id`, `job_id`) |
+| Method | Path                         | Description                      |
+| ------ | ---------------------------- | -------------------------------- |
+| POST   | `/api/share`                 | Share job to LinkedIn as article |
+| POST   | `/api/share/post`            | Post freeform text to LinkedIn   |
+| POST   | `/api/share/media`           | Post with image attachment       |
+| POST   | `/api/share/document`        | Post with document attachment    |
+| POST   | `/api/share/reshare`         | Reshare existing LinkedIn post   |
+| GET    | `/api/linkedin/posts`        | Get user's LinkedIn posts        |
+| POST   | `/api/linkedin/comments`     | Add comment to post              |
+| POST   | `/api/linkedin/reactions`    | Add reaction to post             |
+| DELETE | `/api/linkedin/reactions`    | Remove reaction                  |
+| GET    | `/api/linkedin/capabilities` | Available LinkedIn API features  |
+
+### Notion Sync
+
+| Method | Path                         | Description                                |
+| ------ | ---------------------------- | ------------------------------------------ |
+| POST   | `/api/notion/configure`      | Runtime Notion setup (token + database_id) |
+| GET    | `/api/notion/status`         | Notion integration status + schema         |
+| GET    | `/api/notion/schema`         | Notion database schema                     |
+| POST   | `/api/notion/sync`           | Bidirectional sync (non-blocking)          |
+| POST   | `/api/notion/push`           | Push all jobs to Notion                    |
+| POST   | `/api/notion/pull`           | Pull changes from Notion                   |
+| GET    | `/api/notion/jobs`           | List all Notion database entries           |
+| GET    | `/api/notion/jobs/{page_id}` | Fetch single Notion page                   |
+| PATCH  | `/api/notion/jobs/{page_id}` | Update Notion page properties              |
+| DELETE | `/api/notion/jobs/{page_id}` | Archive Notion page                        |
+| POST   | `/api/notion/jobs`           | Create new Notion page                     |
+
+### Telemetry
+
+| Method | Path             | Description        |
+| ------ | ---------------- | ------------------ |
+| GET    | `/api/telemetry` | Telemetry snapshot |
 
 ### Development (debug mode only)
 
-| Method | Path                     | Description                                |
-| ------ | ------------------------ | ------------------------------------------ |
-| POST   | `/api/dev/seed`          | Seed 3 mock jobs                           |
-| POST   | `/api/dev/reset-seen`    | Clear seen URLs                            |
-| POST   | `/api/dev/clear-pending` | Clear pending queue                        |
-| GET    | `/api/dev/logs`          | Recent log lines (query: `n`, default 100) |
+| Method | Path                            | Description                                |
+| ------ | ------------------------------- | ------------------------------------------ |
+| POST   | `/api/dev/seed`                 | Seed mock jobs                             |
+| POST   | `/api/dev/reset-seen`           | Clear seen URLs                            |
+| POST   | `/api/dev/clear-pending`        | Clear pending queue                        |
+| POST   | `/api/dev/purge-keyword-scored` | Purge keyword-scored jobs                  |
+| GET    | `/api/dev/logs`                 | Recent log lines (query: `n`, default 500) |
 
 ---
 
@@ -568,6 +617,9 @@ red_flags             Concerns (list, always ≥1)
 fit_reasons           2–4 short fit reasons
 dealbreaker_warnings  0–3 convincing-needed warnings
 
+# Notion Cross-Reference
+notion_page_id        Linked Notion page ID (nullable)
+
 # User Fields
 notes                 Personal notes
 application_status    "new" | "applied" | "phone_screen" | "interview" | "offer" | "rejected"
@@ -612,7 +664,9 @@ LinkedOut/
 │   ├── models.py            # Pydantic models (JobPayload, UserPreferences, etc.)
 │   ├── config.py            # Environment config (pydantic-settings)
 │   ├── linkedin_api.py      # LinkedIn profile + sharing API
-│   ├── linkedin_oauth.py    # OAuth 2.0 flow
+│   ├── linkedin_oauth.py    # OAuth 2.0 flow + session persistence
+│   ├── notion_sync.py       # Bidirectional Notion database sync
+│   ├── mcp_server.py        # FastMCP server for Claude Desktop
 │   ├── Dockerfile           # Python 3.12-slim container
 │   ├── requirements.txt     # fastapi, uvicorn, pydantic, httpx, google-genai, openai
 │   └── .env.example         # Environment variable template
@@ -636,10 +690,18 @@ LinkedOut/
 │   │   ├── YourHubView.swift      # Unified dashboard: stats, profile, settings
 │   │   ├── PendingJobsListView.swift  # Pending queue list (from stat card)
 │   │   ├── RejectedJobsView.swift # Passed/rejected jobs list
-│   │   ├── ProfileView.swift      # LinkedIn profile display
+│   │   ├── ResumeView.swift       # LinkedIn profile display
 │   │   ├── SettingsView.swift     # Preferences + weight tuning + sync indicators
 │   │   ├── LoginView.swift        # OAuth login flow
 │   │   ├── OAuthWebView.swift     # WKWebView for LinkedIn auth
+│   │   ├── FilterSheet.swift      # Job filtering controls
+│   │   ├── ApplyReviewSheet.swift # Apply confirmation sheet
+│   │   ├── ComposePostView.swift  # LinkedIn post composition
+│   │   ├── ShareSheetView.swift   # iOS share sheet wrapper
+│   │   ├── SafariView.swift       # In-app Safari browser
+│   │   ├── NotionDatabaseView.swift # Notion database browser
+│   │   ├── TelemetryView.swift    # Backend telemetry dashboard
+│   │   ├── OnboardingOverlay.swift # First-launch tutorial overlay
 │   │   ├── ErrorBanner.swift      # Error + info banners
 │   │   └── SwipeHintOverlay.swift # Visual swipe direction hints
 │   ├── Network/
@@ -648,6 +710,7 @@ LinkedOut/
 │   └── Utils/
 │       ├── LocationGeocoder.swift # CLGeocoder with caching
 │       ├── ScoreRing.swift        # Circular score indicator
+│       ├── ApplicationTracker.swift # Application status tracking
 │       └── SwipeHintOverlay.swift # Visual swipe direction hints
 ├── docker-compose.yml       # Local dev: backend + volume mount
 ├── render.yaml              # Render Blueprint config
