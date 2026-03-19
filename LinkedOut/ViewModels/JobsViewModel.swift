@@ -9,6 +9,30 @@ import Combine
 import Foundation
 import SwiftUI
 
+enum JobSortMode: String, CaseIterable, Identifiable {
+    case score = "Best Match"
+    case newest = "Newest"
+    case salary = "Highest Pay"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .score: return "star.fill"
+        case .newest: return "clock.fill"
+        case .salary: return "dollarsign.circle.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .score: return .blue
+        case .newest: return .orange
+        case .salary: return .green
+        }
+    }
+}
+
 @MainActor
 class JobsViewModel: ObservableObject {
     @Published var pendingJobs: [JobPayload] = []
@@ -26,6 +50,9 @@ class JobsViewModel: ObservableObject {
     /// True when the last network request failed — shows offline indicator
     @Published var isOffline = false
 
+    /// How the pending queue is sorted — persisted across sessions
+    @Published var sortMode: JobSortMode = .score
+
     /// The timestamp of the last time the user viewed the Discover tab
     @Published var lastSeenTimestamp: Date = .distantPast
 
@@ -41,26 +68,46 @@ class JobsViewModel: ObservableObject {
         return Set(decoded.map { $0.lowercased() })
     }
 
-    /// Pending jobs with blocked companies and already-decided URLs filtered out
+    /// Pending jobs with blocked companies and already-decided URLs filtered out, sorted by current mode
     var visiblePendingJobs: [JobPayload] {
         let blocked = blockedCompanies
         let decided = decidedURLs
 
-        // Filter out acted-upon/blocked jobs
-        let rawFilter = pendingJobs.filter { job in
+        let filtered = pendingJobs.filter { job in
             if !blocked.isEmpty && blocked.contains(job.companyName.lowercased()) { return false }
             if decided.contains(job.sourceUrl) { return false }
             return true
         }
 
-        // Sort explicitly: LLM-scored jobs first, then properly scored jobs by builder_score descending
-        return rawFilter.sorted { a, b in
-            let aIsLocal = a.aiPitchSummary.lowercased().contains("local keyword")
-            let bIsLocal = b.aiPitchSummary.lowercased().contains("local keyword")
+        return sortJobs(filtered)
+    }
 
-            if aIsLocal && !bIsLocal { return false }
-            if !aIsLocal && bIsLocal { return true }
-            return a.builderScore > b.builderScore
+    /// Deterministic sort with tiebreakers — used by all views
+    func sortJobs(_ jobs: [JobPayload]) -> [JobPayload] {
+        jobs.sorted { a, b in
+            switch sortMode {
+            case .score:
+                if a.builderScore != b.builderScore { return a.builderScore > b.builderScore }
+                // Tiebreak: newer first, then alphabetical for full determinism
+                let aDate = a.postedAt ?? .distantPast
+                let bDate = b.postedAt ?? .distantPast
+                if aDate != bDate { return aDate > bDate }
+                return a.roleTitle < b.roleTitle
+
+            case .newest:
+                let aDate = a.postedAt ?? .distantPast
+                let bDate = b.postedAt ?? .distantPast
+                if aDate != bDate { return aDate > bDate }
+                // Tiebreak: higher score first
+                if a.builderScore != b.builderScore { return a.builderScore > b.builderScore }
+                return a.roleTitle < b.roleTitle
+
+            case .salary:
+                if a.salaryFloor != b.salaryFloor { return a.salaryFloor > b.salaryFloor }
+                // Tiebreak: higher score first
+                if a.builderScore != b.builderScore { return a.builderScore > b.builderScore }
+                return a.roleTitle < b.roleTitle
+            }
         }
     }
 

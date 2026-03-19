@@ -10,23 +10,13 @@ import SwiftUI
 struct PendingJobsListView: View {
     @EnvironmentObject var jobs: JobsViewModel
     @State private var selectedJob: JobPayload?
-    @State private var sortByNewest = false
-
-    private var sortedPending: [JobPayload] {
-        if sortByNewest {
-            return jobs.pendingJobs.sorted {
-                ($0.postedAt ?? .distantPast) > ($1.postedAt ?? .distantPast)
-            }
-        }
-        return jobs.pendingJobs // default: sorted by score
-    }
 
     var body: some View {
         Group {
             if jobs.pendingJobs.isEmpty {
                 emptyState
             } else {
-                List(sortedPending) { job in
+                List(jobs.visiblePendingJobs) { job in
                     Button {
                         selectedJob = job
                     } label: {
@@ -40,13 +30,20 @@ struct PendingJobsListView: View {
         .navigationTitle("In Queue")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    withAnimation(.spring(response: 0.3)) {
-                        sortByNewest.toggle()
+                Menu {
+                    ForEach(JobSortMode.allCases) { mode in
+                        Button {
+                            withAnimation(.spring(response: 0.3)) {
+                                jobs.sortMode = mode
+                            }
+                        } label: {
+                            Label(mode.rawValue, systemImage: mode.icon)
+                        }
                     }
                 } label: {
-                    Image(systemName: sortByNewest ? "clock.fill" : "tray.full.fill")
-                        .foregroundStyle(sortByNewest ? .orange : .blue)
+                    Label(jobs.sortMode.rawValue, systemImage: jobs.sortMode.icon)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(jobs.sortMode.tint)
                 }
             }
         }

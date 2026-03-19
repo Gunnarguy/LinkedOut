@@ -10,7 +10,6 @@ import UIKit
 
 struct CardStackView: View {
     @EnvironmentObject var jobs: JobsViewModel
-    @State private var sortByNewest = false
     @State private var showListView = false
     @State private var showFilters = false
     @State private var filters = JobFilters()
@@ -32,14 +31,11 @@ struct CardStackView: View {
         Array(Set(jobs.pendingJobs.map(\.sourceName))).sorted()
     }
 
-    /// Filtered + sorted pending jobs
+    /// Filtered + sorted pending jobs (sort handled by ViewModel)
     private var sortedPending: [JobPayload] {
         var result = jobs.visiblePendingJobs
         if filters.isActive {
             result = result.filter { filters.matches($0) }
-        }
-        if sortByNewest {
-            result.sort { ($0.postedAt ?? .distantPast) > ($1.postedAt ?? .distantPast) }
         }
         return result
     }
@@ -128,14 +124,21 @@ struct CardStackView: View {
                                     .offset(x: 6, y: -6)
                             }
                         }
-                        // Sort toggle
-                        Button {
-                            withAnimation(.spring(response: 0.3)) {
-                                sortByNewest.toggle()
+                        // Sort picker
+                        Menu {
+                            ForEach(JobSortMode.allCases) { mode in
+                                Button {
+                                    withAnimation(.spring(response: 0.3)) {
+                                        jobs.sortMode = mode
+                                    }
+                                } label: {
+                                    Label(mode.rawValue, systemImage: mode.icon)
+                                }
                             }
                         } label: {
-                            Image(systemName: sortByNewest ? "clock.fill" : "star.fill")
-                                .foregroundStyle(sortByNewest ? .orange : .blue)
+                            Label(jobs.sortMode.rawValue, systemImage: jobs.sortMode.icon)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(jobs.sortMode.tint)
                         }
 
                         if let stats = jobs.stats {

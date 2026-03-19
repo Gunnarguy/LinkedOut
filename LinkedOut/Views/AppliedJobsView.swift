@@ -276,18 +276,7 @@ struct JobListRow: View {
         VStack(alignment: .leading, spacing: 10) {
             // ── Row 1: Score + Title + Salary + NEW badge ──
             HStack(spacing: 14) {
-                if job.aiPitchSummary.lowercased().contains("local keyword") {
-                    Text("Unscored")
-                        .font(.system(size: 10, weight: .bold))
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 2)
-                        .background(.gray.opacity(0.2))
-                        .foregroundStyle(.secondary)
-                        .clipShape(Capsule())
-                        .frame(width: 48) // match ScoreRing size
-                } else {
-                    ScoreRing(score: job.builderScore, size: 48, lineWidth: 4.5)
-                }
+                ScoreRing(score: job.builderScore, size: 48, lineWidth: 4.5)
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {

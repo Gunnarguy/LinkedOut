@@ -42,17 +42,7 @@ struct JobCardView: View {
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 4) {
-                    if job.aiPitchSummary.lowercased().contains("local keyword") {
-                        Text("Unscored")
-                            .font(.caption2.weight(.bold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(.gray.opacity(0.2))
-                            .foregroundStyle(.secondary)
-                            .clipShape(Capsule())
-                    } else {
-                        ScoreRing(score: job.builderScore, size: 56, lineWidth: 5)
-                    }
+                    ScoreRing(score: job.builderScore, size: 56, lineWidth: 5)
 
                     if let pos = queuePosition {
                         Text(pos)
