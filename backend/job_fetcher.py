@@ -27,14 +27,18 @@ logger = logging.getLogger(__name__)
 # Search queries — tuned to Gunnar's real stack and interests
 SEARCH_QUERIES = [
     "AI engineer",
+    "junior AI engineer",
     "product engineer",
     "founding engineer",
     "iOS engineer",
+    "junior iOS engineer",
     "machine learning engineer",
     "RAG engineer",
     "LLM engineer",
     "AI startup",
     "mobile engineer",
+    "junior software engineer",
+    "entry level engineer",
     "developer tools AI",
     "generative AI",
     "software engineer startup",
@@ -44,6 +48,12 @@ SEARCH_QUERIES = [
     "on-device ML",
     "agent engineer",
     "embeddings search",
+    "junior developer remote",
+    "apprentice engineer",
+    "associate software engineer",
+    "self-taught developer",
+    "no degree engineer",
+    "portfolio-based hiring",
 ]
 
 TIMEOUT = httpx.Timeout(15.0, connect=10.0)

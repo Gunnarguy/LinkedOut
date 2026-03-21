@@ -214,13 +214,16 @@ or the profile below.
   "or equivalent projects", "or comparable portfolio" escape hatch. This is the
   #1 dealbreaker. If they REQUIRE a degree, period, you're out. But if they say
   "or equivalent" or "preferred" or don't mention it at all — that's fine.
-- Above "{max_seniority_level}" seniority (hierarchy: Junior < Mid < Senior < Any)
-- Requires 7+ years professional software engineering
-- Requires 5+ years with no flexibility language
+- Requires 10+ years professional software engineering (no flexibility)
 - Pure non-tech role (sales, marketing, HR, legal, finance, design-only)
 - Salary band explicitly entirely below ${min_salary}
 - Cultural red flags: "legacy codebase maintenance," "migrating monoliths," strict
   "ticket-taking" with no architectural input
+
+**IMPORTANT: Do NOT reject based on seniority level alone.** Many "Senior" and even
+"Staff" roles at startups are attainable with a strong portfolio and shipping velocity.
+Only reject if the description explicitly demands 7+ years at FAANG-tier companies
+with zero flexibility for non-traditional backgrounds.
 
 **IMPORTANT: All output text MUST use second person — "you/your", NEVER third person
 ("he/his/the candidate/the applicant"). You are speaking directly to the person.**
@@ -241,8 +244,15 @@ Your scores MUST follow this distribution for the post-triage pool:
 
 **Anchor at 0.55.** A typical post-triage job with an interesting mission, some AI
 relevance, but no explicit signal they welcome non-traditional builders = ~0.55.
-Adjust UP only for concrete evidence they'd want you specifically. Adjust DOWN
-for concrete friction (hard stack reqs, credential signals, convincing needed).
+Adjust UP for concrete evidence they'd want you (portfolio-first, builder culture,
+startup, no degree mentioned, small team). Adjust DOWN for concrete friction
+(hard stack reqs, credential signals, FAANG-tier gatekeeping).
+
+**IMPORTANT: Score with the mindset that this candidate is a relentless self-taught
+builder who learns fast and ships constantly.** Lack of professional experience is
+a FACT, not a death sentence. If the company seems like they'd value output over
+resumes, score generously. The candidate has 4 App Store apps, 758 commits, and
+6 shipped repos — that IS experience, just non-traditional.
 
 **The critical test for every score**: "Is this score based on something the listing
 ACTUALLY SAYS, or am I inferring enthusiasm that isn't there?"
@@ -264,23 +274,28 @@ ACTUALLY SAYS, or am I inferring enthusiasm that isn't there?"
 - Company explicitly values shipped products / portfolio-first: {portfolio_boost}
 
 **Experience Reality**:
-- "1-3 years" or "any": no penalty
-- "3-5 years professional": -0.05 (your published apps MAY count — FLAG it)
-- "5+ years" strictly enterprise/corporate SWE: HARD REJECT (passed_filter=false)
-- "5+ years" with flexibility: {experience_penalty} (FLAG)
+- "1-3 years" or "any" or "entry level": no penalty — these are ideal
+- "2-4 years" or "3-5 years": -0.03 (your shipped apps count as equivalent — FLAG but don't penalize hard)
+- "5+ years" with flexibility language ("or equivalent", "or strong portfolio"): {experience_penalty} (FLAG)
+- "5+ years" strictly enterprise/corporate SWE with zero flexibility: -0.15 (FLAG, don't hard reject)
+- "7+ years" with no flexibility: HARD REJECT (passed_filter=false)
 - "CS degree required" with NO escape hatch: HARD REJECT (passed_filter=false)
-- "CS degree preferred": -0.03 (FLAG — but don't reject)
-- "CS degree or equivalent experience": no penalty (this is fine)
-- "No degree required" / "we don't care about degrees": +0.08 (THIS IS WHAT YOU WANT)
-- Known elite/selective (FAANG, Jane Street): {credential_penalty}
-- Strict corporate environment/agile ("enterprise scale", "large teams"): -0.10
+- "CS degree preferred": -0.02 (FLAG — but many companies don't enforce "preferred")
+- "CS degree or equivalent experience": no penalty (this is fine — your apps ARE equivalent)
+- "No degree required" / "we don't care about degrees": +0.10 (THIS IS WHAT YOU WANT)
+- Known elite/selective (FAANG, Jane Street, quant): {credential_penalty}
+- Strict corporate environment/agile ("enterprise scale", "large teams"): -0.08
 
-**Non-Traditional / Portfolio-First Signals** (BOOST these — they're gold):
-- "No CS degree required" / "We value skills over credentials": +0.10
-- "Portfolio > resume" / "Show us what you've built": +0.10
-- "Non-traditional backgrounds welcome" / "Self-taught welcome": +0.10
-- "Equivalent experience" / "equivalent projects" in lieu of degree: +0.05
-- Company has <50 employees and no degree mentioned: +0.05
+**Non-Traditional / Portfolio-First Signals** (BOOST these HARD — they're gold):
+- "No CS degree required" / "We value skills over credentials": +0.12
+- "Portfolio > resume" / "Show us what you've built": +0.12
+- "Non-traditional backgrounds welcome" / "Self-taught welcome": +0.12
+- "Learn fast" / "scrappy" / "figure it out" / "wear many hats": +0.10
+- "Equivalent experience" / "equivalent projects" in lieu of degree: +0.08
+- Company has <50 employees and no degree mentioned: +0.08
+- Startup with no formal experience requirements listed: +0.06
+- "Hobby projects", "side projects", "passion projects" mentioned: +0.10
+- Role is explicitly entry-level, junior, or "no experience required": +0.08
 
 **Industry Multiplier**:
 - HealthTech / MedTech / Clinical AI: +0.08 (your Stryker/VA domain is a real differentiator)
@@ -432,13 +447,13 @@ Max seniority comfort level: {max_seniority_level}
 
 ## REJECT (dominated=false) ONLY if clearly true:
 - Requires on-site or hybrid attendance (must be 100% remote or highly autonomous)
-- Salary band explicitly entirely below $90,000
+- Salary band explicitly entirely below $70,000
 - Director, VP, C-suite, or Head-of title (executive-level only)
 - "Staff" or "Principal" with 10+ years required and no flexibility
 - **Requires CS/engineering degree with NO "or equivalent" / "or equivalent experience"**
   This is the #1 dealbreaker. If it says "requires CS degree" with no escape hatch, REJECT.
-- Requires 7+ years professional SWE experience with no flexibility
-- Explicitly demands "enterprise scale", "corporate experience", or "strict agile ceremonies" with 0 signal they welcome indie/hobbyist builders.
+- Requires 7+ years professional SWE experience with absolutely no flexibility
+- Explicitly demands "enterprise scale" + "10+ years" corporate experience
 - Hard requires a specific non-matching stack (Java, Go, C++, Rust) with NO signal
   they accept portfolio or fast learners
 - Pure non-tech (sales, marketing, HR, legal, finance, design-only)
@@ -447,8 +462,8 @@ Max seniority comfort level: {max_seniority_level}
 
 ## PASS (dominated=true) if ANY are true:
 - **"Senior" in title is NOT an automatic reject** — many senior roles accept strong
-  portfolios, non-traditional backgrounds, or 2-3 years equivalent. Only reject if the
-  description explicitly demands 7+ years or deeply specialized expertise with no flexibility.
+  portfolios, non-traditional backgrounds, or 2-3 years equivalent. PASS them.
+- **Any seniority level** — junior, mid, senior, unspecified. Let full scoring decide.
 - **Explicitly says "no CS degree required", "non-traditional welcome", or "portfolio-first"**
 - **Says "or equivalent experience" / "or equivalent projects" instead of hard degree req**
 - AI/ML roles (RAG, embeddings, agents, LLM tooling, GenAI)
@@ -462,6 +477,9 @@ Max seniority comfort level: {max_seniority_level}
 - Entry, junior, mid-level, or unspecified seniority
 - Hobby projects / side projects valued, portfolio reviews mentioned
 - Remote-first culture with async work style
+- "Learn fast", "scrappy", "self-starter", "figure it out"
+- Startup / seed / Series A — these rarely gatekeep on credentials
+- Role doesn't mention degree requirements at all (many don't = good sign)
 
 When in doubt, PASS. Let the full scoring engine make the final call.
 
@@ -578,11 +596,12 @@ async def score_job(
                 rejection_reason=reason,
             )
 
-        # Deflate score — LLMs over-score even with calibration instructions.
-        # Compress the 0.60-1.0 range by 15% toward 0.55 anchor.
+        # Light deflation — LLMs over-score slightly but we don't want to
+        # crush scores for a non-traditional builder who needs every edge.
+        # Compress the 0.65-1.0 range by 10% toward 0.60 anchor.
         raw_score = max(0.0, min(1.0, data.get("builder_score") or 0.0))
-        if raw_score > 0.55:
-            deflated = 0.55 + (raw_score - 0.55) * 0.78
+        if raw_score > 0.65:
+            deflated = 0.65 + (raw_score - 0.65) * 0.90
         else:
             deflated = raw_score
         final_score = round(max(0.0, min(1.0, deflated)), 2)

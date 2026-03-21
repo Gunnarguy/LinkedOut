@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     debug: bool = os.getenv("RENDER", "") == ""  # Auto-disable debug on Render
 
     # Job scoring defaults
-    min_salary: int = 90000
+    min_salary: int = 70000
     require_remote: bool = True
 
     # Notion integration
