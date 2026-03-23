@@ -209,6 +209,7 @@ You are writing directly TO the candidate — always use second person ("you/you
 - Salary band explicitly entirely below ${min_salary}
 - Zero-flexibility 10+ years legacy software engineering requirement
 - Role is exclusively about hand-writing low-level algorithms, data structures, or systems code with zero product/AI surface (e.g. pure compiler engineering, kernel dev, embedded C firmware)
+- Requires 5+ years professional software engineering experience with NO "or equivalent projects" escape hatch
 
 ## The Core Matching Question — READ THIS CAREFULLY
 
@@ -302,7 +303,9 @@ Your scores MUST reflect REALISTIC chance of getting hired, not aspirational fit
 - "Portfolio over resume" / "Show us what you've built": +0.15
 - "Non-traditional backgrounds welcome": +0.12
 - Company has <50 employees and values output: +0.08
-- "5+ years SWE" with no flexibility for non-traditional: -0.15
+- "3-5 years SWE" with no flexibility for non-traditional: -0.12
+- "5-7 years" experience required: -0.20 (almost certainly out of reach)
+- "8+ years" / "10+ years" experience required: -0.30 (HARD penalty — not realistic)
 - Known FAANG-tier credential culture: -0.12
 - Strict corporate "enterprise scale" / formal leveling: -0.10
 
@@ -423,7 +426,10 @@ Max seniority comfort level: {max_seniority_level}
 - "Staff" or "Principal" with 10+ years required and no flexibility
 - **Requires CS/engineering degree with NO "or equivalent" / "or equivalent experience"**
   This is the #1 dealbreaker. If it says "requires CS degree" with no escape hatch, REJECT.
-- Requires 7+ years professional SWE experience with absolutely no flexibility
+- **Requires 5+ years professional SWE/engineering experience** with no flexibility.
+  Look for patterns like "5+ years", "7+ years", "8-10 years", "10+ years".
+  If they say "5+ years" but also say "or equivalent project experience" → PASS.
+  If they just say "8-10 years of experience" with no flexibility → REJECT.
 - Explicitly demands "enterprise scale" + "10+ years" corporate experience
 - Hard requires a specific non-matching stack (Java, Go, C++, Rust) with NO signal
   they accept portfolio or fast learners
