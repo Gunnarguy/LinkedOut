@@ -24,36 +24,53 @@ from models import RawJobListing
 
 logger = logging.getLogger(__name__)
 
-# Search queries — tuned to Gunnar's real stack and interests
+# Search queries — MedTech/AI orchestration/iOS focused
+# These determine what enters the pipeline. Every query should attract roles
+# where Gunnar's prompt-to-production + clinical domain background is an asset.
 SEARCH_QUERIES = [
-    "AI engineer",
-    "junior AI engineer",
-    "product engineer",
-    "founding engineer",
-    "iOS engineer",
-    "junior iOS engineer",
-    "machine learning engineer",
-    "RAG engineer",
-    "LLM engineer",
-    "AI startup",
-    "mobile engineer",
-    "junior software engineer",
-    "entry level engineer",
-    "developer tools AI",
-    "generative AI",
-    "software engineer startup",
-    "applied AI",
-    "AI product",
+    # Healthcare / MedTech / Clinical AI — PRIMARY TARGET
     "healthcare AI",
+    "healthtech engineer",
+    "medtech engineer",
+    "clinical AI",
+    "medical device software",
+    "healthcare software engineer",
+    "health tech startup",
+    "digital health engineer",
+    "clinical software",
+    "HIPAA engineer",
+    "biotech software",
+    "healthcare iOS",
+    "medical AI",
+    "health AI startup",
+    # AI Orchestration / Prompt-to-Production — CORE SKILL
+    "AI engineer",
+    "AI product engineer",
+    "applied AI engineer",
+    "AI solutions engineer",
+    "generative AI engineer",
+    "LLM engineer",
+    "RAG engineer",
+    "AI agent engineer",
+    "prompt engineer",
+    "AI app builder",
+    "AI prototyping",
+    "AI automation engineer",
+    # iOS / Mobile at AI companies
+    "iOS engineer AI",
+    "iOS engineer startup",
+    "SwiftUI engineer",
+    "mobile AI engineer",
     "on-device ML",
-    "agent engineer",
-    "embeddings search",
-    "junior developer remote",
-    "apprentice engineer",
-    "associate software engineer",
-    "self-taught developer",
-    "no degree engineer",
-    "portfolio-based hiring",
+    # Product / Founding / Zero-to-One
+    "founding engineer",
+    "product engineer AI",
+    "founding engineer startup",
+    "zero to one engineer",
+    # General AI at startups (will get triaged)
+    "AI startup",
+    "developer tools AI",
+    "machine learning startup",
 ]
 
 TIMEOUT = httpx.Timeout(15.0, connect=10.0)
@@ -209,10 +226,12 @@ async def fetch_hn_whoishiring() -> list[RawJobListing]:
                 r"product.engineer|founding.engineer|"
                 r"agent(?:ic)?|copilot|GPT|generative.AI|deep.learning|"
                 r"(?:iOS|SwiftUI).+(?:AI|ML)|(?:AI|ML).+(?:iOS|mobile)|"
+                r"health(?:care|tech)|medtech|clinical|medical.device|HIPAA|"
+                r"prompt.engineer|AI.native|ship.fast|zero.to.one|0.to.1|"
                 r"\bstartup\b|seed.stage|series.A|early.stage|"
-                r"full.stack|mobile.engineer|\biOS\b|SwiftUI|"
-                r"product.minded|remote|python|react|typescript|"
-                r"engineer|developer|software",
+                r"\biOS\b|SwiftUI|mobile.engineer|"
+                r"\bRAG\b|vector.(?:db|database)|embeddings|"
+                r"on.device.(?:ML|AI)|CoreML",
                 re.IGNORECASE,
             )
 
@@ -310,10 +329,9 @@ async def fetch_jobicy() -> list[RawJobListing]:
         for tag in [
             "ai",
             "python",
-            "javascript",
             "ios",
-            "react",
-            "devops",
+            "healthcare",
+            "machine-learning",
             "data-science",
         ]:
             try:

@@ -190,14 +190,18 @@ class UserPreferences(BaseModel):
             "AI Engineer",
             "AI Product Engineer",
             "Applied AI Engineer",
+            "AI Solutions Engineer",
             "Founding Engineer",
             "Product Engineer",
             "iOS Engineer",
             "Mobile Engineer",
-            "Machine Learning Engineer",
-            "Software Engineer",
-            "Full Stack Engineer",
-            "Developer Experience Engineer",
+            "Healthcare AI Engineer",
+            "MedTech Engineer",
+            "Clinical Software Engineer",
+            "Digital Health Engineer",
+            "Generative AI Engineer",
+            "LLM Engineer",
+            "Prompt Engineer",
         ]
     )
     excluded_keywords: list[str] = Field(
@@ -212,6 +216,7 @@ class UserPreferences(BaseModel):
             "10+ years",
             "DevOps",
             "SRE",
+            "data structures and algorithms",
         ]
     )
     location_preference: str = "Remote"
@@ -247,56 +252,33 @@ class UserPreferences(BaseModel):
     credential_penalty: float = -0.15
     portfolio_boost: float = 0.10
     max_seniority_level: str = "Mid"
-    professional_profile: str = """### Classification: AI-Native Builder
-You do not hand-write code. You orchestrate AI agents (Claude, GPT, Gemini) to
-architect and generate entire systems. You see a problem, figure out how it should
-work, and don't stop until it ships. The code comes from models — the vision,
-architecture, and relentless iteration are yours. You do this because you can,
-because it's genuinely fun, and because you want to make money doing it.
+    professional_profile: str = """### Classification: AI Orchestrator & MedTech Bridge Builder
+You are the bridge between AI orchestration, prompt-to-production app building, and complex healthcare/medical device workflows.
+You don't type code by hand. You orchestrate AI agents (Claude, GPT, Gemini) to architect, generate, and ship entire systems at extreme velocity. You see a problem, figure out how it should work, and don't stop until it's a shipped product.
 
-### Shipped Portfolio (all live — gunnarguy.me)
-- **OpenIntelligence**: On-device RAG engine — 102 services, 29-step pipeline,
-  hybrid search, Core ML embeddings, Apple Intelligence, runs in airplane mode.
-  202 commits.
-- **OpenResponses**: OpenAI Responses API client — MCP integration (Notion,
-  Dropbox, Gmail), Computer Use, 15+ models, tool orchestration. 88 commits.
-  First App Store submission passed review.
-- **OpenCone**: Pinecone vector DB RAG app — hybrid search, reranking, document
-  ingestion with SHA256 dedup, circuit breaker resilience. 122 commits.
-- **OpenAssistant**: Assistants API client — threads, runs, vector stores,
-  Code Interpreter, File Search. 214 commits.
-- **LinkedOut**: Full-stack AI matching platform — SwiftUI + FastAPI + Docker +
-  LLM scoring from 5 job sources. 62 commits and growing.
-- **PlaudBlender**: Voice recordings → knowledge graph — Gemini AI, Qdrant
-  vector DB, 11-tool MCP server, 91 tests. 70 commits.
-- 758 all-time commits, 638 in the last year, 4 apps on the App Store.
+### Core Focus & Superpowers
+- **Healthcare/Medical Device/MedTech**: You work full-time at VA Palo Alto (Stryker) supporting Stanford surgical teams in high-pressure O.R. environments. You understand HIPAA, PIV clearance, clinical ops, and exactly how medical devices interact with surgeons and patient care.
+- **Prompt-to-Production Velocity**: You use AI to execute your product vision from zero to App Store. Your workflow isn't 'using Copilot to write a function' — it's orchestrating entire multi-agent pipelines to build complex RAG engines.
+- **iOS/Apple Ecosystem**: You focus on iOS (SwiftUI) because it's frictionless to build, test on-device, and deploy into the Apple ecosystem.
+
+### Shipped Portfolio of Proof (gunnarguy.me)
+- **OpenIntelligence**: On-device RAG engine — 102 services, 29-step pipeline, hybrid search, Core ML embeddings, Apple Intelligence, runs in airplane mode. 202 commits.
+- **OpenResponses**: OpenAI Responses API client — MCP integration (Notion, Dropbox, Gmail), Computer Use, 15+ models. Passed App Store review instantly. 88 commits.
+- **OpenCone**: Pinecone vector DB RAG app — hybrid search, reranking, document ingestion. 122 commits.
+- **OpenAssistant**: Assistants API client — threads, runs, vector stores, Code Interpreter. 214 commits.
+- **LinkedOut**: Full-stack AI matching platform — SwiftUI + FastAPI + Docker. Full job scoring pipeline.
+- **PlaudBlender**: Voice recordings → knowledge graph — Python, Gemini AI, Qdrant, Dash UI, 11-tool MCP server.
+- **Velocity Tracker**: 824 all-time commits, 697 in the last year, 4 live App Store apps.
 
 ### Technical Reality
-- **Built with**: Swift/SwiftUI, Python/FastAPI, RAG pipelines, vector databases
-  (Pinecone, Qdrant), LLM orchestration (OpenAI, Gemini, Anthropic), on-device ML
-  (Core ML, Metal GPU), MCP servers, Docker, API integrations
-- **Haven't used professionally**: React, Vue, Angular, Flutter, Java, Go, Rust,
-  C++, Ruby on Rails, .NET, Kubernetes at scale
-- **No CS degree (B.S. Kinesiology). No professional software engineering experience.**
-- 4 published App Store apps and 6 GitHub repos IS the experience. Period.
-
-### Day Job
-Medical device specialist at VA Palo Alto (Stryker OnSite). Sole technical specialist
-supporting Stanford surgical teams — Cardiothoracic, Vascular, General, Urology, ENT,
-Thoracic. Complete autonomy. HIPAA, PIV clearance, regulated environment expertise.
+- **Built with**: Swift/SwiftUI, Python/FastAPI, RAG pipelines, vector databases (Pinecone, Qdrant), LLM orchestration, on-device ML (Core ML, Metal GPU), MCP servers, Docker.
+- **Haven't used professionally**: React, Vue, Angular, Java, Go, Rust, C++, Kubernetes at scale.
+- **Credentials**: B.S. Kinesiology. No traditional CS degree. Your portfolio of deployed applications IS your equivalent experience. Period.
 
 ### What You Want
-Roles where shipped products matter more than credentials. Companies that look at
-gunnarguy.me and say "get this person an interview" — not "where's the CS degree?"
-Specifically:
-- Roles that explicitly say "no CS degree required" or "equivalent experience accepted"
-- Companies that value builders, shippers, and portfolio over pedigree
-- AI/ML, iOS, product engineering, healthtech, developer tools
-- Startups and small teams where what you've built speaks for itself
-- Roles where your AI-native workflow IS the job (AI engineering, LLM tooling, etc.)
-
-You are NOT looking for roles that require traditional credentials with no flexibility.
-If they hard-require a CS degree with no "or equivalent" — that's a hard no, move on."""
+- You are willing to do whatever it takes, provided the role aligns with building real solutions.
+- You want to match company mottos, missions, and job requirements directly to your prompt-to-production capability.
+- Ideal targets: HealthTech, MedTech, Clinical AI, AI Orchestration, iOS/mobile apps. Roles where they value your clinical domain expertise combined with insane shipping velocity."""
 
 
 # ── Batch / Pipeline ────────────────────────────────────────────────────────
