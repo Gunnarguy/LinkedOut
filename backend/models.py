@@ -254,7 +254,7 @@ class UserPreferences(BaseModel):
         return "Michigan"
 
     # ── Scoring Weights (adjustable from app) ──
-    score_cutoff: float = 0.50
+    score_cutoff: float = 0.40
     convincing_penalty: float = -0.20
     convincing_boost: float = 0.10
     nearby_penalty: float = -0.03
@@ -264,7 +264,7 @@ class UserPreferences(BaseModel):
     experience_penalty: float = -0.10
     credential_penalty: float = -0.15
     portfolio_boost: float = 0.10
-    max_seniority_level: str = "Mid"
+    max_seniority_level: str = "Senior"
     professional_profile: str = """### Classification: AI Orchestrator & MedTech Bridge Builder
 You are the bridge between AI orchestration, prompt-to-production app building, and complex healthcare/medical device workflows.
 You don't type code by hand. You orchestrate AI agents (Claude, GPT, Gemini) to architect, generate, and ship entire systems at extreme velocity. You see a problem, figure out how it should work, and don't stop until it's a shipped product.

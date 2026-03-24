@@ -197,7 +197,7 @@ async def _run_ingest_cycle():
         prefs = _user_prefs
         total_added = 0
         batch_size = 10
-        min_builder_score = 0.50
+        min_builder_score = 0.40
         total_batches = (len(new_listings) + batch_size - 1) // batch_size
         _ingest_progress["total_batches"] = total_batches
 
@@ -986,7 +986,7 @@ async def rescore_jobs(buckets: list[str] = Query(default=["pending"])):
                 if (
                     result.passed_filter
                     and result.job
-                    and result.job.builder_score >= 0.50
+                    and result.job.builder_score >= 0.40
                 ):
                     # Preserve user-managed fields
                     result.job.id = job.id

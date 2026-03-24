@@ -271,19 +271,23 @@ builds?" Specifically:
 ## Score Calibration — Realistic Matching
 
 Your scores MUST reflect REALISTIC chance of getting hired, not aspirational fit.
-Jobs below 0.50 will be REJECTED by the pipeline. Do not bother scoring carefully if
+Jobs below 0.40 will be REJECTED by the pipeline. Do not bother scoring carefully if
 the match is clearly poor — set passed_filter to false and reject early.
 
-- 0.85-1.0: **Rare (<3%)**. Healthcare + AI + they explicitly welcome non-traditional builders. Or the role literally describes building iOS AI apps with no degree requirement.
-- 0.70-0.84: **Strong (~10%)**. Heavy alignment in MedTech/Healthcare OR AI orchestration. Company signals they value shipping over credentials. Realistic hire.
-- 0.55-0.69: **Solid (~20%)**. Good alignment with meaningful friction. They might value the portfolio — real chance but not guaranteed.
-- 0.50-0.54: **Borderline (~15%)**. Worth showing but barely. Some alignment exists but significant gaps or unknowns.
-- Below 0.50: **REJECT**. Set passed_filter to false. No realistic path to getting hired. Don't waste the user's time.
+The industry IS shifting. Companies that build AI products, healthtech, and developer
+tools are actively hiring people who can orchestrate AI to ship fast. This candidate
+IS competitive for many of these roles. Score accordingly — don't be nihilistic.
+
+- 0.85-1.0: **Rare (<5%)**. Healthcare + AI + they explicitly welcome non-traditional builders. Or the role literally describes building iOS AI apps with no degree requirement.
+- 0.70-0.84: **Strong (~15%)**. Heavy alignment in MedTech/Healthcare OR AI orchestration. Company signals they value shipping over credentials. Realistic hire.
+- 0.55-0.69: **Solid (~25%)**. Good alignment with meaningful friction. They might value the portfolio — real chance but not guaranteed.
+- 0.40-0.54: **Borderline (~20%)**. Some alignment. Worth showing but with clear gaps. The user decides whether to pursue.
+- Below 0.40: **REJECT**. Set passed_filter to false. No realistic path to getting hired.
 
 **Anchor at 0.55.** A generic "Software Engineer" posting with no AI/health angle,
-unclear degree policy, and standard tech stack = NOT worth showing.
-The bar for entry is: "Would a hiring manager at this company actually call back someone
-with 0 years traditional SWE experience, no CS degree, but a killer portfolio of shipped AI apps?"
+unclear degree policy, and standard tech stack = 0.40-0.45.
+The bar for entry is: "Would a hiring manager at this company find a portfolio of
+4 shipped App Store apps and deep healthcare domain knowledge interesting?"
 If probably not → reject outright (passed_filter: false).
 
 ### Score Adjustments (apply on top of base assessment)
@@ -308,11 +312,11 @@ If probably not → reject outright (passed_filter: false).
 - "Portfolio over resume" / "Show us what you've built": +0.15
 - "Non-traditional backgrounds welcome": +0.12
 - Company has <50 employees and values output: +0.08
-- "3-5 years SWE" with no flexibility for non-traditional: -0.12
-- "5-7 years" experience required: -0.20 (almost certainly out of reach)
-- "8+ years" / "10+ years" experience required: -0.30 (HARD penalty — not realistic)
-- Known FAANG-tier credential culture: -0.12
-- Strict corporate "enterprise scale" / formal leveling: -0.10
+- "3-5 years SWE" (aspirational — most startups are flexible): -0.05
+- "5-7 years" experience required: -0.15 (real friction but not impossible)
+- "8+ years" / "10+ years" experience required: -0.25 (HARD penalty — probably out of reach)
+- Known FAANG-tier credential culture: -0.10
+- Strict corporate "enterprise scale" / formal leveling: -0.08
 
 ## Output Instructions — Facts Only
 
@@ -415,61 +419,52 @@ Return ONLY valid JSON:
 
 
 TRIAGE_PROMPT = """\
-You are a STRICT job-listing triage filter. Your job is to REJECT everything that
-isn't a genuinely plausible match. Quality over quantity — the user would rather see
-ZERO jobs than waste time on bad matches. Target a ~25-30% pass rate.
+You are a job-listing triage filter. Your job is to quickly separate plausible matches
+from obvious mismatches. Let borderline cases PASS — the full scorer will evaluate them
+carefully. Target a ~45-55% pass rate. When in doubt, PASS.
 
 ## Your snapshot
 {professional_profile}
-Home: {preferred_locations}. Wants 100% remote.
+Home: {preferred_locations}. Prefers remote.
 Max seniority comfort level: {max_seniority_level}
 
 ## EXCLUDED KEYWORDS — AUTO-REJECT on match:
 {excluded_keywords}
-If the job title or description prominently features any of the above, REJECT.
+If the job title prominently features any of the above, REJECT.
 
-## REJECT (dominated=false) if ANY are clearly true:
-- Requires on-site or hybrid attendance (must be 100% remote or highly autonomous)
-- Salary band explicitly entirely below $70,000
-- Director, VP, C-suite, or Head-of title (executive-level only)
-- "Staff" or "Principal" with 10+ years required and no flexibility
-- **Requires CS/engineering degree with NO "or equivalent" / "or equivalent experience"**
-  This is the #1 dealbreaker. If it says "requires CS degree" with no escape hatch, REJECT.
-- **Requires 5+ years professional SWE/engineering experience** with no flexibility.
-  Look for patterns like "5+ years", "7+ years", "8-10 years", "10+ years".
-  If they say "5+ years" but also say "or equivalent project experience" → PASS.
-  If they just say "8-10 years of experience" with no flexibility → REJECT.
-- Explicitly demands "enterprise scale" + "10+ years" corporate experience
-- Hard requires a specific non-matching stack (Java, Go, C++, Rust, Ruby, Shopify,
-  PHP, .NET, Scala, Kotlin) with NO signal they accept portfolio or fast learners
-- Pure non-tech (sales, marketing, HR, legal, finance, design-only)
-- Pure infra / DevOps / SRE / platform ops / site reliability with no product surface
-- Pure backend API role in a stack the candidate doesn't use (Java/Spring, Ruby/Rails,
-  Go microservices, .NET/C#) — these are not learnable-via-AI in weeks
-- E-commerce platform specialist (Shopify, Magento, WooCommerce, BigCommerce)
+## HARD REJECT (dominated=false) — only if CLEARLY true:
+- Pure non-tech role (sales, marketing, HR, legal, finance, design-only)
+- Pure infra / DevOps / SRE / platform ops with NO product or AI surface
+- IT Support / Helpdesk / SysAdmin with no software building component
+- E-commerce platform specialist (Shopify, Magento, WooCommerce)
 - WordPress / PHP / Drupal development
-- Pure data engineering (Spark, dbt, Airflow, data pipelines) with no AI/ML surface
 - QA / Test Automation / SDET roles
-- IT Support / Helpdesk / SysAdmin roles
-- Cybersecurity / Penetration Testing / SOC roles (unless building AI security tools)
-- Geographic restriction to a country outside the US (e.g. "Germany only", "UK only")
-- The role is fundamentally about maintaining/operating existing systems rather than building new ones
+- Director, VP, C-suite, Head-of title (executive-level)
+- Requires 8+ years professional SWE experience with NO flexibility or "equivalent" escape
+- Requires CS/engineering degree with NO "or equivalent experience" escape hatch
+- Hard requires a non-matching stack (Java, Go, C++, Rust, Ruby, .NET, Scala) with
+  ZERO signal they accept portfolio, fast learners, or AI-assisted development
+- Salary band explicitly entirely below $70,000
+- Geographic restriction to outside the US (e.g. "Germany only", "UK only", "EU only")
 
-## PASS (dominated=true) ONLY if the role has genuine alignment:
-- **"Healthcare", "MedTech", "Clinical", "Surgical"** — PASS these if they involve building software.
-- **"iOS", "SwiftUI", "Mobile"** at an AI or Healthcare company.
-- **AI/ML roles** (RAG, embeddings, agents, LLM tooling, GenAI, AI orchestration) that don't require deep ML research PhDs
-- Founding / first engineer at startups (<50 people) building AI or Healthcare products
-- Healthcare AI / MedTech / clinical technology
-- Developer tools and AI platforms where the work IS building AI-powered products
-- Mentions "rapid iteration", "zero-to-one", "autonomy", "AI-native", "prompt interface"
-- Portfolio-first / non-traditional-welcome signals
-- Explicitly values shipping velocity over credentials
-- "Senior" in title is NOT an automatic reject IF the company shows builder-culture signals
+## PASS (dominated=true) — any of these signals = let it through:
+- **Healthcare / MedTech / Clinical / Surgical / HIPAA** — always pass if building software
+- **AI / ML / LLM / RAG / Agents / GenAI / AI orchestration** — the core skill match
+- **iOS / SwiftUI / Mobile** at any company doing interesting work
+- **Founding / first / early engineer** at startups
+- **Product engineer** roles at companies building AI or health products
+- "Rapid iteration", "zero-to-one", "autonomy", "AI-native", "ship fast"
+- "Non-traditional backgrounds", "portfolio over resume", "show us what you built"
+- Startup or small company (<200 people) building something the candidate could contribute to
+- Python / FastAPI / Docker mentioned alongside AI or product building
+- "Senior" title is FINE — many AI roles are titled Senior even for 2-3 year practitioners
+- "3-5 years experience" is NOT a hard reject — many companies treat portfolio as equivalent
+- If the role touches AI in any meaningful way and isn't exclusively a different tech stack → PASS
 
-## The critical question: "Would they realistically hire someone with 0 years traditional SWE
-experience, no CS degree, but 4 shipped App Store apps and deep healthcare domain knowledge?"
-If the answer is probably NO → REJECT. Don't waste the user's time.
+## Key context: The job market IS shifting. Companies are actively hiring AI-native builders
+who orchestrate LLMs to ship products. Roles like "AI Engineer", "Applied AI", "AI Solutions
+Engineer", "Product Engineer" at AI companies — these are EXACTLY what this candidate does.
+Don't over-filter. Let the full scorer make the nuanced call.
 
 Return ONLY valid JSON:
 {{"dominated": true/false, "reason": "one sentence why"}}
@@ -486,41 +481,15 @@ async def triage_job(raw: RawJobListing, prefs: UserPreferences | None = None) -
         else "Kalamazoo, Michigan"
     )
 
-    # ── Programmatic pre-triage: check excluded keywords before LLM ────
+    # ── Programmatic pre-triage: check excluded keywords in TITLE only ────
     title_lower = raw.title.lower()
-    desc_lower = raw.description[:3000].lower()
     for kw in prefs.excluded_keywords:
         kw_lower = kw.lower()
-        # Check title first (strongest signal)
         if kw_lower in title_lower:
             logger.info(
                 f"[TRIAGE] PRE-REJECT (title match '{kw}') | {raw.title} @ {raw.company}"
             )
             return False
-        # Check description only for strong keyword matches (avoid false positives)
-        if len(kw_lower) > 4 and kw_lower in desc_lower:
-            # Allow if the keyword appears only in a "nice to have" or "bonus" context
-            # But reject for prominent/title-level keywords
-            if kw_lower in ("devops", "sre", "leetcode", "whiteboard"):
-                # These specific keywords in description body = strong reject signal
-                # Check if they seem like a CORE requirement vs. nice-to-have
-                for line in raw.description[:3000].split("\n"):
-                    line_lower = line.lower()
-                    if kw_lower in line_lower and any(
-                        w in line_lower
-                        for w in [
-                            "require",
-                            "must",
-                            "core",
-                            "primary",
-                            "role is",
-                            "title:",
-                        ]
-                    ):
-                        logger.info(
-                            f"[TRIAGE] PRE-REJECT (desc requirement '{kw}') | {raw.title} @ {raw.company}"
-                        )
-                        return False
 
     excluded_keywords_formatted = ", ".join(prefs.excluded_keywords)
     triage_sys = TRIAGE_PROMPT.replace("{professional_profile}", prefs.professional_profile)
@@ -542,9 +511,9 @@ async def triage_job(raw: RawJobListing, prefs: UserPreferences | None = None) -
         return passed
     except Exception as e:
         logger.warning(
-            f"[TRIAGE] ERROR for {raw.title} @ {raw.company}: {type(e).__name__}: {e or '(empty)'} — REJECTING (strict mode)"
+            f"[TRIAGE] ERROR for {raw.title} @ {raw.company}: {type(e).__name__}: {e or '(empty)'} — PASSING to full scorer"
         )
-        return False  # Strict: reject on error instead of letting garbage through
+        return True  # On error, let full scoring evaluate (don't silently kill listings)
 
 
 async def score_job(
@@ -625,15 +594,15 @@ async def score_job(
                 rejection_reason=reason,
             )
 
-        # Deflation — LLMs consistently over-score by 15-25%.
-        # Stronger compression: anchor at 0.50, compress everything above.
+        # Deflation — LLMs consistently over-score by 10-20%.
+        # Mild compression: keeps relative ordering while grounding scores.
         raw_score = max(0.0, min(1.0, data.get("builder_score") or 0.0))
         if raw_score > 0.60:
-            # Compress the 0.60-1.0 range by 20% toward 0.55 anchor
-            deflated = 0.60 + (raw_score - 0.60) * 0.80
+            # Compress the 0.60-1.0 range by 15% toward 0.55 anchor
+            deflated = 0.60 + (raw_score - 0.60) * 0.85
         elif raw_score > 0.40:
-            # Mild compression in the middle range
-            deflated = 0.40 + (raw_score - 0.40) * 0.90
+            # Very mild compression in the middle range
+            deflated = 0.40 + (raw_score - 0.40) * 0.95
         else:
             deflated = raw_score
         final_score = round(max(0.0, min(1.0, deflated)), 2)
@@ -654,18 +623,10 @@ async def score_job(
             "system administrator",
             "network engineer",
             "network admin",
-            "data analyst",
-            "business analyst",
             "scrum master",
-            "project manager",
-            "product manager",
-            "ux designer",
-            "graphic designer",
             "copywriter",
             "content writer",
-            "sales engineer",
             "account executive",
-            "customer success",
             "recruiter",
             "human resources",
         ]

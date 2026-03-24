@@ -43,6 +43,9 @@ SEARCH_QUERIES = [
     "healthcare iOS",
     "medical AI",
     "health AI startup",
+    "healthcare technology",
+    "health informatics",
+    "clinical data",
     # AI Orchestration / Prompt-to-Production — CORE SKILL
     "AI engineer",
     "AI product engineer",
@@ -56,21 +59,39 @@ SEARCH_QUERIES = [
     "AI app builder",
     "AI prototyping",
     "AI automation engineer",
+    "AI implementation",
+    "AI integration engineer",
+    "AI application developer",
+    "AI tools engineer",
+    "agentic AI",
+    "AI workflow",
+    "conversational AI",
     # iOS / Mobile at AI companies
     "iOS engineer AI",
     "iOS engineer startup",
     "SwiftUI engineer",
     "mobile AI engineer",
     "on-device ML",
-    # Product / Founding / Zero-to-One
+    "iOS developer remote",
+    "mobile engineer startup",
+    # Product / Founding / Zero-to-One — builder culture
     "founding engineer",
     "product engineer AI",
     "founding engineer startup",
     "zero to one engineer",
-    # General AI at startups (will get triaged)
+    "full stack engineer AI",
+    "startup engineer",
+    "early stage engineer",
+    "first engineer",
+    # General AI + emerging roles
     "AI startup",
     "developer tools AI",
     "machine learning startup",
+    "AI developer",
+    "AI native",
+    "no degree engineer",
+    "technical AI",
+    "AI platform engineer",
 ]
 
 TIMEOUT = httpx.Timeout(15.0, connect=10.0)
@@ -333,6 +354,11 @@ async def fetch_jobicy() -> list[RawJobListing]:
             "healthcare",
             "machine-learning",
             "data-science",
+            "startup",
+            "product",
+            "mobile",
+            "swift",
+            "medical",
         ]:
             try:
                 resp = await client.get(
