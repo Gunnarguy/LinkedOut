@@ -13,11 +13,14 @@ struct ContentView: View {
     @State private var showOnboarding = false
 
     var body: some View {
-        Group {
-            if auth.isAuthenticated {
-                MainTabView()
-            } else {
+        ZStack {
+            MainTabView()
+                .opacity(auth.isAuthenticated ? 1 : 0)
+                .allowsHitTesting(auth.isAuthenticated)
+
+            if !auth.isAuthenticated {
                 LoginView()
+                    .transition(.opacity)
             }
         }
         .animation(.easeInOut, value: auth.isAuthenticated)

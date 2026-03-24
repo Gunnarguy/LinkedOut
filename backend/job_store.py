@@ -18,7 +18,7 @@ SEEN_FILE = DATA_DIR / "seen_urls.json"
 
 # Jobs scoring at or above this threshold are "high salience" and
 # protected from age-based expiry.  They clearly describe *you*.
-HIGH_SALIENCE_THRESHOLD = 0.60
+HIGH_SALIENCE_THRESHOLD = 0.65
 
 
 class JobStore:

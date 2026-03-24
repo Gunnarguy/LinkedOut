@@ -197,7 +197,7 @@ async def _run_ingest_cycle():
         prefs = _user_prefs
         total_added = 0
         batch_size = 10
-        min_builder_score = 0.20
+        min_builder_score = 0.50
         total_batches = (len(new_listings) + batch_size - 1) // batch_size
         _ingest_progress["total_batches"] = total_batches
 
@@ -983,7 +983,11 @@ async def rescore_jobs(buckets: list[str] = Query(default=["pending"])):
                     is_remote=job.is_remote,
                 )
                 result = await score_job(raw, prefs)
-                if result.passed_filter and result.job:
+                if (
+                    result.passed_filter
+                    and result.job
+                    and result.job.builder_score >= 0.50
+                ):
                     # Preserve user-managed fields
                     result.job.id = job.id
                     result.job.notes = job.notes
@@ -996,9 +1000,16 @@ async def rescore_jobs(buckets: list[str] = Query(default=["pending"])):
                         f"score={result.job.builder_score:.2f}"
                     )
                 else:
+                    # Evict jobs that no longer pass — don't keep garbage forever
+                    reason = result.rejection_reason or (
+                        f"score={result.job.builder_score:.2f}"
+                        if result.job
+                        else "triage_rejected"
+                    )
+                    store.move_to_bucket(job.id, "rejected")
                     logger.info(
-                        f"[RESCORE] {job.role_title} @ {job.company_name} "
-                        f"— kept existing (LLM rejected on rescore)"
+                        f"[RESCORE] EVICTED {job.role_title} @ {job.company_name} "
+                        f"— {reason}"
                     )
             except Exception as e:
                 _rescore_progress["errors"] += 1

@@ -217,6 +217,19 @@ class UserPreferences(BaseModel):
             "DevOps",
             "SRE",
             "data structures and algorithms",
+            "Shopify",
+            "Magento",
+            "WordPress",
+            "PHP",
+            "Ruby on Rails",
+            ".NET",
+            "C#",
+            "IT Support",
+            "Helpdesk",
+            "SysAdmin",
+            "QA Engineer",
+            "SDET",
+            "Penetration Testing",
         ]
     )
     location_preference: str = "Remote"
@@ -241,7 +254,7 @@ class UserPreferences(BaseModel):
         return "Michigan"
 
     # ── Scoring Weights (adjustable from app) ──
-    score_cutoff: float = 0.35
+    score_cutoff: float = 0.50
     convincing_penalty: float = -0.20
     convincing_boost: float = 0.10
     nearby_penalty: float = -0.03

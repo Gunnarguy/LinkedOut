@@ -437,10 +437,11 @@ class JobsViewModel: ObservableObject {
 
     func refreshAll() async {
         print("[VM] refreshAll — reloading all lists + stats")
-        await loadPendingJobs()
-        await loadAppliedJobs()
-        await loadSavedJobs()
-        await loadStats()
+        async let p: () = loadPendingJobs()
+        async let a: () = loadAppliedJobs()
+        async let s: () = loadSavedJobs()
+        async let st: () = loadStats()
+        _ = await (p, a, s, st)
     }
 
     /// Trigger a fresh job ingest cycle from APIs → LLM scoring → queue

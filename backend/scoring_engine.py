@@ -270,16 +270,21 @@ builds?" Specifically:
 
 ## Score Calibration — Realistic Matching
 
-Your scores MUST reflect REALISTIC chance of getting hired, not aspirational fit:
-- 0.85-1.0: **Rare (<5%)**. Healthcare + AI + they explicitly welcome non-traditional builders. Or the role literally describes building iOS AI apps with no degree requirement.
-- 0.70-0.84: **Strong (~15%)**. Heavy alignment in MedTech/Healthcare OR AI orchestration. Company signals they value shipping over credentials. Realistic hire.
-- 0.55-0.69: **Decent (~30%)**. Interesting role with some friction. They might value the portfolio but there are unknowns (unstated degree policy, unfamiliar-but-learnable stack).
-- 0.40-0.54: **Stretch (~30%)**. Real gaps. They want traditional SWE signals this candidate doesn't have, OR the stack is far from Swift/Python/AI.
-- Below {score_cutoff}: **Reject (~20%)**. No realistic path to getting hired. Heavy credential gatekeeping, wrong domain entirely, or pure hand-coding culture.
+Your scores MUST reflect REALISTIC chance of getting hired, not aspirational fit.
+Jobs below 0.50 will be REJECTED by the pipeline. Do not bother scoring carefully if
+the match is clearly poor — set passed_filter to false and reject early.
 
-**Anchor at 0.50.** This is NOT generous — it's realistic. A generic "Software Engineer" posting with no AI/health angle, unclear degree policy, and standard tech stack = 0.50. Adjust from there based on concrete signals in the listing.
+- 0.85-1.0: **Rare (<3%)**. Healthcare + AI + they explicitly welcome non-traditional builders. Or the role literally describes building iOS AI apps with no degree requirement.
+- 0.70-0.84: **Strong (~10%)**. Heavy alignment in MedTech/Healthcare OR AI orchestration. Company signals they value shipping over credentials. Realistic hire.
+- 0.55-0.69: **Solid (~20%)**. Good alignment with meaningful friction. They might value the portfolio — real chance but not guaranteed.
+- 0.50-0.54: **Borderline (~15%)**. Worth showing but barely. Some alignment exists but significant gaps or unknowns.
+- Below 0.50: **REJECT**. Set passed_filter to false. No realistic path to getting hired. Don't waste the user's time.
 
-**The test for every score**: "If this candidate applied with gunnarguy.me as their portfolio and their Stryker/VA background, would this company's hiring manager actually want to talk to them?"
+**Anchor at 0.55.** A generic "Software Engineer" posting with no AI/health angle,
+unclear degree policy, and standard tech stack = NOT worth showing.
+The bar for entry is: "Would a hiring manager at this company actually call back someone
+with 0 years traditional SWE experience, no CS degree, but a killer portfolio of shipped AI apps?"
+If probably not → reject outright (passed_filter: false).
 
 ### Score Adjustments (apply on top of base assessment)
 
@@ -410,16 +415,20 @@ Return ONLY valid JSON:
 
 
 TRIAGE_PROMPT = """\
-You are a fast job-listing triage filter. Your job is to PASS jobs that have
-any reasonable chance of being a good fit, and only reject clear mismatches.
-Target a ~60% pass rate — let borderline jobs through for full scoring.
+You are a STRICT job-listing triage filter. Your job is to REJECT everything that
+isn't a genuinely plausible match. Quality over quantity — the user would rather see
+ZERO jobs than waste time on bad matches. Target a ~25-30% pass rate.
 
 ## Your snapshot
 {professional_profile}
 Home: {preferred_locations}. Wants 100% remote.
 Max seniority comfort level: {max_seniority_level}
 
-## REJECT (dominated=false) ONLY if clearly true:
+## EXCLUDED KEYWORDS — AUTO-REJECT on match:
+{excluded_keywords}
+If the job title or description prominently features any of the above, REJECT.
+
+## REJECT (dominated=false) if ANY are clearly true:
 - Requires on-site or hybrid attendance (must be 100% remote or highly autonomous)
 - Salary band explicitly entirely below $70,000
 - Director, VP, C-suite, or Head-of title (executive-level only)
@@ -431,32 +440,36 @@ Max seniority comfort level: {max_seniority_level}
   If they say "5+ years" but also say "or equivalent project experience" → PASS.
   If they just say "8-10 years of experience" with no flexibility → REJECT.
 - Explicitly demands "enterprise scale" + "10+ years" corporate experience
-- Hard requires a specific non-matching stack (Java, Go, C++, Rust) with NO signal
-  they accept portfolio or fast learners
+- Hard requires a specific non-matching stack (Java, Go, C++, Rust, Ruby, Shopify,
+  PHP, .NET, Scala, Kotlin) with NO signal they accept portfolio or fast learners
 - Pure non-tech (sales, marketing, HR, legal, finance, design-only)
-- Pure infra / DevOps / SRE with no product surface at all
+- Pure infra / DevOps / SRE / platform ops / site reliability with no product surface
+- Pure backend API role in a stack the candidate doesn't use (Java/Spring, Ruby/Rails,
+  Go microservices, .NET/C#) — these are not learnable-via-AI in weeks
+- E-commerce platform specialist (Shopify, Magento, WooCommerce, BigCommerce)
+- WordPress / PHP / Drupal development
+- Pure data engineering (Spark, dbt, Airflow, data pipelines) with no AI/ML surface
+- QA / Test Automation / SDET roles
+- IT Support / Helpdesk / SysAdmin roles
+- Cybersecurity / Penetration Testing / SOC roles (unless building AI security tools)
+- Geographic restriction to a country outside the US (e.g. "Germany only", "UK only")
+- The role is fundamentally about maintaining/operating existing systems rather than building new ones
 
-## PASS (dominated=true) if ANY are true:
-- **"Healthcare", "MedTech", "Clinical", "Surgical"** — PASS these instantly if they involve building software.
+## PASS (dominated=true) ONLY if the role has genuine alignment:
+- **"Healthcare", "MedTech", "Clinical", "Surgical"** — PASS these if they involve building software.
 - **"iOS", "SwiftUI", "Mobile"** at an AI or Healthcare company.
-- **"Senior" in title is NOT an automatic reject** — many senior roles accept strong
-  portfolios, non-traditional backgrounds, or 2-3 years equivalent. PASS them.
-- **Any seniority level** — junior, mid, senior, unspecified. Let full scoring decide.
-- **Explicitly says "no CS degree required", "non-traditional welcome", or "portfolio-first"**
-- **Says "or equivalent experience" / "or equivalent projects" instead of hard degree req**
-- AI/ML roles (RAG, embeddings, agents, LLM tooling, GenAI, AI orchestration)
-- Founding / first engineer at startups (<50 people)
+- **AI/ML roles** (RAG, embeddings, agents, LLM tooling, GenAI, AI orchestration) that don't require deep ML research PhDs
+- Founding / first engineer at startups (<50 people) building AI or Healthcare products
 - Healthcare AI / MedTech / clinical technology
-- Developer tools, AI platforms, developer experience roles
-- Mentions "rapid iteration," "zero-to-one," "autonomy," "AI-native", "prompt interface"
-- Entry, junior, mid-level, or unspecified seniority
-- Hobby projects / side projects valued, portfolio reviews mentioned
-- Remote-first culture with async work style
-- "Learn fast", "scrappy", "self-starter", "figure it out"
-- Startup / seed / Series A — these rarely gatekeep on credentials
-- Role doesn't mention degree requirements at all (many don't = good sign)
+- Developer tools and AI platforms where the work IS building AI-powered products
+- Mentions "rapid iteration", "zero-to-one", "autonomy", "AI-native", "prompt interface"
+- Portfolio-first / non-traditional-welcome signals
+- Explicitly values shipping velocity over credentials
+- "Senior" in title is NOT an automatic reject IF the company shows builder-culture signals
 
-When in doubt, PASS. Let the full scoring engine make the final call.
+## The critical question: "Would they realistically hire someone with 0 years traditional SWE
+experience, no CS degree, but 4 shipped App Store apps and deep healthcare domain knowledge?"
+If the answer is probably NO → REJECT. Don't waste the user's time.
 
 Return ONLY valid JSON:
 {{"dominated": true/false, "reason": "one sentence why"}}
@@ -472,8 +485,47 @@ async def triage_job(raw: RawJobListing, prefs: UserPreferences | None = None) -
         if prefs.preferred_locations
         else "Kalamazoo, Michigan"
     )
+
+    # ── Programmatic pre-triage: check excluded keywords before LLM ────
+    title_lower = raw.title.lower()
+    desc_lower = raw.description[:3000].lower()
+    for kw in prefs.excluded_keywords:
+        kw_lower = kw.lower()
+        # Check title first (strongest signal)
+        if kw_lower in title_lower:
+            logger.info(
+                f"[TRIAGE] PRE-REJECT (title match '{kw}') | {raw.title} @ {raw.company}"
+            )
+            return False
+        # Check description only for strong keyword matches (avoid false positives)
+        if len(kw_lower) > 4 and kw_lower in desc_lower:
+            # Allow if the keyword appears only in a "nice to have" or "bonus" context
+            # But reject for prominent/title-level keywords
+            if kw_lower in ("devops", "sre", "leetcode", "whiteboard"):
+                # These specific keywords in description body = strong reject signal
+                # Check if they seem like a CORE requirement vs. nice-to-have
+                for line in raw.description[:3000].split("\n"):
+                    line_lower = line.lower()
+                    if kw_lower in line_lower and any(
+                        w in line_lower
+                        for w in [
+                            "require",
+                            "must",
+                            "core",
+                            "primary",
+                            "role is",
+                            "title:",
+                        ]
+                    ):
+                        logger.info(
+                            f"[TRIAGE] PRE-REJECT (desc requirement '{kw}') | {raw.title} @ {raw.company}"
+                        )
+                        return False
+
+    excluded_keywords_formatted = ", ".join(prefs.excluded_keywords)
     triage_sys = TRIAGE_PROMPT.replace("{professional_profile}", prefs.professional_profile)
     triage_sys = triage_sys.replace("{preferred_locations}", locations_formatted)
+    triage_sys = triage_sys.replace("{excluded_keywords}", excluded_keywords_formatted)
     triage_sys = triage_sys.replace(
         "{max_seniority_level}", prefs.max_seniority_level or "Senior"
     )
@@ -489,8 +541,10 @@ async def triage_job(raw: RawJobListing, prefs: UserPreferences | None = None) -
         logger.info(f"[TRIAGE] {'PASS' if passed else 'FAIL'} | {raw.title} @ {raw.company} | {reason}")
         return passed
     except Exception as e:
-        logger.warning(f"[TRIAGE] ERROR for {raw.title} @ {raw.company}: {type(e).__name__}: {e or '(empty)'} — letting through")
-        return True
+        logger.warning(
+            f"[TRIAGE] ERROR for {raw.title} @ {raw.company}: {type(e).__name__}: {e or '(empty)'} — REJECTING (strict mode)"
+        )
+        return False  # Strict: reject on error instead of letting garbage through
 
 
 async def score_job(
@@ -571,15 +625,59 @@ async def score_job(
                 rejection_reason=reason,
             )
 
-        # Light deflation — LLMs over-score slightly but we don't want to
-        # crush scores for a non-traditional builder who needs every edge.
-        # Compress the 0.65-1.0 range by 10% toward 0.60 anchor.
+        # Deflation — LLMs consistently over-score by 15-25%.
+        # Stronger compression: anchor at 0.50, compress everything above.
         raw_score = max(0.0, min(1.0, data.get("builder_score") or 0.0))
-        if raw_score > 0.65:
-            deflated = 0.65 + (raw_score - 0.65) * 0.90
+        if raw_score > 0.60:
+            # Compress the 0.60-1.0 range by 20% toward 0.55 anchor
+            deflated = 0.60 + (raw_score - 0.60) * 0.80
+        elif raw_score > 0.40:
+            # Mild compression in the middle range
+            deflated = 0.40 + (raw_score - 0.40) * 0.90
         else:
             deflated = raw_score
         final_score = round(max(0.0, min(1.0, deflated)), 2)
+
+        # ── Post-score programmatic safety net ────────────────────────
+        # Even if the LLM scored it, catch obvious mismatches
+        role_title = (data.get("role_title") or raw.title or "").lower()
+        poison_titles = [
+            "shopify",
+            "magento",
+            "wordpress",
+            "drupal",
+            "php",
+            "it support",
+            "helpdesk",
+            "help desk",
+            "sysadmin",
+            "system administrator",
+            "network engineer",
+            "network admin",
+            "data analyst",
+            "business analyst",
+            "scrum master",
+            "project manager",
+            "product manager",
+            "ux designer",
+            "graphic designer",
+            "copywriter",
+            "content writer",
+            "sales engineer",
+            "account executive",
+            "customer success",
+            "recruiter",
+            "human resources",
+        ]
+        for poison in poison_titles:
+            if poison in role_title:
+                logger.info(
+                    f"[SCORE] POST-REJECT (poison title '{poison}') | {raw.title} @ {raw.company}"
+                )
+                return ScoringResult(
+                    passed_filter=False,
+                    rejection_reason=f"Poison title match: {poison}",
+                )
 
         job = JobPayload(
             company_name=data.get("company_name", raw.company),
