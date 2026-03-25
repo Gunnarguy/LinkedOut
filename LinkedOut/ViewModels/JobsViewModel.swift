@@ -496,6 +496,9 @@ class JobsViewModel: ObservableObject {
             let kickoff = try await APIClient.shared.refreshIngest()
             print("[VM] ingestNewJobs — kickoff status=\(kickoff.status ?? "nil")")
 
+            let startingPendingCount = pendingJobs.count
+            var lastObservedPendingCount = pendingJobs.count
+
             // Poll for completion — use cycle_active to detect ongoing periodic ingest too
             ingestProgress = "Scanning & scoring with AI..."
             var pollCount = 0
@@ -506,6 +509,17 @@ class JobsViewModel: ObservableObject {
 
                 let status = try await APIClient.shared.fetchIngestStatus()
                 let stillActive = status.manualRunning || (status.cycleActive ?? false)
+
+                if status.store.pending > lastObservedPendingCount {
+                    print("[VM] ingestNewJobs — pending grew \(lastObservedPendingCount) → \(status.store.pending), live-refreshing queue")
+                    let fetchedPending = try await APIClient.shared.fetchPendingJobs()
+                    pendingJobs = fetchedPending
+                    Self.writeCache("pending", jobs: pendingJobs)
+                    stats = status.store
+                    lastObservedPendingCount = pendingJobs.count
+                    let newCount = max(pendingJobs.count - startingPendingCount, 0)
+                    print("[VM] ingestNewJobs — live queue now has \(pendingJobs.count) jobs (\(newCount) new this run)")
+                }
 
                 // Pull live telemetry during ingest for console visibility
                 if pollCount % 3 == 0 { // Every ~6s
@@ -518,6 +532,7 @@ class JobsViewModel: ObservableObject {
                     print("[VM] ingestNewJobs — done after \(pollCount) polls, ingested=\(ingested)")
                     ingestProgress = "Loading results..."
                     pendingJobs = try await APIClient.shared.fetchPendingJobs()
+                    Self.writeCache("pending", jobs: pendingJobs)
                     print("[VM] ingestNewJobs — pending queue now has \(pendingJobs.count) jobs")
                     await loadStats()
 
@@ -549,7 +564,8 @@ class JobsViewModel: ObservableObject {
                         } else {
                             detail = "Scoring batch \(p.batch)/\(p.totalBatches)"
                         }
-                        ingestProgress = "\(detail) — \(p.queued) queued so far"
+                        let liveAdded = max(status.store.pending - startingPendingCount, 0)
+                        ingestProgress = "\(detail) — \(p.queued) queued so far, \(liveAdded) live"
                     } else if p.phase == "fetching" {
                         ingestProgress = "Fetching from job boards…"
                     } else if p.phase == "deduping" {
