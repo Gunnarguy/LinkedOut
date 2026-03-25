@@ -271,6 +271,14 @@ class JobsViewModel: ObservableObject {
         } else {
             lines.append("│ ⚙️ Ingest: \(p.phase.uppercased())  \(lockIcon)  batch \(p.batch)/\(p.totalBatches)")
             lines.append("│    fetched=\(p.fetched) new=\(p.newAfterDedup) scored=\(p.scored) queued=\(p.queued) rejected=\(p.rejected) low=\(p.lowScore) err=\(p.errors)")
+            if let stage = p.currentStage,
+               let item = p.currentItem,
+               let total = p.currentTotal,
+               let title = p.currentTitle,
+               !title.isEmpty {
+                let company = (p.currentCompany?.isEmpty == false) ? " @ \(p.currentCompany!)" : ""
+                lines.append("│    \(stage.capitalized) \(item)/\(total): \(title)\(company)")
+            }
         }
 
         // Rescore
@@ -330,6 +338,12 @@ class JobsViewModel: ObservableObject {
         try? data.write(to: file, options: .atomic)
     }
 
+    private func isExpectedCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+        return false
+    }
+
     func loadPendingJobs() async {
         isLoading = true
         defer { isLoading = false }
@@ -352,6 +366,10 @@ class JobsViewModel: ObservableObject {
                 }
             }
         } catch {
+                if isExpectedCancellation(error) {
+                    print("[VM] loadPendingJobs — cancelled (superseded)")
+                    return
+                }
             print("[VM] loadPendingJobs — ERROR: \(error)")
             isOffline = true
             if pendingJobs.isEmpty {
@@ -374,6 +392,10 @@ class JobsViewModel: ObservableObject {
                 print("[VM] loadAppliedJobs — got \(appliedJobs.count)")
             }
         } catch {
+            if isExpectedCancellation(error) {
+                print("[VM] loadAppliedJobs — cancelled (superseded)")
+                return
+            }
             print("[VM] loadAppliedJobs — ERROR (suppressed): \(error)")
         }
     }
@@ -390,6 +412,10 @@ class JobsViewModel: ObservableObject {
                 print("[VM] loadSavedJobs — got \(savedJobs.count)")
             }
         } catch {
+            if isExpectedCancellation(error) {
+                print("[VM] loadSavedJobs — cancelled (superseded)")
+                return
+            }
             print("[VM] loadSavedJobs — ERROR (suppressed): \(error)")
         }
     }
@@ -406,6 +432,10 @@ class JobsViewModel: ObservableObject {
                 print("[VM] loadRejectedJobs — got \(rejectedJobs.count)")
             }
         } catch {
+            if isExpectedCancellation(error) {
+                print("[VM] loadRejectedJobs — cancelled (superseded)")
+                return
+            }
             print("[VM] loadRejectedJobs — ERROR (suppressed): \(error)")
         }
     }
@@ -420,6 +450,10 @@ class JobsViewModel: ObservableObject {
                 print("[VM] loadStats — pending=\(s.pending) applied=\(s.applied) saved=\(s.saved) rejected=\(s.rejected)")
             }
         } catch {
+            if isExpectedCancellation(error) {
+                print("[VM] loadStats — cancelled (superseded)")
+                return
+            }
             // Stats are non-critical — don't show red banner for this
             print("[VM] loadStats — ERROR (suppressed): \(error)")
         }
@@ -505,7 +539,17 @@ class JobsViewModel: ObservableObject {
                 if let t = telemetry {
                     let p = t.ingest.progress
                     if p.phase == "scoring" && p.totalBatches > 0 {
-                        ingestProgress = "Scoring batch \(p.batch)/\(p.totalBatches) — \(p.queued) queued so far"
+                        let detail: String
+                        if let stage = p.currentStage,
+                           let item = p.currentItem,
+                           let total = p.currentTotal,
+                           let title = p.currentTitle,
+                           !title.isEmpty {
+                            detail = "\(stage.capitalized) \(item)/\(total): \(title)"
+                        } else {
+                            detail = "Scoring batch \(p.batch)/\(p.totalBatches)"
+                        }
+                        ingestProgress = "\(detail) — \(p.queued) queued so far"
                     } else if p.phase == "fetching" {
                         ingestProgress = "Fetching from job boards…"
                     } else if p.phase == "deduping" {

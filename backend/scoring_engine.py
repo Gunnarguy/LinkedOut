@@ -13,6 +13,7 @@ import json
 import logging
 import re
 import time as _time_mod
+from collections.abc import Callable
 from datetime import datetime, timezone
 
 from openai import AsyncOpenAI
@@ -695,6 +696,11 @@ async def score_batch(
 async def triage_and_score(
     listings: list[RawJobListing],
     prefs: UserPreferences | None = None,
+    on_triage_start: Callable[[RawJobListing, int, int], None] | None = None,
+    on_triage_result: Callable[[RawJobListing, bool], None] | None = None,
+    on_scoring_started: Callable[[int], None] | None = None,
+    on_score_start: Callable[[RawJobListing, int, int], None] | None = None,
+    on_score_result: Callable[[RawJobListing, ScoringResult], None] | None = None,
 ) -> list[ScoringResult]:
     """Two-tier scoring.
 
@@ -714,8 +720,18 @@ async def triage_and_score(
         batch_size = 5
         for i in range(0, len(listings), batch_size):
             batch = listings[i : i + batch_size]
+
+            async def _triage_one(offset: int, raw: RawJobListing):
+                overall_index = i + offset + 1
+                if on_triage_start:
+                    on_triage_start(raw, overall_index, len(listings))
+                passed = await triage_job(raw, prefs)
+                if on_triage_result:
+                    on_triage_result(raw, passed)
+                return passed
+
             batch_results = await asyncio.gather(
-                *(triage_job(raw, prefs) for raw in batch),
+                *(_triage_one(offset, raw) for offset, raw in enumerate(batch)),
                 return_exceptions=True,
             )
             triage_results.extend(batch_results)
@@ -731,14 +747,16 @@ async def triage_and_score(
     if triage_failed or not triage_results:
         # LLM triage unavailable — let everything through
         logger.info("Triage unavailable — passing all listings to scoring")
-        survivors = listings
+        survivors: list[tuple[RawJobListing, int]] = [
+            (raw, idx + 1) for idx, raw in enumerate(listings)
+        ]
     else:
-        survivors: list[RawJobListing] = []
-        for raw, passed in zip(listings, triage_results):
+        survivors = []
+        for idx, (raw, passed) in enumerate(zip(listings, triage_results), start=1):
             if isinstance(passed, BaseException):
-                survivors.append(raw)  # On error, let it through
+                survivors.append((raw, idx))  # On error, let it through
             elif passed:
-                survivors.append(raw)
+                survivors.append((raw, idx))
 
     logger.info(f"Phase 1 complete: {len(survivors)}/{len(listings)} passed triage")
 
@@ -747,12 +765,20 @@ async def triage_and_score(
             ScoringResult(passed_filter=False, rejection_reason="Failed triage")
         ] * len(listings)
 
+    if on_scoring_started:
+        on_scoring_started(len(survivors))
+
     # Phase 2: Try LLM scoring on first few, detect if LLM is working
     logger.info(f"Phase 2: Scoring {len(survivors)} survivors...")
 
     # Test LLM with first listing
     t1 = _time.monotonic()
-    test_result = await score_job(survivors[0], prefs)
+    first_raw, _ = survivors[0]
+    if on_score_start:
+        on_score_start(first_raw, 1, len(survivors))
+    test_result = await score_job(first_raw, prefs)
+    if on_score_result:
+        on_score_result(first_raw, test_result)
     test_elapsed = _time.monotonic() - t1
     logger.info(f"[SCORE] Test scoring took {test_elapsed:.1f}s")
     llm_works = test_result.passed_filter or test_result.rejection_reason != ""
@@ -772,9 +798,14 @@ async def triage_and_score(
         consecutive_fallbacks = 0
         fell_back_to_retry = False
 
-        async def _score_one(raw_listing):
+        async def _score_one(raw_listing: RawJobListing, score_index: int):
             async with sem:
-                return await score_job(raw_listing, prefs)
+                if on_score_start:
+                    on_score_start(raw_listing, score_index, len(survivors))
+                result = await score_job(raw_listing, prefs)
+                if on_score_result:
+                    on_score_result(raw_listing, result)
+                return result
 
         score_batch_size = 3
         remaining_survivors = survivors[1:]
@@ -783,13 +814,18 @@ async def triage_and_score(
                 break
             batch = remaining_survivors[i : i + score_batch_size]
             batch_results = await asyncio.gather(
-                *(_score_one(raw) for raw in batch),
+                *(
+                    _score_one(raw, i + offset + 2)
+                    for offset, (raw, _) in enumerate(batch)
+                ),
                 return_exceptions=True,
             )
-            for raw, result in zip(batch, batch_results):
+            for (raw, _), result in zip(batch, batch_results):
                 if isinstance(result, BaseException):
                     logger.warning(f"[SCORE] Exception scoring {raw.title}: {result}")
                     result = ScoringResult(passed_filter=False, rejection_reason="LLM_FAILURE_RETRY")
+                    if on_score_result:
+                        on_score_result(raw, result)
 
                 is_failure = result.rejection_reason == "LLM_FAILURE_RETRY"
                 if is_failure:
@@ -806,8 +842,14 @@ async def triage_and_score(
                             f"LLM failed {consecutive_fallbacks}x in a row — "
                             f"marking remaining {len(rest)} listings for next cycle"
                         )
-                        for r in rest:
-                            results.append(ScoringResult(passed_filter=False, rejection_reason="LLM_FAILURE_RETRY"))
+                        for r, _ in rest:
+                            retry_result = ScoringResult(
+                                passed_filter=False,
+                                rejection_reason="LLM_FAILURE_RETRY",
+                            )
+                            results.append(retry_result)
+                            if on_score_result:
+                                on_score_result(r, retry_result)
                     fell_back_to_retry = True
                     break
 
@@ -815,8 +857,13 @@ async def triage_and_score(
                 await asyncio.sleep(0.3)
     else:
         logger.warning("LLM scoring completely unavailable — delaying remaining listings to next ingest cycle")
-        for raw in survivors[1:]:
-            results.append(ScoringResult(passed_filter=False, rejection_reason="LLM_FAILURE_RETRY"))
+        for raw, _ in survivors[1:]:
+            retry_result = ScoringResult(
+                passed_filter=False, rejection_reason="LLM_FAILURE_RETRY"
+            )
+            results.append(retry_result)
+            if on_score_result:
+                on_score_result(raw, retry_result)
 
     passed = sum(1 for r in results if r.passed_filter)
     logger.info(f"Phase 2 complete: {passed}/{len(survivors)} passed scoring")

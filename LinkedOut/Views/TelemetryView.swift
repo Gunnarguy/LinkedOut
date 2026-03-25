@@ -112,6 +112,25 @@ struct TelemetryView: View {
                     .tint(.blue)
             }
 
+            if let stage = p.currentStage,
+               let item = p.currentItem,
+               let total = p.currentTotal,
+               let title = p.currentTitle,
+               !title.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Current Listing")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("\(stage.capitalized) \(item)/\(total): \(title)")
+                        .font(.subheadline)
+                    if let company = p.currentCompany, !company.isEmpty {
+                        Text(company)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
             // Counters
             if p.fetched > 0 || p.phase != "idle" {
                 LazyVGrid(columns: [
@@ -119,7 +138,9 @@ struct TelemetryView: View {
                 ], spacing: 8) {
                     CounterCell(label: "Fetched", count: p.fetched, color: .blue)
                     CounterCell(label: "New", count: p.newAfterDedup, color: .cyan)
+                    CounterCell(label: "Triaged", count: p.triaged ?? 0, color: .mint)
                     CounterCell(label: "Scored", count: p.scored, color: .indigo)
+                    CounterCell(label: "To Score", count: p.toScore ?? 0, color: .purple)
                     CounterCell(label: "Queued", count: p.queued, color: .green)
                     CounterCell(label: "Rejected", count: p.rejected, color: .orange)
                     CounterCell(label: "Low Score", count: p.lowScore, color: .yellow)

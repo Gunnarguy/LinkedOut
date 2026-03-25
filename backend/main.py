@@ -94,16 +94,24 @@ import time as _time
 _boot_time: float = _time.time()
 
 _ingest_progress: dict = {
-    "phase": "idle",        # idle | fetching | deduping | scoring | complete | error
+    "phase": "idle",  # idle | fetching | deduping | scoring | complete | error
     "batch": 0,
     "total_batches": 0,
     "fetched": 0,
     "new_after_dedup": 0,
+    "triaged": 0,
+    "triage_passed": 0,
+    "to_score": 0,
     "scored": 0,
     "queued": 0,
     "rejected": 0,
     "low_score": 0,
     "errors": 0,
+    "current_stage": "idle",
+    "current_item": 0,
+    "current_total": 0,
+    "current_title": "",
+    "current_company": "",
     "started_at": None,
     "last_completed_at": None,
     "last_duration_s": None,
@@ -147,9 +155,25 @@ async def _run_ingest_cycle():
     """
     cycle_start = _time.monotonic()
     _ingest_progress.update(
-        phase="fetching", batch=0, total_batches=0, fetched=0,
-        new_after_dedup=0, scored=0, queued=0, rejected=0, low_score=0,
-        errors=0, started_at=_time.time(),
+        phase="fetching",
+        batch=0,
+        total_batches=0,
+        fetched=0,
+        new_after_dedup=0,
+        triaged=0,
+        triage_passed=0,
+        to_score=0,
+        scored=0,
+        queued=0,
+        rejected=0,
+        low_score=0,
+        current_stage="fetching",
+        current_item=0,
+        current_total=0,
+        current_title="",
+        current_company="",
+        errors=0,
+        started_at=_time.time(),
     )
     logger.info("="*60)
     logger.info("INGEST CYCLE STARTING")
@@ -205,8 +229,50 @@ async def _run_ingest_cycle():
             batch = new_listings[i : i + batch_size]
             batch_num = i // batch_size + 1
             _ingest_progress["batch"] = batch_num
+
+            def _on_triage_start(
+                raw: RawJobListing, item_index: int, total_items: int
+            ) -> None:
+                _ingest_progress.update(
+                    current_stage="triage",
+                    current_item=item_index,
+                    current_total=total_items,
+                    current_title=raw.title,
+                    current_company=raw.company,
+                )
+
+            def _on_triage_result(raw: RawJobListing, passed: bool) -> None:
+                _ingest_progress["triaged"] += 1
+                if passed:
+                    _ingest_progress["triage_passed"] += 1
+
+            def _on_scoring_started(total_items: int) -> None:
+                _ingest_progress["to_score"] = total_items
+
+            def _on_score_start(
+                raw: RawJobListing, item_index: int, total_items: int
+            ) -> None:
+                _ingest_progress.update(
+                    current_stage="scoring",
+                    current_item=item_index,
+                    current_total=total_items,
+                    current_title=raw.title,
+                    current_company=raw.company,
+                )
+
+            def _on_score_result(raw: RawJobListing, result: ScoringResult) -> None:
+                _ingest_progress["scored"] += 1
+
             t1 = _time.monotonic()
-            results = await triage_and_score(batch, prefs)
+            results = await triage_and_score(
+                batch,
+                prefs,
+                on_triage_start=_on_triage_start,
+                on_triage_result=_on_triage_result,
+                on_scoring_started=_on_scoring_started,
+                on_score_start=_on_score_start,
+                on_score_result=_on_score_result,
+            )
             score_elapsed = _time.monotonic() - t1
 
             for raw_listing, result in zip(batch, results):
@@ -216,7 +282,11 @@ async def _run_ingest_cycle():
 
                 # Only mark as seen after we've processed it
                 store.mark_url_seen(raw_listing.url)
-                _ingest_progress["scored"] += 1
+                _ingest_progress.update(
+                    current_stage="persisting",
+                    current_title=raw_listing.title,
+                    current_company=raw_listing.company,
+                )
                 if result.passed_filter and result.job:
                     if result.job.builder_score >= min_builder_score:
                         store.add_pending(result.job)
@@ -251,6 +321,10 @@ async def _run_ingest_cycle():
         total_elapsed = _time.monotonic() - cycle_start
         _ingest_progress.update(
             phase="complete",
+            current_stage="idle",
+            current_item=0,
+            current_title="",
+            current_company="",
             last_completed_at=_time.time(),
             last_duration_s=round(total_elapsed, 1),
         )
@@ -267,7 +341,12 @@ async def _run_ingest_cycle():
 
     except Exception as e:
         total_elapsed = _time.monotonic() - cycle_start
-        _ingest_progress.update(phase="error", errors=_ingest_progress.get("errors", 0) + 1, last_duration_s=round(total_elapsed, 1))
+        _ingest_progress.update(
+            phase="error",
+            current_stage="idle",
+            errors=_ingest_progress.get("errors", 0) + 1,
+            last_duration_s=round(total_elapsed, 1),
+        )
         logger.exception(f"INGEST CYCLE FAILED after {total_elapsed:.1f}s: {e}")
         return 0
 

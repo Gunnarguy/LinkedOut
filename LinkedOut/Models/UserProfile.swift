@@ -442,11 +442,19 @@ struct IngestProgress: Codable {
     let totalBatches: Int
     let fetched: Int
     let newAfterDedup: Int
+    let triaged: Int?
+    let triagePassed: Int?
+    let toScore: Int?
     let scored: Int
     let queued: Int
     let rejected: Int
     let lowScore: Int
     let errors: Int
+    let currentStage: String?
+    let currentItem: Int?
+    let currentTotal: Int?
+    let currentTitle: String?
+    let currentCompany: String?
     let startedAt: Double?
     let lastCompletedAt: Double?
     let lastDurationS: Double?
@@ -457,9 +465,17 @@ struct IngestProgress: Codable {
         case totalBatches = "total_batches"
         case fetched
         case newAfterDedup = "new_after_dedup"
+        case triaged
+        case triagePassed = "triage_passed"
+        case toScore = "to_score"
         case scored, queued, rejected
         case lowScore = "low_score"
         case errors
+        case currentStage = "current_stage"
+        case currentItem = "current_item"
+        case currentTotal = "current_total"
+        case currentTitle = "current_title"
+        case currentCompany = "current_company"
         case startedAt = "started_at"
         case lastCompletedAt = "last_completed_at"
         case lastDurationS = "last_duration_s"

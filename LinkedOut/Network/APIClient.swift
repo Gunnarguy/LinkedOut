@@ -522,10 +522,8 @@ final class APIClient: @unchecked Sendable {
                 }
                 return (data, response)
             } catch is CancellationError {
-                print("[API] 🚫 CANCELLED \(method) \(url)")
                 throw CancellationError()
             } catch let error as URLError where error.code == .cancelled {
-                print("[API] 🚫 CANCELLED \(method) \(url)")
                 throw CancellationError()
             } catch {
                 let elapsed = String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - start) * 1000)
