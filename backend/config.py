@@ -37,6 +37,23 @@ class Settings(BaseSettings):
     notion_token: str = ""
     notion_database_id: str = ""
 
+    # SerpAPI (Google Jobs aggregator — free 250 searches/month at serpapi.com)
+    serpapi_api_key: str = ""
+
+    # Adzuna (job search aggregator — free at developer.adzuna.com)
+    adzuna_app_id: str = ""
+    adzuna_app_key: str = ""
+
+    # FindWork.dev (dev/startup jobs — free at findwork.dev/developers)
+    findwork_api_token: str = ""
+
+    # Reed.co.uk (UK + remote jobs — free at reed.co.uk/developers)
+    reed_api_key: str = ""
+
+    # USAJobs (federal tech jobs — free at developer.usajobs.gov)
+    usajobs_api_key: str = ""
+    usajobs_email: str = ""
+
     # CORS
     allowed_origins: list[str] = ["*"]
 

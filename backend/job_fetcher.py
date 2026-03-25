@@ -1,14 +1,21 @@
 """Job fetcher — pulls real listings from free APIs and feeds them to the scoring engine.
 
-Sources:
-  1. Remotive (free, no auth, remote-first jobs)
-  2. HimalayanJobs / Arbeitnow (free, no auth)
-  3. HackerNews "Who's Hiring" (Algolia API, free)
-  4. Jobicy (free, no auth, remote-first)
-  5. RemoteOK (free, no auth)
-  6. We Work Remotely (RSS feed, free, no auth — top remote job board)
-  7. Arbeitnow (free API, no auth — EU + global remote)
-  8. The Muse (free public API, no auth — career platform)
+Sources (free, no auth):
+  1. Remotive (remote-first jobs)
+  2. HimalayanJobs / Arbeitnow (remote-first)
+  3. HackerNews "Who's Hiring" (Algolia API)
+  4. Jobicy (remote-first)
+  5. RemoteOK
+  6. We Work Remotely (RSS feed — top remote job board)
+  7. Arbeitnow (EU + global remote)
+  8. The Muse (career platform)
+
+Sources (API key required — gracefully skipped if not configured):
+  9. SerpAPI Google Jobs (aggregates LinkedIn, Indeed, Glassdoor, ZipRecruiter, etc.)
+ 10. Adzuna (major aggregator — US + 18 countries)
+ 11. FindWork.dev (dev/startup focused)
+ 12. Reed.co.uk (UK + remote jobs)
+ 13. USAJobs (federal tech/health IT jobs)
 """
 
 from __future__ import annotations
@@ -657,6 +664,494 @@ async def fetch_themuse() -> list[RawJobListing]:
     return all_listings
 
 
+# ── API-key-based sources (gracefully skipped when keys not configured) ──
+
+
+async def fetch_serpapi_google_jobs() -> list[RawJobListing]:
+    """Fetch via SerpAPI Google Jobs — aggregates LinkedIn, Indeed, Glassdoor, etc.
+
+    Requires SERPAPI_API_KEY env var (free 250 searches/month at serpapi.com).
+    """
+    import time as _time
+    from config import settings
+
+    t0 = _time.monotonic()
+    if not settings.serpapi_api_key:
+        logger.debug("SerpAPI: skipped (SERPAPI_API_KEY not set)")
+        return []
+
+    all_listings: list[RawJobListing] = []
+    seen_urls: set[str] = set()
+
+    # Use a targeted subset of queries to stay within free tier budget
+    serpapi_queries = [
+        "healthcare AI engineer remote",
+        "founding engineer AI startup",
+        "iOS engineer AI startup",
+        "LLM engineer remote",
+        "AI product engineer",
+        "medical device software engineer",
+        "generative AI engineer",
+        "health tech startup engineer",
+        "SwiftUI engineer remote",
+        "machine learning engineer startup",
+        "applied AI engineer",
+        "RAG engineer",
+        "AI agent engineer remote",
+        "digital health engineer",
+        "clinical AI software",
+    ]
+
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        for query in serpapi_queries:
+            try:
+                resp = await client.get(
+                    "https://serpapi.com/search.json",
+                    params={
+                        "engine": "google_jobs",
+                        "q": query,
+                        "hl": "en",
+                        "gl": "us",
+                        "api_key": settings.serpapi_api_key,
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+                for job in data.get("jobs_results", []):
+                    # Get the best apply URL
+                    apply_options = job.get("apply_options", [])
+                    url = ""
+                    if apply_options:
+                        url = apply_options[0].get("link", "")
+                    if not url:
+                        url = job.get("share_link", "")
+                    if not url or url in seen_urls:
+                        continue
+                    seen_urls.add(url)
+
+                    desc = job.get("description", "") or ""
+                    desc = re.sub(r"\s+", " ", desc).strip()
+
+                    detected = job.get("detected_extensions", {})
+                    salary_text = detected.get("salary", "")
+                    is_remote = detected.get("work_from_home", False)
+                    location = job.get("location", "") or ""
+                    if is_remote and "remote" not in location.lower():
+                        location = f"{location} (Remote)" if location else "Remote"
+
+                    all_listings.append(
+                        RawJobListing(
+                            title=job.get("title", "Unknown"),
+                            company=job.get("company_name", "Unknown"),
+                            description=desc[:8000],
+                            url=url,
+                            salary_text=salary_text or "",
+                            location=location or "Unknown",
+                            is_remote=is_remote,
+                        )
+                    )
+
+            except Exception as e:
+                logger.warning(f"SerpAPI fetch failed for '{query}': {e}")
+
+    logger.info(
+        f"SerpAPI Google Jobs: fetched {len(all_listings)} listings in {_time.monotonic() - t0:.1f}s"
+    )
+    return all_listings
+
+
+async def fetch_adzuna() -> list[RawJobListing]:
+    """Fetch from Adzuna API — major aggregator for US + international.
+
+    Requires ADZUNA_APP_ID + ADZUNA_APP_KEY (free at developer.adzuna.com).
+    """
+    import time as _time
+    from config import settings
+
+    t0 = _time.monotonic()
+    if not settings.adzuna_app_id or not settings.adzuna_app_key:
+        logger.debug("Adzuna: skipped (ADZUNA_APP_ID/ADZUNA_APP_KEY not set)")
+        return []
+
+    all_listings: list[RawJobListing] = []
+    seen_urls: set[str] = set()
+
+    adzuna_queries = [
+        "AI engineer",
+        "healthcare AI",
+        "iOS developer",
+        "machine learning engineer",
+        "founding engineer",
+        "LLM engineer",
+        "product engineer startup",
+        "health tech software",
+        "generative AI",
+        "medical software engineer",
+    ]
+
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        for query in adzuna_queries:
+            try:
+                resp = await client.get(
+                    "https://api.adzuna.com/v1/api/jobs/us/search/1",
+                    params={
+                        "app_id": settings.adzuna_app_id,
+                        "app_key": settings.adzuna_app_key,
+                        "what": query,
+                        "results_per_page": 20,
+                        "content-type": "application/json",
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+                for job in data.get("results", []):
+                    url = job.get("redirect_url", "")
+                    if not url or url in seen_urls:
+                        continue
+                    seen_urls.add(url)
+
+                    desc = job.get("description", "") or ""
+                    desc = re.sub(r"<[^>]+>", " ", desc)
+                    desc = re.sub(r"\s+", " ", desc).strip()
+
+                    salary_min = job.get("salary_min")
+                    salary_max = job.get("salary_max")
+                    salary_text = ""
+                    if salary_min and salary_max:
+                        salary_text = f"${int(salary_min):,} - ${int(salary_max):,}"
+                    elif salary_min:
+                        salary_text = f"${int(salary_min):,}+"
+
+                    loc = job.get("location", {})
+                    location = loc.get("display_name", "") or "Unknown"
+
+                    title = job.get("title", "Unknown")
+                    title = re.sub(
+                        r"<[^>]+>", "", title
+                    )  # Adzuna sometimes wraps keywords in <strong>
+
+                    company_obj = job.get("company", {})
+                    company = (
+                        company_obj.get("display_name", "Unknown")
+                        if company_obj
+                        else "Unknown"
+                    )
+
+                    is_remote = bool(
+                        re.search(
+                            r"remote|anywhere|work from home",
+                            f"{location} {title} {desc}",
+                            re.IGNORECASE,
+                        )
+                    )
+
+                    all_listings.append(
+                        RawJobListing(
+                            title=title,
+                            company=company,
+                            description=desc[:8000],
+                            url=url,
+                            salary_text=salary_text,
+                            location=location,
+                            is_remote=is_remote,
+                        )
+                    )
+
+            except Exception as e:
+                logger.warning(f"Adzuna fetch failed for '{query}': {e}")
+
+    logger.info(
+        f"Adzuna: fetched {len(all_listings)} listings in {_time.monotonic() - t0:.1f}s"
+    )
+    return all_listings
+
+
+async def fetch_findwork() -> list[RawJobListing]:
+    """Fetch from FindWork.dev API — dev/startup focused jobs.
+
+    Requires FINDWORK_API_TOKEN (free at findwork.dev/developers).
+    """
+    import time as _time
+    from config import settings
+
+    t0 = _time.monotonic()
+    if not settings.findwork_api_token:
+        logger.debug("FindWork: skipped (FINDWORK_API_TOKEN not set)")
+        return []
+
+    all_listings: list[RawJobListing] = []
+    seen_urls: set[str] = set()
+
+    findwork_queries = [
+        "AI",
+        "machine learning",
+        "iOS",
+        "healthcare",
+        "startup",
+        "LLM",
+        "product engineer",
+        "founding engineer",
+    ]
+
+    async with httpx.AsyncClient(
+        timeout=TIMEOUT,
+        headers={"Authorization": f"Token {settings.findwork_api_token}"},
+    ) as client:
+        for query in findwork_queries:
+            try:
+                resp = await client.get(
+                    "https://findwork.dev/api/jobs/",
+                    params={"search": query, "sort_by": "relevance"},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+                for job in data.get("results", []):
+                    url = job.get("url", "")
+                    if not url or url in seen_urls:
+                        continue
+                    seen_urls.add(url)
+
+                    desc = job.get("text", "") or ""
+                    desc = re.sub(r"<[^>]+>", " ", desc)
+                    desc = re.sub(r"\s+", " ", desc).strip()
+
+                    is_remote = job.get("remote", False)
+                    location = job.get("location", "") or (
+                        "Remote" if is_remote else "Unknown"
+                    )
+
+                    all_listings.append(
+                        RawJobListing(
+                            title=job.get("role", "Unknown"),
+                            company=job.get("company_name", "Unknown"),
+                            description=desc[:8000],
+                            url=url,
+                            salary_text="",
+                            location=location,
+                            is_remote=is_remote,
+                        )
+                    )
+
+            except Exception as e:
+                logger.warning(f"FindWork fetch failed for '{query}': {e}")
+
+    logger.info(
+        f"FindWork: fetched {len(all_listings)} listings in {_time.monotonic() - t0:.1f}s"
+    )
+    return all_listings
+
+
+async def fetch_reed() -> list[RawJobListing]:
+    """Fetch from Reed.co.uk API — UK + global remote tech jobs.
+
+    Requires REED_API_KEY (free at reed.co.uk/developers).
+    """
+    import time as _time
+    from base64 import b64encode
+    from config import settings
+
+    t0 = _time.monotonic()
+    if not settings.reed_api_key:
+        logger.debug("Reed: skipped (REED_API_KEY not set)")
+        return []
+
+    all_listings: list[RawJobListing] = []
+    seen_urls: set[str] = set()
+
+    # Reed uses basic auth with API key as username, empty password
+    auth_str = b64encode(f"{settings.reed_api_key}:".encode()).decode()
+
+    reed_queries = [
+        "AI engineer remote",
+        "machine learning remote",
+        "iOS developer remote",
+        "health tech engineer",
+        "product engineer startup",
+        "LLM engineer",
+    ]
+
+    async with httpx.AsyncClient(
+        timeout=TIMEOUT,
+        headers={"Authorization": f"Basic {auth_str}"},
+    ) as client:
+        for query in reed_queries:
+            try:
+                resp = await client.get(
+                    "https://www.reed.co.uk/api/1.0/search",
+                    params={"keywords": query, "resultsToTake": 25},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+                for job in data.get("results", []):
+                    job_id = job.get("jobId", "")
+                    url = (
+                        job.get("jobUrl", "") or f"https://www.reed.co.uk/jobs/{job_id}"
+                    )
+                    if not url or url in seen_urls:
+                        continue
+                    seen_urls.add(url)
+
+                    desc = job.get("jobDescription", "") or ""
+                    desc = re.sub(r"<[^>]+>", " ", desc)
+                    desc = re.sub(r"\s+", " ", desc).strip()
+
+                    salary_min = job.get("minimumSalary")
+                    salary_max = job.get("maximumSalary")
+                    salary_text = ""
+                    if salary_min and salary_max:
+                        salary_text = f"£{int(salary_min):,} - £{int(salary_max):,}"
+                    elif salary_min:
+                        salary_text = f"£{int(salary_min):,}+"
+
+                    location = job.get("locationName", "") or "UK"
+                    is_remote = bool(
+                        re.search(
+                            r"remote|work from home|anywhere",
+                            f"{location} {desc}",
+                            re.IGNORECASE,
+                        )
+                    )
+
+                    all_listings.append(
+                        RawJobListing(
+                            title=job.get("jobTitle", "Unknown"),
+                            company=job.get("employerName", "Unknown"),
+                            description=desc[:8000],
+                            url=url,
+                            salary_text=salary_text,
+                            location=location,
+                            is_remote=is_remote,
+                        )
+                    )
+
+            except Exception as e:
+                logger.warning(f"Reed fetch failed for '{query}': {e}")
+
+    logger.info(
+        f"Reed: fetched {len(all_listings)} listings in {_time.monotonic() - t0:.1f}s"
+    )
+    return all_listings
+
+
+async def fetch_usajobs() -> list[RawJobListing]:
+    """Fetch from USAJobs API — federal government tech/health IT jobs.
+
+    Requires USAJOBS_API_KEY + USAJOBS_EMAIL (free at developer.usajobs.gov).
+    """
+    import time as _time
+    from config import settings
+
+    t0 = _time.monotonic()
+    if not settings.usajobs_api_key or not settings.usajobs_email:
+        logger.debug("USAJobs: skipped (USAJOBS_API_KEY/USAJOBS_EMAIL not set)")
+        return []
+
+    all_listings: list[RawJobListing] = []
+    seen_urls: set[str] = set()
+
+    usajobs_queries = [
+        "artificial intelligence",
+        "software engineer",
+        "data scientist",
+        "health IT",
+        "iOS developer",
+        "machine learning",
+        "cybersecurity",
+        "digital services",
+    ]
+
+    async with httpx.AsyncClient(
+        timeout=TIMEOUT,
+        headers={
+            "Authorization-Key": settings.usajobs_api_key,
+            "User-Agent": settings.usajobs_email,
+            "Host": "data.usajobs.gov",
+        },
+    ) as client:
+        for query in usajobs_queries:
+            try:
+                resp = await client.get(
+                    "https://data.usajobs.gov/api/search",
+                    params={
+                        "Keyword": query,
+                        "ResultsPerPage": 25,
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+                items = data.get("SearchResult", {}).get("SearchResultItems", [])
+
+                for item in items:
+                    matched = item.get("MatchedObjectDescriptor", {})
+                    apply_uris = matched.get("ApplyURI", [])
+                    url = (
+                        apply_uris[0] if apply_uris else matched.get("PositionURI", "")
+                    )
+                    if not url or url in seen_urls:
+                        continue
+                    seen_urls.add(url)
+
+                    desc = (
+                        matched.get("UserArea", {})
+                        .get("Details", {})
+                        .get("JobSummary", "")
+                        or ""
+                    )
+                    desc = re.sub(r"<[^>]+>", " ", desc)
+                    desc = re.sub(r"\s+", " ", desc).strip()
+
+                    # Qualification summary often has good detail
+                    qual = matched.get("QualificationSummary", "") or ""
+                    if qual:
+                        desc = f"{desc}\n\nQualifications: {qual}"
+
+                    remuneration = matched.get("PositionRemuneration", [])
+                    salary_text = ""
+                    if remuneration:
+                        pay = remuneration[0]
+                        sal_min = pay.get("MinimumRange", "")
+                        sal_max = pay.get("MaximumRange", "")
+                        interval = pay.get("Description", "Per Year")
+                        if sal_min and sal_max:
+                            salary_text = f"${sal_min} - ${sal_max} {interval}"
+
+                    location = matched.get("PositionLocationDisplay", "") or "USA"
+                    is_remote = bool(
+                        re.search(
+                            r"remote|telework|anywhere|virtual",
+                            f"{location} {matched.get('PositionOfferingType', [{}])}",
+                            re.IGNORECASE,
+                        )
+                    )
+
+                    org = matched.get("OrganizationName", "") or "US Government"
+
+                    all_listings.append(
+                        RawJobListing(
+                            title=matched.get("PositionTitle", "Unknown"),
+                            company=org,
+                            description=desc[:8000],
+                            url=url,
+                            salary_text=salary_text,
+                            location=location,
+                            is_remote=is_remote,
+                        )
+                    )
+
+            except Exception as e:
+                logger.warning(f"USAJobs fetch failed for '{query}': {e}")
+
+    logger.info(
+        f"USAJobs: fetched {len(all_listings)} listings in {_time.monotonic() - t0:.1f}s"
+    )
+    return all_listings
+
+
 async def fetch_all_sources() -> list[RawJobListing]:
     """Fetch from all sources concurrently. Returns deduplicated listings."""
     import time as _time
@@ -670,6 +1165,12 @@ async def fetch_all_sources() -> list[RawJobListing]:
         fetch_weworkremotely(),
         fetch_arbeitnow(),
         fetch_themuse(),
+        # API-key sources (gracefully return [] if not configured)
+        fetch_serpapi_google_jobs(),
+        fetch_adzuna(),
+        fetch_findwork(),
+        fetch_reed(),
+        fetch_usajobs(),
         return_exceptions=True,
     )
 
@@ -677,17 +1178,23 @@ async def fetch_all_sources() -> list[RawJobListing]:
     seen_titles: set[str] = set()
     seen_urls: set[str] = set()
 
+    source_names = [
+        "Remotive",
+        "Himalayas",
+        "HN",
+        "Jobicy",
+        "RemoteOK",
+        "WWR",
+        "Arbeitnow",
+        "TheMuse",
+        "SerpAPI",
+        "Adzuna",
+        "FindWork",
+        "Reed",
+        "USAJobs",
+    ]
+
     for i, result in enumerate(results):
-        source_names = [
-            "Remotive",
-            "Himalayas",
-            "HN",
-            "Jobicy",
-            "RemoteOK",
-            "WWR",
-            "Arbeitnow",
-            "TheMuse",
-        ]
         name = source_names[i] if i < len(source_names) else f"Source{i}"
         if isinstance(result, BaseException):
             logger.error(f"[FETCH] {name} FAILED: {result}")

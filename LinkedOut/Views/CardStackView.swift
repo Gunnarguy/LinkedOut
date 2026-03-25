@@ -15,6 +15,12 @@ struct CardStackView: View {
     @State private var filters = JobFilters()
     @AppStorage("lastViewedTimestamp") private var lastViewedTimestamp: Double = 0
 
+    // ── Location Filtering ──
+    @AppStorage("preferredLocationsJSON") private var preferredLocationsJSON: String = "[\"Kalamazoo, Michigan\"]"
+    @State private var selectedLocationTab: String = "All"
+    @State private var showLocationManager = false
+    @State private var editableLocations: [String] = []
+
     /// All unique tech stacks across pending jobs (for filter sheet)
     private var availableTechStacks: [String] {
         var counts: [String: Int] = [:]
@@ -40,6 +46,52 @@ struct CardStackView: View {
         return result
     }
 
+    // ── Location Helpers ──
+
+    private var preferredLocations: [String] {
+        guard let data = preferredLocationsJSON.data(using: .utf8),
+              let locs = try? JSONDecoder().decode([String].self, from: data) else {
+            return ["Kalamazoo, Michigan"]
+        }
+        return locs
+    }
+
+    private var locationTabs: [LocationTab] {
+        var tabs: [LocationTab] = [
+            LocationTab(id: "All", label: "All", icon: "tray.full", count: sortedPending.count, tint: .primary),
+            LocationTab(id: "Remote", label: "Remote", icon: "wifi", count: sortedPending.filter(\.isRemote).count, tint: .green),
+        ]
+        for loc in preferredLocations {
+            let city = loc.split(separator: ",").first.map(String.init)?.trimmingCharacters(in: .whitespaces) ?? loc
+            let count = sortedPending.filter { jobMatchesCity($0, city: city) }.count
+            tabs.append(LocationTab(id: loc, label: city, icon: "mappin", count: count, tint: .blue))
+        }
+        return tabs
+    }
+
+    /// Jobs filtered by the currently selected location tab
+    private var locationFilteredJobs: [JobPayload] {
+        switch selectedLocationTab {
+        case "All":
+            return sortedPending
+        case "Remote":
+            return sortedPending.filter(\.isRemote)
+        default:
+            let city = selectedLocationTab.split(separator: ",").first.map(String.init)?.trimmingCharacters(in: .whitespaces) ?? selectedLocationTab
+            return sortedPending.filter { jobMatchesCity($0, city: city) }
+        }
+    }
+
+    private func jobMatchesCity(_ job: JobPayload, city: String) -> Bool {
+        job.location.localizedCaseInsensitiveContains(city)
+    }
+
+    private func saveLocationsToAppStorage() {
+        if let data = try? JSONEncoder().encode(editableLocations) {
+            preferredLocationsJSON = String(data: data, encoding: .utf8) ?? "[]"
+        }
+    }
+
     /// The cutoff date: jobs added after this are "new"
     private var lastViewedDate: Date {
         lastViewedTimestamp > 0 ? Date(timeIntervalSince1970: lastViewedTimestamp) : .distantPast
@@ -57,10 +109,22 @@ struct CardStackView: View {
                     loadingView
                 } else if jobs.pendingJobs.isEmpty {
                     emptyView
-                } else if showListView {
-                    pendingListView
                 } else {
-                    cardStack
+                    VStack(spacing: 0) {
+                        LocationBarView(
+                            tabs: locationTabs,
+                            selectedTab: $selectedLocationTab
+                        ) {
+                            editableLocations = preferredLocations
+                            showLocationManager = true
+                        }
+
+                        if showListView {
+                            pendingListView
+                        } else {
+                            cardStack
+                        }
+                    }
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -186,6 +250,10 @@ struct CardStackView: View {
                     jobs.jobToApply = nil
                 }
             }
+            .sheet(isPresented: $showLocationManager, onDismiss: saveLocationsToAppStorage) {
+                LocationManagerSheet(locations: $editableLocations)
+                    .presentationDetents([.medium, .large])
+            }
             .overlay(alignment: .top) {
                 VStack(spacing: 4) {
                     if let error = jobs.error {
@@ -212,7 +280,7 @@ struct CardStackView: View {
     private var pendingListView: some View {
         List {
             Section {
-                ForEach(sortedPending) { job in
+                ForEach(locationFilteredJobs) { job in
                     Button {
                         jobs.selectedJob = job
                     } label: {
@@ -247,11 +315,14 @@ struct CardStackView: View {
                 }
             } header: {
                 HStack {
-                    Text("\(sortedPending.count) jobs\(filters.isActive ? " (filtered)" : "")")
+                    Text("\(locationFilteredJobs.count) jobs\(filters.isActive || selectedLocationTab != "All" ? " (filtered)" : "")")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                    if filters.isActive {
-                        Button("Clear") { filters = JobFilters() }
+                    if filters.isActive || selectedLocationTab != "All" {
+                        Button("Clear") {
+                            filters = JobFilters()
+                            selectedLocationTab = "All"
+                        }
                             .font(.caption2)
                     }
                 }
@@ -266,14 +337,14 @@ struct CardStackView: View {
         VStack(spacing: 0) {
             ZStack {
                 // Show up to 3 cards stacked
-                ForEach(Array(sortedPending.prefix(3).enumerated().reversed()), id: \.element.id) { index, job in
+                ForEach(Array(locationFilteredJobs.prefix(3).enumerated().reversed()), id: \.element.id) { index, job in
                     let isTop = index == 0
 
                     JobCardView(
                         job: job,
                         isTopCard: isTop,
                         isNew: isJobNew(job),
-                        queuePosition: isTop ? "\(index + 1) of \(sortedPending.count)" : nil
+                        queuePosition: isTop ? "\(index + 1) of \(locationFilteredJobs.count)" : nil
                     ) {
                         jobs.selectedJob = job
                     }
@@ -286,7 +357,7 @@ struct CardStackView: View {
                         isTop ? .degrees(jobs.topCardRotation) : .zero
                     )
                     .scaleEffect(isTop ? 1.0 : 1.0 - CGFloat(index) * 0.04)
-                    .zIndex(Double(sortedPending.count - index))
+                    .zIndex(Double(locationFilteredJobs.count - index))
                     .gesture(isTop ? swipeGesture : nil)
                     .allowsHitTesting(isTop)
                 }
@@ -313,7 +384,7 @@ struct CardStackView: View {
                 jobs.topCardRotation = Double(value.translation.width / 20)
             }
             .onEnded { value in
-                guard let topJob = sortedPending.first else { return }
+                guard let topJob = locationFilteredJobs.first else { return }
                 let width = value.translation.width
                 let height = value.translation.height
 
@@ -385,7 +456,7 @@ struct CardStackView: View {
             // Reject
             Button {
                 haptic()
-                if let job = sortedPending.first {
+                if let job = locationFilteredJobs.first {
                     Task { await jobs.swipeLeft(job: job) }
                 }
             } label: {
@@ -396,12 +467,12 @@ struct CardStackView: View {
                     .background(.red.opacity(0.1))
                     .clipShape(Circle())
             }
-            .disabled(sortedPending.first.map { jobs.processingJobIds.contains($0.id) } ?? true)
+            .disabled(locationFilteredJobs.first.map { jobs.processingJobIds.contains($0.id) } ?? true)
 
             // Save
             Button {
                 haptic()
-                if let job = sortedPending.first {
+                if let job = locationFilteredJobs.first {
                     Task { await jobs.swipeUp(job: job) }
                 }
             } label: {
@@ -412,12 +483,12 @@ struct CardStackView: View {
                     .background(.blue.opacity(0.1))
                     .clipShape(Circle())
             }
-            .disabled(sortedPending.first.map { jobs.processingJobIds.contains($0.id) } ?? true)
+            .disabled(locationFilteredJobs.first.map { jobs.processingJobIds.contains($0.id) } ?? true)
 
             // Apply
             Button {
                 haptic()
-                if let job = sortedPending.first {
+                if let job = locationFilteredJobs.first {
                     Task { await jobs.swipeRight(job: job) }
                 }
             } label: {
@@ -428,7 +499,7 @@ struct CardStackView: View {
                     .background(.green.opacity(0.1))
                     .clipShape(Circle())
             }
-            .disabled(sortedPending.first.map { jobs.processingJobIds.contains($0.id) } ?? true)
+            .disabled(locationFilteredJobs.first.map { jobs.processingJobIds.contains($0.id) } ?? true)
         }
         .padding(.bottom, 8)
     }
