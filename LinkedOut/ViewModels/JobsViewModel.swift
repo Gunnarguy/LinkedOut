@@ -344,6 +344,24 @@ class JobsViewModel: ObservableObject {
         return false
     }
 
+    private func isTransientBackendFailure(_ error: Error) -> Bool {
+        if let apiError = error as? APIError {
+            return apiError.isTransientServerFailure
+        }
+        if let urlError = error as? URLError {
+            return [
+                .timedOut,
+                .cannotFindHost,
+                .cannotConnectToHost,
+                .networkConnectionLost,
+                .dnsLookupFailed,
+                .notConnectedToInternet,
+                .resourceUnavailable,
+            ].contains(urlError.code)
+        }
+        return false
+    }
+
     func loadPendingJobs() async {
         isLoading = true
         defer { isLoading = false }
@@ -507,18 +525,40 @@ class JobsViewModel: ObservableObject {
                 try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
                 pollCount += 1
 
-                let status = try await APIClient.shared.fetchIngestStatus()
+                let status: IngestStatusResponse
+                do {
+                    status = try await APIClient.shared.fetchIngestStatus()
+                } catch {
+                    if isExpectedCancellation(error) {
+                        print("[VM] ingestNewJobs — polling cancelled")
+                        return
+                    }
+                    if isTransientBackendFailure(error) {
+                        print("[VM] ingestNewJobs — transient ingest-status failure: \(error.localizedDescription)")
+                        ingestProgress = "Backend waking up… retrying status check"
+                        continue
+                    }
+                    throw error
+                }
                 let stillActive = status.manualRunning || (status.cycleActive ?? false)
 
                 if status.store.pending > lastObservedPendingCount {
                     print("[VM] ingestNewJobs — pending grew \(lastObservedPendingCount) → \(status.store.pending), live-refreshing queue")
-                    let fetchedPending = try await APIClient.shared.fetchPendingJobs()
-                    pendingJobs = fetchedPending
-                    Self.writeCache("pending", jobs: pendingJobs)
-                    stats = status.store
-                    lastObservedPendingCount = pendingJobs.count
-                    let newCount = max(pendingJobs.count - startingPendingCount, 0)
-                    print("[VM] ingestNewJobs — live queue now has \(pendingJobs.count) jobs (\(newCount) new this run)")
+                    do {
+                        let fetchedPending = try await APIClient.shared.fetchPendingJobs()
+                        pendingJobs = fetchedPending
+                        Self.writeCache("pending", jobs: pendingJobs)
+                        stats = status.store
+                        lastObservedPendingCount = pendingJobs.count
+                        let newCount = max(pendingJobs.count - startingPendingCount, 0)
+                        print("[VM] ingestNewJobs — live queue now has \(pendingJobs.count) jobs (\(newCount) new this run)")
+                    } catch {
+                        if isTransientBackendFailure(error) {
+                            print("[VM] ingestNewJobs — transient pending refresh failure: \(error.localizedDescription)")
+                        } else {
+                            throw error
+                        }
+                    }
                 }
 
                 // Pull live telemetry during ingest for console visibility
@@ -531,8 +571,16 @@ class JobsViewModel: ObservableObject {
                     let ingested = status.lastIngestResult ?? 0
                     print("[VM] ingestNewJobs — done after \(pollCount) polls, ingested=\(ingested)")
                     ingestProgress = "Loading results..."
-                    pendingJobs = try await APIClient.shared.fetchPendingJobs()
-                    Self.writeCache("pending", jobs: pendingJobs)
+                    do {
+                        pendingJobs = try await APIClient.shared.fetchPendingJobs()
+                        Self.writeCache("pending", jobs: pendingJobs)
+                    } catch {
+                        if isTransientBackendFailure(error) {
+                            print("[VM] ingestNewJobs — transient final pending fetch failure: \(error.localizedDescription)")
+                        } else {
+                            throw error
+                        }
+                    }
                     print("[VM] ingestNewJobs — pending queue now has \(pendingJobs.count) jobs")
                     await loadStats()
 
@@ -585,6 +633,11 @@ class JobsViewModel: ObservableObject {
             info = "Scoring is still running — pull to refresh for latest results"
 
         } catch {
+            if isTransientBackendFailure(error) {
+                print("[VM] ingestNewJobs — transient top-level failure: \(error.localizedDescription)")
+                info = "Backend had a temporary hiccup. Pull to refresh in a few seconds."
+                return
+            }
             print("[VM] ingestNewJobs — ERROR: \(error)")
             self.error = error.localizedDescription
         }

@@ -18,7 +18,17 @@ enum APIError: LocalizedError {
         case .invalidURL:
             return "Invalid URL"
         case .httpError(let code, let body):
-            return "HTTP \(code): \(body)"
+            if [502, 503, 504].contains(code) {
+                return "Server temporarily unavailable (HTTP \(code)). Try again in a moment."
+            }
+            let cleaned = body
+                .replacingOccurrences(of: "\n", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if cleaned.lowercased().contains("<!doctype html") {
+                return "Server returned an HTML error page (HTTP \(code))."
+            }
+            let preview = String(cleaned.prefix(180))
+            return preview.isEmpty ? "HTTP \(code)" : "HTTP \(code): \(preview)"
         case .decodingError(let error):
             return "Decoding failed: \(error.localizedDescription)"
         case .networkError(let error):
@@ -29,6 +39,26 @@ enum APIError: LocalizedError {
     var is404: Bool {
         if case .httpError(let code, _) = self, code == 404 { return true }
         return false
+    }
+
+    var isTransientServerFailure: Bool {
+        switch self {
+        case .httpError(let code, _):
+            return [429, 502, 503, 504].contains(code)
+        case .networkError(let error):
+            guard let urlError = error as? URLError else { return false }
+            return [
+                .timedOut,
+                .cannotFindHost,
+                .cannotConnectToHost,
+                .networkConnectionLost,
+                .dnsLookupFailed,
+                .notConnectedToInternet,
+                .resourceUnavailable,
+            ].contains(urlError.code)
+        default:
+            return false
+        }
     }
 }
 
