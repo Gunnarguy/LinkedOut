@@ -209,7 +209,9 @@ You are writing directly TO the candidate — always use second person ("you/you
 - Salary band explicitly entirely below ${min_salary}
 - Zero-flexibility 10+ years legacy software engineering requirement
 - Role is exclusively about hand-writing low-level algorithms, data structures, or systems code with zero product/AI surface (e.g. pure compiler engineering, kernel dev, embedded C firmware)
-- Requires 5+ years professional software engineering experience with NO "or equivalent projects" escape hatch
+- Requires 3+ years professional software engineering experience with NO "or equivalent projects" escape hatch
+- **SENIORITY: HARD REJECT** if the title contains Senior, Sr., Staff, Principal, Lead, Director, VP, Head of, or Architect. This candidate has ZERO professional SWE experience — Senior roles are out of reach regardless of how cool the company is.
+- Requires experience working on a software team, code reviews, agile/scrum in a professional setting
 
 ## The Core Matching Question — READ THIS CAREFULLY
 
@@ -217,15 +219,16 @@ You are NOT scoring "could this person theoretically do this job." You are scori
 "would this company REALISTICALLY hire this person given their unconventional background?"
 
 This candidate:
-- Orchestrates AI agents to build entire production apps from prompt to App Store
-- Has 4 live App Store iOS apps and 824 commits as proof of shipping velocity
-- Works full-time in medical device/surgical ops at a VA hospital (Stryker)
-- Has NO CS degree (B.S. Kinesiology) and NO traditional SWE employment history
-- Is willing to do whatever — but needs to MATCH with companies that value what he does
+- Is a self-taught solo iOS developer with 4 App Store apps — ALL personal projects, NONE for an employer
+- Works full-time as an OnSite Specialist at Stryker (VA Palo Alto) — medical device support, NOT software engineering
+- Has NO CS degree (B.S. Kinesiology) and ZERO professional SWE employment history
+- Has never worked on a software team, never done professional code reviews, never shipped software for an employer
+- Uses AI tools to help build apps — not a traditional hand-coder
+- Is an ENTRY-LEVEL / JUNIOR candidate for software roles
 
-The industry IS shifting. Companies ARE now hiring people who can orchestrate AI to
-build and ship entire products. But many companies still want traditional hand-coders.
-Your job is to distinguish between the two.
+Do NOT score Senior/Staff/Lead/Principal roles above 0.40 — hard reject them.
+This candidate needs: entry-level, junior, associate, or explicitly "no experience required" roles.
+The sweet spot is startups that say "show us what you've built" and don't care about job title history.
 
 ## Detecting "Traditional Hand-Coder" vs "AI-Native Builder" Signals
 
@@ -278,11 +281,11 @@ The industry IS shifting. Companies that build AI products, healthtech, and deve
 tools are actively hiring people who can orchestrate AI to ship fast. This candidate
 IS competitive for many of these roles. Score accordingly — don't be nihilistic.
 
-- 0.85-1.0: **Rare (<5%)**. Healthcare + AI + they explicitly welcome non-traditional builders. Or the role literally describes building iOS AI apps with no degree requirement.
-- 0.70-0.84: **Strong (~15%)**. Heavy alignment in MedTech/Healthcare OR AI orchestration. Company signals they value shipping over credentials. Realistic hire.
-- 0.55-0.69: **Solid (~25%)**. Good alignment with meaningful friction. They might value the portfolio — real chance but not guaranteed.
-- 0.40-0.54: **Borderline (~20%)**. Some alignment. Worth showing but with clear gaps. The user decides whether to pursue.
-- Below 0.40: **REJECT**. Set passed_filter to false. No realistic path to getting hired.
+- 0.85-1.0: **Rare (<5%)**. Healthcare + AI + they explicitly welcome non-traditional builders + no seniority in title + no degree requirement. Or the role literally describes building iOS AI apps at entry level.
+- 0.70-0.84: **Strong (~15%)**. Heavy alignment in MedTech/Healthcare OR AI orchestration. Company explicitly signals they value shipping over credentials. Entry-level or junior. Realistic hire.
+- 0.55-0.69: **Solid (~25%)**. Good alignment with meaningful friction. They might value the portfolio — real chance but gaps exist. No seniority gate.
+- 0.40-0.54: **Borderline (~20%)**. Some alignment. Worth showing but with clear gaps. The user decides.
+- Below 0.40: **REJECT**. Set passed_filter to false. No realistic path. Any Senior/Staff/Lead/Principal title = automatic reject.
 
 **Anchor at 0.55.** A generic "Software Engineer" posting with no AI/health angle,
 unclear degree policy, and standard tech stack = 0.40-0.45.
@@ -307,16 +310,18 @@ If probably not → reject outright (passed_filter: false).
 
 **Experience Reality & "Portfolio of Proof"**:
 - "Require traditional CS degree" with NO escape: HARD REJECT
-- "CS degree or equivalent experience": no penalty (portfolio IS equivalent)
+- "CS degree or equivalent experience": -0.10 (portfolio might count, but risky)
 - Degree not mentioned: +0.05
 - "Portfolio over resume" / "Show us what you've built": +0.15
 - "Non-traditional backgrounds welcome": +0.12
 - Company has <50 employees and values output: +0.08
-- "3-5 years SWE" (aspirational — most startups are flexible): -0.05
-- "5-7 years" experience required: -0.15 (real friction but not impossible)
-- "8+ years" / "10+ years" experience required: -0.25 (HARD penalty — probably out of reach)
-- Known FAANG-tier credential culture: -0.10
-- Strict corporate "enterprise scale" / formal leveling: -0.08
+- "1-2 years SWE" or "entry level": +0.05 (realistic target)
+- "3-5 years SWE" with no escape hatch: -0.20 (real friction — you have 0 years professional)
+- "5-7 years" experience required: HARD REJECT (impossible gap)
+- "8+ years" / "10+ years" experience required: HARD REJECT
+- Known FAANG-tier credential culture: -0.15
+- Strict corporate "enterprise scale" / formal leveling: -0.10
+- **SENIORITY** — title contains Senior/Sr./Staff/Principal/Lead/Director: HARD REJECT. You have zero professional SWE experience.
 
 ## Output Instructions — Facts Only
 
@@ -428,23 +433,24 @@ this candidate might fit, PASS it.
 {professional_profile}
 Prefers remote. US-based.
 
-## ONLY reject (dominated=false) if ALL of these are true:
+## ONLY reject (dominated=false) if ANY of these are true:
 1. The role has ZERO overlap with: AI, ML, LLM, health, iOS, product building, Python, startups, or mobile
 2. AND the role is clearly one of these:
    - Pure non-tech (sales, marketing, HR, legal, accounting)
    - IT Support / Helpdesk / SysAdmin (not building software)
    - E-commerce platform dev (Shopify, Magento, WooCommerce, WordPress, PHP, Drupal)
    - Hard geographic restriction outside the US with no remote option
-   - Requires 8+ years of SPECIFIC traditional SWE experience (not "or equivalent")
+   - Requires 3+ years of SPECIFIC traditional SWE experience (not "or equivalent")
+3. OR the title contains Senior, Sr., Staff, Principal, Lead, Director, VP, Head of, or Architect — this candidate has ZERO professional SWE experience and cannot apply to senior roles
+4. OR the description requires professional software engineering experience of 3+ years with no flexibility
 
 That's it. Everything else passes — including:
-- Senior/Staff/Lead titles (these are normal for AI roles)
-- Director/VP at small companies (could be hands-on)
-- Roles requiring 3-5 years experience (portfolio counts)
-- Any tech stack if the company does AI/health/interesting work
-- Product/design/data roles at AI or health companies
+- Entry-level, Junior, Associate, or untitled roles
+- Roles requiring 0-2 years experience (portfolio counts)
+- Any tech stack if the company does AI/health/interesting work AND the role is NOT senior-titled
+- Product/design/data roles at AI or health companies if not senior-titled
 - "Requires CS degree" IF it says "or equivalent" anywhere
-- Any role that mentions AI, agents, LLM, health, iOS, or startup
+- Any role that mentions AI, agents, LLM, health, iOS, or startup at a non-senior level
 
 ## Excluded title keywords (auto-reject if in job title):
 {excluded_keywords}
@@ -585,6 +591,20 @@ async def score_job(
         # Even if the LLM scored it, catch obvious mismatches
         role_title = (data.get("role_title") or raw.title or "").lower()
         poison_titles = [
+            "senior",
+            "sr.",
+            "staff",
+            "principal",
+            "lead engineer",
+            "lead software",
+            "lead developer",
+            "lead mobile",
+            "lead ios",
+            "lead ai",
+            "director",
+            "head of",
+            "vp of",
+            "architect",
             "shopify",
             "magento",
             "wordpress",

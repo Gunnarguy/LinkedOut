@@ -206,10 +206,17 @@ class UserPreferences(BaseModel):
     )
     excluded_keywords: list[str] = Field(
         default_factory=lambda: [
+            "Senior",
+            "Sr.",
+            "Sr ",
             "Staff Engineer",
             "Principal Engineer",
+            "Lead Engineer",
             "Engineering Manager",
             "Director of Engineering",
+            "VP of Engineering",
+            "Head of Engineering",
+            "Architect",
             "LeetCode",
             "whiteboard",
             "competitive programming",
@@ -264,34 +271,46 @@ class UserPreferences(BaseModel):
     experience_penalty: float = -0.10
     credential_penalty: float = -0.15
     portfolio_boost: float = 0.10
-    max_seniority_level: str = "Senior"
-    professional_profile: str = """### Classification: AI Orchestrator & MedTech Bridge Builder
-You are the bridge between AI orchestration, prompt-to-production app building, and complex healthcare/medical device workflows.
-You don't type code by hand. You orchestrate AI agents (Claude, GPT, Gemini) to architect, generate, and ship entire systems at extreme velocity. You see a problem, figure out how it should work, and don't stop until it's a shipped product.
+    max_seniority_level: str = "Mid"
+    professional_profile: str = """### Background — Read This Carefully
+You have ZERO professional software engineering experience. Your day job is OnSite Specialist at Stryker (VA Palo Alto Health Care System, since August 2022). You support Stanford surgical teams — setting up medical devices, troubleshooting equipment during live surgeries, training staff. You hold Government Contractor PIV clearance. You have witnessed 1,000+ surgeries.
 
-### Core Focus & Superpowers
-- **Healthcare/Medical Device/MedTech**: You work full-time at VA Palo Alto (Stryker) supporting Stanford surgical teams in high-pressure O.R. environments. You understand HIPAA, PIV clearance, clinical ops, and exactly how medical devices interact with surgeons and patient care.
-- **Prompt-to-Production Velocity**: You use AI to execute your product vision from zero to App Store. Your workflow isn't 'using Copilot to write a function' — it's orchestrating entire multi-agent pipelines to build complex RAG engines.
-- **iOS/Apple Ecosystem**: You focus on iOS (SwiftUI) because it's frictionless to build, test on-device, and deploy into the Apple ecosystem.
+Your education is a B.S. in Exercise Science (Kinesiology). No CS degree.
 
-### Shipped Portfolio of Proof (gunnarguy.me)
-- **OpenIntelligence**: On-device RAG engine — 102 services, 29-step pipeline, hybrid search, Core ML embeddings, Apple Intelligence, runs in airplane mode. 202 commits.
-- **OpenResponses**: OpenAI Responses API client — MCP integration (Notion, Dropbox, Gmail), Computer Use, 15+ models. Passed App Store review instantly. 88 commits.
-- **OpenCone**: Pinecone vector DB RAG app — hybrid search, reranking, document ingestion. 122 commits.
-- **OpenAssistant**: Assistants API client — threads, runs, vector stores, Code Interpreter. 214 commits.
-- **LinkedOut**: Full-stack AI matching platform — SwiftUI + FastAPI + Docker. Full job scoring pipeline.
-- **PlaudBlender**: Voice recordings → knowledge graph — Python, Gemini AI, Qdrant, Dash UI, 11-tool MCP server.
-- **Velocity Tracker**: 824 all-time commits, 697 in the last year, 4 live App Store apps.
+Outside of work, you are a self-taught solo iOS developer with 4 apps on the App Store. All projects are personal — none were built for an employer. You use AI tools (Claude, GPT, Gemini) to help you build.
 
-### Technical Reality
-- **Built with**: Swift/SwiftUI, Python/FastAPI, RAG pipelines, vector databases (Pinecone, Qdrant), LLM orchestration, on-device ML (Core ML, Metal GPU), MCP servers, Docker.
-- **Haven't used professionally**: React, Vue, Angular, Java, Go, Rust, C++, Kubernetes at scale.
-- **Credentials**: B.S. Kinesiology. No traditional CS degree. Your portfolio of deployed applications IS your equivalent experience. Period.
+### Shipped Personal Projects (gunnarguy.me)
+- **OpenIntelligence**: On-device RAG engine — 102 services, 29-step pipeline, hybrid search, Core ML, runs offline. Live on App Store Jan 2026.
+- **OpenResponses**: OpenAI Responses API client — MCP integration, 15+ models, 43+ file formats. Live on App Store Jan 2026.
+- **OpenCone**: Pinecone vector DB RAG app — hybrid search, reranking, document ingestion. Live on App Store May 2025.
+- **OpenAssistant**: OpenAI Assistants API v2 client — threads, runs, vector stores, Code Interpreter. Live on App Store Oct 2024.
+- **LinkedOut**: Full-stack job matching app — SwiftUI + FastAPI + Docker.
+- **PlaudBlender**: Voice recordings → knowledge graph — Python, Gemini, Qdrant, Dash UI.
+- 824 total commits, 697 in the last year.
+
+### Technical Skills (from resume)
+- **Mobile**: SwiftUI, Swift, MVVM, Combine, URLSession, XCTest, Core ML, Metal, SQLite, PDFKit, Vision
+- **Languages**: Swift, Python, HTML, CSS
+- **Backend**: RESTful APIs, JSON, Docker, MCP Servers, Async/Await, SSE
+- **AI/ML**: RAG Architecture, Vector DBs (Pinecone/Qdrant), LLM Integration (OpenAI), Embeddings, On-Device ML
+- **Healthcare**: HIPAA Compliance, Clinical Workflows, Medical Device Support, PIV Clearance
+- **NOT in your stack**: React, Vue, Angular, Java, Go, Rust, C++, Kubernetes, TypeScript, Node.js
+
+### Experience Level — CRITICAL
+You are an ENTRY-LEVEL / JUNIOR software engineering candidate. Your portfolio is impressive for a self-taught developer, but:
+- You have never held a software engineering job title
+- You have never worked on a software team
+- You have never done code reviews, sprint planning, or agile ceremonies professionally
+- You have never shipped software for an employer
+- All your projects are solo personal projects
+
+Do NOT match you with Senior, Staff, Lead, or Principal roles. These require years of professional engineering experience you do not have. Even 'Mid-level' is a stretch — you should target Junior, Entry-Level, Associate, or roles that explicitly say 'no experience required' or 'portfolio over resume.'
 
 ### What You Want
-- You are willing to do whatever it takes, provided the role aligns with building real solutions.
-- You want to match company mottos, missions, and job requirements directly to your prompt-to-production capability.
-- Ideal targets: HealthTech, MedTech, Clinical AI, AI Orchestration, iOS/mobile apps. Roles where they value your clinical domain expertise combined with insane shipping velocity."""
+- Entry-level or junior roles where your personal projects and healthcare domain knowledge give you an edge
+- Companies that value what you've built over credentials and job titles
+- HealthTech, MedTech, Clinical AI, AI tooling, iOS — places where your O.R. background is an unfair advantage
+- Startups that judge by shipped work, not years of professional experience"""
 
 
 # ── Batch / Pipeline ────────────────────────────────────────────────────────
