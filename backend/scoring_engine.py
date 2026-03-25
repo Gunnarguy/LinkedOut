@@ -419,55 +419,38 @@ Return ONLY valid JSON:
 
 
 TRIAGE_PROMPT = """\
-You are a job-listing triage filter. Your job is to quickly separate plausible matches
-from obvious mismatches. Let borderline cases PASS — the full scorer will evaluate them
-carefully. Target a ~45-55% pass rate. When in doubt, PASS.
+You are a permissive job triage filter. Your DEFAULT answer is PASS (dominated=true).
+Only reject jobs that are OBVIOUSLY wrong. The full scorer handles nuance — your job
+is just to remove clear garbage. If you can imagine ANY reasonable argument for why
+this candidate might fit, PASS it.
 
-## Your snapshot
+## Candidate snapshot
 {professional_profile}
-Home: {preferred_locations}. Prefers remote.
-Max seniority comfort level: {max_seniority_level}
+Prefers remote. US-based.
 
-## EXCLUDED KEYWORDS — AUTO-REJECT on match:
+## ONLY reject (dominated=false) if ALL of these are true:
+1. The role has ZERO overlap with: AI, ML, LLM, health, iOS, product building, Python, startups, or mobile
+2. AND the role is clearly one of these:
+   - Pure non-tech (sales, marketing, HR, legal, accounting)
+   - IT Support / Helpdesk / SysAdmin (not building software)
+   - E-commerce platform dev (Shopify, Magento, WooCommerce, WordPress, PHP, Drupal)
+   - Hard geographic restriction outside the US with no remote option
+   - Requires 8+ years of SPECIFIC traditional SWE experience (not "or equivalent")
+
+That's it. Everything else passes — including:
+- Senior/Staff/Lead titles (these are normal for AI roles)
+- Director/VP at small companies (could be hands-on)
+- Roles requiring 3-5 years experience (portfolio counts)
+- Any tech stack if the company does AI/health/interesting work
+- Product/design/data roles at AI or health companies
+- "Requires CS degree" IF it says "or equivalent" anywhere
+- Any role that mentions AI, agents, LLM, health, iOS, or startup
+
+## Excluded title keywords (auto-reject if in job title):
 {excluded_keywords}
-If the job title prominently features any of the above, REJECT.
-
-## HARD REJECT (dominated=false) — only if CLEARLY true:
-- Pure non-tech role (sales, marketing, HR, legal, finance, design-only)
-- Pure infra / DevOps / SRE / platform ops with NO product or AI surface
-- IT Support / Helpdesk / SysAdmin with no software building component
-- E-commerce platform specialist (Shopify, Magento, WooCommerce)
-- WordPress / PHP / Drupal development
-- QA / Test Automation / SDET roles
-- Director, VP, C-suite, Head-of title (executive-level)
-- Requires 8+ years professional SWE experience with NO flexibility or "equivalent" escape
-- Requires CS/engineering degree with NO "or equivalent experience" escape hatch
-- Hard requires a non-matching stack (Java, Go, C++, Rust, Ruby, .NET, Scala) with
-  ZERO signal they accept portfolio, fast learners, or AI-assisted development
-- Salary band explicitly entirely below $70,000
-- Geographic restriction to outside the US (e.g. "Germany only", "UK only", "EU only")
-
-## PASS (dominated=true) — any of these signals = let it through:
-- **Healthcare / MedTech / Clinical / Surgical / HIPAA** — always pass if building software
-- **AI / ML / LLM / RAG / Agents / GenAI / AI orchestration** — the core skill match
-- **iOS / SwiftUI / Mobile** at any company doing interesting work
-- **Founding / first / early engineer** at startups
-- **Product engineer** roles at companies building AI or health products
-- "Rapid iteration", "zero-to-one", "autonomy", "AI-native", "ship fast"
-- "Non-traditional backgrounds", "portfolio over resume", "show us what you built"
-- Startup or small company (<200 people) building something the candidate could contribute to
-- Python / FastAPI / Docker mentioned alongside AI or product building
-- "Senior" title is FINE — many AI roles are titled Senior even for 2-3 year practitioners
-- "3-5 years experience" is NOT a hard reject — many companies treat portfolio as equivalent
-- If the role touches AI in any meaningful way and isn't exclusively a different tech stack → PASS
-
-## Key context: The job market IS shifting. Companies are actively hiring AI-native builders
-who orchestrate LLMs to ship products. Roles like "AI Engineer", "Applied AI", "AI Solutions
-Engineer", "Product Engineer" at AI companies — these are EXACTLY what this candidate does.
-Don't over-filter. Let the full scorer make the nuanced call.
 
 Return ONLY valid JSON:
-{{"dominated": true/false, "reason": "one sentence why"}}
+{{"dominated": true/false, "reason": "one sentence"}}
 """
 
 
@@ -475,11 +458,6 @@ async def triage_job(raw: RawJobListing, prefs: UserPreferences | None = None) -
     """Fast triage with Flash model. Returns True if worth full scoring."""
     if prefs is None:
         prefs = UserPreferences()
-    locations_formatted = (
-        ", ".join(prefs.preferred_locations)
-        if prefs.preferred_locations
-        else "Kalamazoo, Michigan"
-    )
 
     # ── Programmatic pre-triage: check excluded keywords in TITLE only ────
     title_lower = raw.title.lower()
@@ -493,11 +471,7 @@ async def triage_job(raw: RawJobListing, prefs: UserPreferences | None = None) -
 
     excluded_keywords_formatted = ", ".join(prefs.excluded_keywords)
     triage_sys = TRIAGE_PROMPT.replace("{professional_profile}", prefs.professional_profile)
-    triage_sys = triage_sys.replace("{preferred_locations}", locations_formatted)
     triage_sys = triage_sys.replace("{excluded_keywords}", excluded_keywords_formatted)
-    triage_sys = triage_sys.replace(
-        "{max_seniority_level}", prefs.max_seniority_level or "Senior"
-    )
     user_msg = f"Title: {raw.title}\nCompany: {raw.company}\nLocation: {raw.location}\nRemote: {raw.is_remote}\n\nDescription (first 1500 chars):\n{raw.description[:1500]}"
 
     try:
