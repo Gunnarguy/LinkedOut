@@ -180,7 +180,11 @@ async def _run_ingest_cycle():
     logger.info("="*60)
     try:
         t0 = _time.monotonic()
-        raw_listings = await fetch_all_sources()
+        # Pass user's preferred locations so location-aware sources
+        # (SerpAPI, Adzuna, TheMuse, FindWork, Reed, USAJobs) can
+        # search specifically in those cities.
+        locations = _user_prefs.preferred_locations if _user_prefs else None
+        raw_listings = await fetch_all_sources(preferred_locations=locations)
         fetch_elapsed = _time.monotonic() - t0
         _ingest_progress["fetched"] = len(raw_listings)
         logger.info(f"[FETCH] Got {len(raw_listings)} total listings in {fetch_elapsed:.1f}s")

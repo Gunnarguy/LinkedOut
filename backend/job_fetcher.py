@@ -587,8 +587,11 @@ async def fetch_arbeitnow() -> list[RawJobListing]:
     return all_listings
 
 
-async def fetch_themuse() -> list[RawJobListing]:
-    """Fetch jobs from The Muse public API (free, no auth, well-known career platform)."""
+async def fetch_themuse(locations: list[str] | None = None) -> list[RawJobListing]:
+    """Fetch jobs from The Muse public API (free, no auth, well-known career platform).
+
+    When locations are provided, runs additional location-scoped searches.
+    """
     import time as _time
 
     t0 = _time.monotonic()
@@ -603,12 +606,25 @@ async def fetch_themuse() -> list[RawJobListing]:
         "IT",
     ]
 
+    # Build search plan: (category, location_filter)
+    search_plan: list[tuple[str, str]] = [(c, "") for c in categories]
+    if locations:
+        for loc in locations:
+            for c in categories:
+                search_plan.append((c, loc))
+        logger.info(
+            f"The Muse: {len(search_plan)} total searches ({len(categories)} base + {len(locations)} locations)"
+        )
+
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-        for category in categories:
+        for category, location_filter in search_plan:
             try:
+                params: dict = {"category": category, "page": 0, "descending": "true"}
+                if location_filter:
+                    params["location"] = location_filter
                 resp = await client.get(
                     "https://www.themuse.com/api/public/jobs",
-                    params={"category": category, "page": 0, "descending": "true"},
+                    params=params,
                 )
                 resp.raise_for_status()
                 data = resp.json()
@@ -631,10 +647,12 @@ async def fetch_themuse() -> list[RawJobListing]:
                         company_obj.get("name", "Unknown") if company_obj else "Unknown"
                     )
 
-                    locations = job.get("locations", [])
+                    job_locations = job.get("locations", [])
                     location_str = (
                         ", ".join(
-                            loc.get("name", "") for loc in locations if loc.get("name")
+                            loc.get("name", "")
+                            for loc in job_locations
+                            if loc.get("name")
                         )
                         or "Unknown"
                     )
@@ -667,10 +685,13 @@ async def fetch_themuse() -> list[RawJobListing]:
 # ── API-key-based sources (gracefully skipped when keys not configured) ──
 
 
-async def fetch_serpapi_google_jobs() -> list[RawJobListing]:
+async def fetch_serpapi_google_jobs(
+    locations: list[str] | None = None,
+) -> list[RawJobListing]:
     """Fetch via SerpAPI Google Jobs — aggregates LinkedIn, Indeed, Glassdoor, etc.
 
     Requires SERPAPI_API_KEY env var (free 250 searches/month at serpapi.com).
+    When locations are provided, runs additional location-scoped searches.
     """
     import time as _time
     from config import settings
@@ -702,18 +723,33 @@ async def fetch_serpapi_google_jobs() -> list[RawJobListing]:
         "clinical AI software",
     ]
 
+    # Build search plan: base queries (no location) + location-scoped queries
+    search_plan: list[tuple[str, str]] = [(q, "") for q in serpapi_queries]
+    if locations:
+        # Top 5 queries per location to stay within free-tier budget
+        loc_queries = serpapi_queries[:5]
+        for loc in locations:
+            for q in loc_queries:
+                search_plan.append((q, loc))
+        logger.info(
+            f"SerpAPI: {len(search_plan)} total searches ({len(serpapi_queries)} base + {len(locations)} locations × {len(loc_queries)} queries)"
+        )
+
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-        for query in serpapi_queries:
+        for query, location_filter in search_plan:
             try:
+                params = {
+                    "engine": "google_jobs",
+                    "q": query,
+                    "hl": "en",
+                    "gl": "us",
+                    "api_key": settings.serpapi_api_key,
+                }
+                if location_filter:
+                    params["location"] = location_filter
                 resp = await client.get(
                     "https://serpapi.com/search.json",
-                    params={
-                        "engine": "google_jobs",
-                        "q": query,
-                        "hl": "en",
-                        "gl": "us",
-                        "api_key": settings.serpapi_api_key,
-                    },
+                    params=params,
                 )
                 resp.raise_for_status()
                 data = resp.json()
@@ -761,10 +797,11 @@ async def fetch_serpapi_google_jobs() -> list[RawJobListing]:
     return all_listings
 
 
-async def fetch_adzuna() -> list[RawJobListing]:
+async def fetch_adzuna(locations: list[str] | None = None) -> list[RawJobListing]:
     """Fetch from Adzuna API — major aggregator for US + international.
 
     Requires ADZUNA_APP_ID + ADZUNA_APP_KEY (free at developer.adzuna.com).
+    When locations are provided, runs additional location-scoped searches.
     """
     import time as _time
     from config import settings
@@ -790,18 +827,31 @@ async def fetch_adzuna() -> list[RawJobListing]:
         "medical software engineer",
     ]
 
+    # Build search plan: (query, location_filter)
+    search_plan: list[tuple[str, str]] = [(q, "") for q in adzuna_queries]
+    if locations:
+        for loc in locations:
+            for q in adzuna_queries:
+                search_plan.append((q, loc))
+        logger.info(
+            f"Adzuna: {len(search_plan)} total searches ({len(adzuna_queries)} base + {len(locations)} locations)"
+        )
+
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-        for query in adzuna_queries:
+        for query, location_filter in search_plan:
             try:
+                params = {
+                    "app_id": settings.adzuna_app_id,
+                    "app_key": settings.adzuna_app_key,
+                    "what": query,
+                    "results_per_page": 20,
+                    "content-type": "application/json",
+                }
+                if location_filter:
+                    params["where"] = location_filter
                 resp = await client.get(
                     "https://api.adzuna.com/v1/api/jobs/us/search/1",
-                    params={
-                        "app_id": settings.adzuna_app_id,
-                        "app_key": settings.adzuna_app_key,
-                        "what": query,
-                        "results_per_page": 20,
-                        "content-type": "application/json",
-                    },
+                    params=params,
                 )
                 resp.raise_for_status()
                 data = resp.json()
@@ -868,10 +918,11 @@ async def fetch_adzuna() -> list[RawJobListing]:
     return all_listings
 
 
-async def fetch_findwork() -> list[RawJobListing]:
+async def fetch_findwork(locations: list[str] | None = None) -> list[RawJobListing]:
     """Fetch from FindWork.dev API — dev/startup focused jobs.
 
     Requires FINDWORK_API_TOKEN (free at findwork.dev/developers).
+    When locations are provided, runs additional location-scoped searches.
     """
     import time as _time
     from config import settings
@@ -895,15 +946,28 @@ async def fetch_findwork() -> list[RawJobListing]:
         "founding engineer",
     ]
 
+    # Build search plan: (query, location_filter)
+    search_plan: list[tuple[str, str]] = [(q, "") for q in findwork_queries]
+    if locations:
+        for loc in locations:
+            for q in findwork_queries:
+                search_plan.append((q, loc))
+        logger.info(
+            f"FindWork: {len(search_plan)} total searches ({len(findwork_queries)} base + {len(locations)} locations)"
+        )
+
     async with httpx.AsyncClient(
         timeout=TIMEOUT,
         headers={"Authorization": f"Token {settings.findwork_api_token}"},
     ) as client:
-        for query in findwork_queries:
+        for query, location_filter in search_plan:
             try:
+                params: dict = {"search": query, "sort_by": "relevance"}
+                if location_filter:
+                    params["location"] = location_filter
                 resp = await client.get(
                     "https://findwork.dev/api/jobs/",
-                    params={"search": query, "sort_by": "relevance"},
+                    params=params,
                 )
                 resp.raise_for_status()
                 data = resp.json()
@@ -944,10 +1008,11 @@ async def fetch_findwork() -> list[RawJobListing]:
     return all_listings
 
 
-async def fetch_reed() -> list[RawJobListing]:
+async def fetch_reed(locations: list[str] | None = None) -> list[RawJobListing]:
     """Fetch from Reed.co.uk API — UK + global remote tech jobs.
 
     Requires REED_API_KEY (free at reed.co.uk/developers).
+    When locations are provided, runs additional location-scoped searches.
     """
     import time as _time
     from base64 import b64encode
@@ -973,15 +1038,28 @@ async def fetch_reed() -> list[RawJobListing]:
         "LLM engineer",
     ]
 
+    # Build search plan: (query, location_filter)
+    search_plan: list[tuple[str, str]] = [(q, "") for q in reed_queries]
+    if locations:
+        for loc in locations:
+            for q in reed_queries:
+                search_plan.append((q, loc))
+        logger.info(
+            f"Reed: {len(search_plan)} total searches ({len(reed_queries)} base + {len(locations)} locations)"
+        )
+
     async with httpx.AsyncClient(
         timeout=TIMEOUT,
         headers={"Authorization": f"Basic {auth_str}"},
     ) as client:
-        for query in reed_queries:
+        for query, location_filter in search_plan:
             try:
+                params: dict = {"keywords": query, "resultsToTake": 25}
+                if location_filter:
+                    params["locationName"] = location_filter
                 resp = await client.get(
                     "https://www.reed.co.uk/api/1.0/search",
-                    params={"keywords": query, "resultsToTake": 25},
+                    params=params,
                 )
                 resp.raise_for_status()
                 data = resp.json()
@@ -1037,10 +1115,11 @@ async def fetch_reed() -> list[RawJobListing]:
     return all_listings
 
 
-async def fetch_usajobs() -> list[RawJobListing]:
+async def fetch_usajobs(locations: list[str] | None = None) -> list[RawJobListing]:
     """Fetch from USAJobs API — federal government tech/health IT jobs.
 
     Requires USAJOBS_API_KEY + USAJOBS_EMAIL (free at developer.usajobs.gov).
+    When locations are provided, runs additional location-scoped searches.
     """
     import time as _time
     from config import settings
@@ -1064,6 +1143,16 @@ async def fetch_usajobs() -> list[RawJobListing]:
         "digital services",
     ]
 
+    # Build search plan: (query, location_filter)
+    search_plan: list[tuple[str, str]] = [(q, "") for q in usajobs_queries]
+    if locations:
+        for loc in locations:
+            for q in usajobs_queries:
+                search_plan.append((q, loc))
+        logger.info(
+            f"USAJobs: {len(search_plan)} total searches ({len(usajobs_queries)} base + {len(locations)} locations)"
+        )
+
     async with httpx.AsyncClient(
         timeout=TIMEOUT,
         headers={
@@ -1072,14 +1161,17 @@ async def fetch_usajobs() -> list[RawJobListing]:
             "Host": "data.usajobs.gov",
         },
     ) as client:
-        for query in usajobs_queries:
+        for query, location_filter in search_plan:
             try:
+                params: dict = {
+                    "Keyword": query,
+                    "ResultsPerPage": 25,
+                }
+                if location_filter:
+                    params["LocationName"] = location_filter
                 resp = await client.get(
                     "https://data.usajobs.gov/api/search",
-                    params={
-                        "Keyword": query,
-                        "ResultsPerPage": 25,
-                    },
+                    params=params,
                 )
                 resp.raise_for_status()
                 data = resp.json()
@@ -1152,10 +1244,20 @@ async def fetch_usajobs() -> list[RawJobListing]:
     return all_listings
 
 
-async def fetch_all_sources() -> list[RawJobListing]:
-    """Fetch from all sources concurrently. Returns deduplicated listings."""
+async def fetch_all_sources(
+    preferred_locations: list[str] | None = None,
+) -> list[RawJobListing]:
+    """Fetch from all sources concurrently. Returns deduplicated listings.
+
+    When preferred_locations is provided, location-aware sources (SerpAPI, Adzuna,
+    TheMuse, FindWork, Reed, USAJobs) will run additional location-scoped searches
+    to find jobs in those specific cities.
+    """
     import time as _time
     t0 = _time.monotonic()
+    locs = preferred_locations or None
+    if locs:
+        logger.info(f"[FETCH] Location-aware search enabled for: {', '.join(locs)}")
     results = await asyncio.gather(
         fetch_remotive(),
         fetch_himalayas(),
@@ -1164,13 +1266,13 @@ async def fetch_all_sources() -> list[RawJobListing]:
         fetch_remoteok(),
         fetch_weworkremotely(),
         fetch_arbeitnow(),
-        fetch_themuse(),
+        fetch_themuse(locations=locs),
         # API-key sources (gracefully return [] if not configured)
-        fetch_serpapi_google_jobs(),
-        fetch_adzuna(),
-        fetch_findwork(),
-        fetch_reed(),
-        fetch_usajobs(),
+        fetch_serpapi_google_jobs(locations=locs),
+        fetch_adzuna(locations=locs),
+        fetch_findwork(locations=locs),
+        fetch_reed(locations=locs),
+        fetch_usajobs(locations=locs),
         return_exceptions=True,
     )
 
