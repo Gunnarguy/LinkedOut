@@ -9,13 +9,17 @@ Sources (free, no auth):
   6. We Work Remotely (RSS feed — top remote job board)
   7. Arbeitnow (EU + global remote)
   8. The Muse (career platform)
+  9. Working Nomads (curated remote dev/data jobs — JSON API)
+ 10. Jobspresso (curated remote jobs — RSS feed with keyword search)
 
 Sources (API key required — gracefully skipped if not configured):
-  9. SerpAPI Google Jobs (aggregates LinkedIn, Indeed, Glassdoor, ZipRecruiter, etc.)
- 10. Adzuna (major aggregator — US + 18 countries)
- 11. FindWork.dev (dev/startup focused)
- 12. Reed.co.uk (UK + remote jobs)
- 13. USAJobs (federal tech/health IT jobs)
+ 11. SerpAPI Google Jobs (aggregates LinkedIn, Indeed, Glassdoor, ZipRecruiter, etc.)
+ 12. Adzuna (major aggregator — US + 18 countries)
+ 13. FindWork.dev (dev/startup focused)
+ 14. Reed.co.uk (UK + remote jobs)
+ 15. FindWork.dev (dev/startup focused)
+ 14. Reed.co.uk (UK + remote jobs)
+ 15. USAJobs (federal tech/health IT jobs)
 """
 
 from __future__ import annotations
@@ -1244,6 +1248,170 @@ async def fetch_usajobs(locations: list[str] | None = None) -> list[RawJobListin
     return all_listings
 
 
+async def fetch_workingnomads() -> list[RawJobListing]:
+    """Fetch from Working Nomads API (free, no auth, curated remote jobs).
+
+    Returns full JSON array with title, company, description, tags, location.
+    Filters by Development + Data categories (most relevant to our search profile).
+    """
+    import time as _time
+
+    t0 = _time.monotonic()
+    all_listings: list[RawJobListing] = []
+    seen_urls: set[str] = set()
+
+    # Working Nomads returns ALL jobs in one call — filter client-side
+    target_categories = {"development", "data", "design", "management", "devops"}
+
+    async with httpx.AsyncClient(
+        timeout=TIMEOUT, headers={"User-Agent": "LinkedOut/1.0"}
+    ) as client:
+        try:
+            resp = await client.get("https://www.workingnomads.com/api/exposed_jobs/")
+            resp.raise_for_status()
+            data = resp.json()
+
+            for job in data:
+                category = (job.get("category_name", "") or "").lower()
+                if category and category not in target_categories:
+                    continue
+
+                url = job.get("url", "")
+                if not url or url in seen_urls:
+                    continue
+                seen_urls.add(url)
+
+                desc = job.get("description", "") or ""
+                desc = re.sub(r"<[^>]+>", " ", desc)
+                desc = re.sub(r"\s+", " ", desc).strip()
+
+                tags = job.get("tags", "") or ""
+                location = job.get("location", "") or "Remote"
+
+                # Append tags to description for better scoring context
+                if tags:
+                    desc = f"{desc}\n\nTags: {tags}"
+
+                all_listings.append(
+                    RawJobListing(
+                        title=job.get("title", "Unknown"),
+                        company=job.get("company_name", "Unknown"),
+                        description=desc[:8000],
+                        url=url,
+                        salary_text="",
+                        location=location,
+                        is_remote=True,
+                    )
+                )
+
+        except Exception as e:
+            logger.warning(f"Working Nomads fetch failed: {e}")
+
+    logger.info(
+        f"WorkingNomads: fetched {len(all_listings)} listings in {_time.monotonic() - t0:.1f}s"
+    )
+    return all_listings
+
+
+async def fetch_jobspresso() -> list[RawJobListing]:
+    """Fetch from Jobspresso RSS feed (free, no auth, curated remote jobs).
+
+    Supports keyword search and job type filtering via RSS URL params.
+    Categories: ai-data, developer, product-mgmt.
+    """
+    import time as _time
+    import xml.etree.ElementTree as ET
+
+    t0 = _time.monotonic()
+    all_listings: list[RawJobListing] = []
+    seen_urls: set[str] = set()
+
+    # Jobspresso RSS supports search_keywords and job_types params
+    rss_urls = [
+        "https://jobspresso.co/?feed=job_feed&job_types=ai-data,developer,product-mgmt&search_keywords=AI+engineer",
+        "https://jobspresso.co/?feed=job_feed&job_types=ai-data,developer&search_keywords=machine+learning",
+        "https://jobspresso.co/?feed=job_feed&job_types=developer&search_keywords=iOS+engineer",
+        "https://jobspresso.co/?feed=job_feed&job_types=developer&search_keywords=founding+engineer",
+        "https://jobspresso.co/?feed=job_feed&job_types=ai-data,developer&search_keywords=healthcare+AI",
+        "https://jobspresso.co/?feed=job_feed&job_types=developer&search_keywords=full+stack+startup",
+    ]
+
+    # XML namespaces used by Jobspresso RSS
+    ns = {
+        "content": "http://purl.org/rss/1.0/modules/content/",
+        "job_listing": "https://jobspresso.co",
+    }
+
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        for rss_url in rss_urls:
+            try:
+                resp = await client.get(rss_url)
+                resp.raise_for_status()
+
+                root = ET.fromstring(resp.text)
+                for item in root.findall(".//item"):
+                    url = (item.findtext("link") or "").strip()
+                    if not url or url in seen_urls:
+                        continue
+                    seen_urls.add(url)
+
+                    title = (item.findtext("title") or "Unknown").strip()
+
+                    # dc:creator contains "Company<br>⚲ Location"
+                    creator = (
+                        item.findtext("{http://purl.org/dc/elements/1.1/}creator") or ""
+                    )
+                    # Parse company and location from creator field
+                    creator_clean = re.sub(r"<[^>]+>", "|", creator)
+                    creator_parts = [
+                        p.strip() for p in creator_clean.split("|") if p.strip()
+                    ]
+                    company = creator_parts[0] if creator_parts else "Unknown"
+                    # Location comes after ⚲ symbol
+                    location = "Remote"
+                    for part in creator_parts:
+                        loc_match = re.search(r"[⚲]\s*(.+)", part)
+                        if loc_match:
+                            location = loc_match.group(1).strip()
+                            break
+
+                    # Try content:encoded first (full HTML), fall back to description
+                    desc = (
+                        item.findtext("content:encoded", namespaces=ns)
+                        or item.findtext("description")
+                        or ""
+                    )
+                    desc = re.sub(r"<[^>]+>", " ", desc)
+                    desc = re.sub(r"\s+", " ", desc).strip()
+
+                    # Job type/category from custom RSS fields
+                    job_type = (
+                        item.findtext("job_listing:job_type", namespaces=ns) or ""
+                    )
+                    if job_type:
+                        desc = f"{desc}\n\nCategory: {job_type}"
+
+                    all_listings.append(
+                        RawJobListing(
+                            title=title,
+                            company=company,
+                            description=desc[:8000],
+                            url=url,
+                            salary_text="",
+                            location=location,
+                            is_remote=True,
+                        )
+                    )
+
+            except Exception as e:
+                logger.warning(f"Jobspresso RSS fetch failed: {e}")
+
+    logger.info(
+        f"Jobspresso: fetched {len(all_listings)} listings in {_time.monotonic() - t0:.1f}s"
+    )
+    return all_listings
+
+
 async def fetch_all_sources(
     preferred_locations: list[str] | None = None,
 ) -> list[RawJobListing]:
@@ -1251,7 +1419,7 @@ async def fetch_all_sources(
 
     When preferred_locations is provided, location-aware sources (SerpAPI, Adzuna,
     TheMuse, FindWork, Reed, USAJobs) will run additional location-scoped searches
-    to find jobs in those specific cities.
+    to find jobs in those specific cities. Total: 15 sources (10 free + 5 API-key).
     """
     import time as _time
     t0 = _time.monotonic()
@@ -1267,6 +1435,8 @@ async def fetch_all_sources(
         fetch_weworkremotely(),
         fetch_arbeitnow(),
         fetch_themuse(locations=locs),
+        fetch_workingnomads(),
+        fetch_jobspresso(),
         # API-key sources (gracefully return [] if not configured)
         fetch_serpapi_google_jobs(locations=locs),
         fetch_adzuna(locations=locs),
@@ -1289,6 +1459,8 @@ async def fetch_all_sources(
         "WWR",
         "Arbeitnow",
         "TheMuse",
+        "WorkingNomads",
+        "Jobspresso",
         "SerpAPI",
         "Adzuna",
         "FindWork",
