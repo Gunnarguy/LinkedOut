@@ -20,9 +20,13 @@ struct UserPreferences: Codable {
     var convincingPenalty: Double       // negative, e.g. -0.20
     var convincingBoost: Double         // positive, e.g.  0.10
     var nearbyPenalty: Double           // negative, e.g. -0.03
+    var nearbyPenaltyMult: Double       // multiplier, e.g. 0.97
     var regionalPenalty: Double         // negative, e.g. -0.08
+    var regionalPenaltyMult: Double     // multiplier, e.g. 0.92
     var relocationPenalty: Double       // negative, e.g. -0.15
+    var relocationPenaltyMult: Double   // multiplier, e.g. 0.85
     var internationalPenalty: Double    // negative, e.g. -0.25
+    var internationalPenaltyMult: Double // multiplier, e.g. 0.75
     var experiencePenalty: Double       // negative, e.g. -0.10
     var credentialPenalty: Double       // negative, e.g. -0.15
     var portfolioBoost: Double          // positive, e.g.  0.10
@@ -40,9 +44,13 @@ struct UserPreferences: Codable {
         case convincingPenalty = "convincing_penalty"
         case convincingBoost = "convincing_boost"
         case nearbyPenalty = "nearby_penalty"
+        case nearbyPenaltyMult = "nearby_penalty_mult"
         case regionalPenalty = "regional_penalty"
+        case regionalPenaltyMult = "regional_penalty_mult"
         case relocationPenalty = "relocation_penalty"
+        case relocationPenaltyMult = "relocation_penalty_mult"
         case internationalPenalty = "international_penalty"
+        case internationalPenaltyMult = "international_penalty_mult"
         case experiencePenalty = "experience_penalty"
         case credentialPenalty = "credential_penalty"
         case portfolioBoost = "portfolio_boost"
@@ -80,13 +88,17 @@ struct UserPreferences: Codable {
         ],
         locationPreference: "Remote",
         preferredLocations: ["Kalamazoo, Michigan"],
-        scoreCutoff: 0.35,
+        scoreCutoff: 0.20,
         convincingPenalty: -0.20,
         convincingBoost: 0.10,
         nearbyPenalty: -0.03,
+        nearbyPenaltyMult: 0.97,
         regionalPenalty: -0.08,
+        regionalPenaltyMult: 0.92,
         relocationPenalty: -0.15,
+        relocationPenaltyMult: 0.85,
         internationalPenalty: -0.25,
+        internationalPenaltyMult: 0.75,
         experiencePenalty: -0.10,
         credentialPenalty: -0.15,
         portfolioBoost: 0.10,

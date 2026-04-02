@@ -59,6 +59,15 @@ class JobPayload(BaseModel):
     domain_leverage: str = ""  # Where he has an unfair advantage
     risk_reward: str = ""  # Realistic friction and upside
 
+    # ── Structured Scoring Factors (v2) ──────────────────────────────────
+    domain_alignment: float = 0.0  # 0-1: company domain match
+    role_alignment: float = 0.0  # 0-1: daily work match
+    culture_fit: float = 0.0  # 0-1: company culture signals
+    experience_friction: float = 0.0  # 0-1: inverted friction (1=no friction)
+    stack_fit: float = 0.0  # 0-1: tech stack overlap
+    caveats: list[str] = Field(default_factory=list)  # Factual friction points
+    scoring_version: str = ""  # "v1" or "v2" — tracks which prompt scored this
+
     # ── User-Managed Fields (not from LLM) ───────────────────────────────
     notes: str = ""  # User's personal notes
     application_status: str = (
@@ -261,56 +270,55 @@ class UserPreferences(BaseModel):
         return "Michigan"
 
     # ── Scoring Weights (adjustable from app) ──
-    score_cutoff: float = 0.40
+    score_cutoff: float = 0.20
     convincing_penalty: float = -0.20
     convincing_boost: float = 0.10
     nearby_penalty: float = -0.03
+    nearby_penalty_mult: float = 0.97
     regional_penalty: float = -0.08
+    regional_penalty_mult: float = 0.92
     relocation_penalty: float = -0.15
+    relocation_penalty_mult: float = 0.85
     international_penalty: float = -0.25
+    international_penalty_mult: float = 0.75
     experience_penalty: float = -0.10
     credential_penalty: float = -0.15
     portfolio_boost: float = 0.10
     max_seniority_level: str = "Mid"
-    professional_profile: str = """### Background — Read This Carefully
-You have ZERO professional software engineering experience. Your day job is OnSite Specialist at Stryker (VA Palo Alto Health Care System, since August 2022). You support Stanford surgical teams — setting up medical devices, troubleshooting equipment during live surgeries, training staff. You hold Government Contractor PIV clearance. You have witnessed 1,000+ surgeries.
+    professional_profile: str = """### AI Orchestrator & MedTech Bridge Builder
 
-Your education is a B.S. in Exercise Science (Kinesiology). No CS degree.
+**Current Role**: OnSite Specialist at Stryker (VA Palo Alto Health Care System, since Aug 2022). You support Stanford surgical teams — setting up/troubleshooting medical devices during live surgeries, training clinical staff. Government Contractor PIV clearance. 1,000+ surgeries witnessed.
 
-Outside of work, you are a self-taught solo iOS developer with 4 apps on the App Store. All projects are personal — none were built for an employer. You use AI tools (Claude, GPT, Gemini) to help you build.
+**Education**: B.S. Exercise Science (Kinesiology). No CS degree.
 
-### Shipped Personal Projects (gunnarguy.me)
-- **OpenIntelligence**: On-device RAG engine — 102 services, 29-step pipeline, hybrid search, Core ML, runs offline. Live on App Store Jan 2026.
-- **OpenResponses**: OpenAI Responses API client — MCP integration, 15+ models, 43+ file formats. Live on App Store Jan 2026.
-- **OpenCone**: Pinecone vector DB RAG app — hybrid search, reranking, document ingestion. Live on App Store May 2025.
-- **OpenAssistant**: OpenAI Assistants API v2 client — threads, runs, vector stores, Code Interpreter. Live on App Store Oct 2024.
-- **LinkedOut**: Full-stack job matching app — SwiftUI + FastAPI + Docker.
+**Builder Profile**: Self-taught AI-native iOS developer. You don't hand-write algorithms — you orchestrate AI models (Claude, GPT, Gemini) to architect and ship full-stack applications at startup velocity. 824 commits, 697 in the last year. 4 live App Store apps, all personal projects.
+
+### Shipped Apps (gunnarguy.me)
+- **OpenIntelligence**: On-device RAG engine — 102 services, 29-step pipeline, hybrid search, Core ML, runs fully offline. App Store Jan 2026.
+- **OpenResponses**: OpenAI Responses API client — MCP integration, 15+ models, 43+ file formats. App Store Jan 2026.
+- **OpenCone**: Pinecone vector DB RAG app — hybrid search, reranking, document ingestion. App Store May 2025.
+- **OpenAssistant**: OpenAI Assistants API v2 client — threads, runs, vector stores, Code Interpreter. App Store Oct 2024.
+- **LinkedOut**: Full-stack job matching — SwiftUI + FastAPI + Docker + LLM scoring pipeline.
 - **PlaudBlender**: Voice recordings → knowledge graph — Python, Gemini, Qdrant, Dash UI.
-- 824 total commits, 697 in the last year.
 
-### Technical Skills (from resume)
+### Technical Stack
 - **Mobile**: SwiftUI, Swift, MVVM, Combine, URLSession, XCTest, Core ML, Metal, SQLite, PDFKit, Vision
 - **Languages**: Swift, Python, HTML, CSS
 - **Backend**: RESTful APIs, JSON, Docker, MCP Servers, Async/Await, SSE
-- **AI/ML**: RAG Architecture, Vector DBs (Pinecone/Qdrant), LLM Integration (OpenAI), Embeddings, On-Device ML
+- **AI/ML**: RAG Architecture, Vector DBs (Pinecone/Qdrant), LLM Integration (OpenAI/Gemini/Claude), Embeddings, On-Device ML, Prompt Engineering
 - **Healthcare**: HIPAA Compliance, Clinical Workflows, Medical Device Support, PIV Clearance
-- **NOT in your stack**: React, Vue, Angular, Java, Go, Rust, C++, Kubernetes, TypeScript, Node.js
 
-### Experience Level — CRITICAL
-You are an ENTRY-LEVEL / JUNIOR software engineering candidate. Your portfolio is impressive for a self-taught developer, but:
-- You have never held a software engineering job title
-- You have never worked on a software team
-- You have never done code reviews, sprint planning, or agile ceremonies professionally
-- You have never shipped software for an employer
-- All your projects are solo personal projects
+### What Makes You Competitive
+- Healthcare domain expertise that no bootcamp grad has — you've been in the O.R. at a VA hospital for 3 years
+- AI-native development velocity — you ship full applications in weeks, not months
+- Portfolio of 4 live App Store apps proves you can ship real products
+- Cross-stack builder: iOS frontend + Python backend + LLM pipelines + Docker deployment
 
-Do NOT match you with Senior, Staff, Lead, or Principal roles. These require years of professional engineering experience you do not have. Even 'Mid-level' is a stretch — you should target Junior, Entry-Level, Associate, or roles that explicitly say 'no experience required' or 'portfolio over resume.'
-
-### What You Want
-- Entry-level or junior roles where your personal projects and healthcare domain knowledge give you an edge
-- Companies that value what you've built over credentials and job titles
-- HealthTech, MedTech, Clinical AI, AI tooling, iOS — places where your O.R. background is an unfair advantage
-- Startups that judge by shipped work, not years of professional experience"""
+### What You're Looking For
+- Roles where building AI-powered products is the job — not maintaining legacy systems
+- Companies where the portfolio speaks louder than a resume (shipped > credentialed)
+- HealthTech, MedTech, Clinical AI, AI tooling, iOS — where your O.R. background is leverage
+- Startups and growth-stage companies that value output and speed over process and titles"""
 
 
 # ── Batch / Pipeline ────────────────────────────────────────────────────────

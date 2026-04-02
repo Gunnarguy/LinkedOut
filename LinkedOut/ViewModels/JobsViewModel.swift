@@ -50,6 +50,13 @@ class JobsViewModel: ObservableObject {
     /// True when the last network request failed — shows offline indicator
     @Published var isOffline = false
 
+    // MARK: - LinkedIn Social State
+    @Published var linkedInPosts: [LinkedInPost] = []
+    @Published var linkedInComments: [String: [LinkedInComment]] = [:] // post_urn -> comments
+    @Published var linkedInReactions: [String: [LinkedInReaction]] = [:] // post_urn -> reactions
+    @Published var isSocialLoading = false
+    @Published var socialError: String?
+
     /// How the pending queue is sorted — persisted across sessions
     @Published var sortMode: JobSortMode = .score
 
@@ -974,5 +981,83 @@ class JobsViewModel: ObservableObject {
 
     enum SwipeHint {
         case none, apply, reject, save
+    }
+
+    // MARK: - LinkedIn Social Actions
+
+    func fetchOwnPosts(personId: String) async {
+        isSocialLoading = true
+        socialError = nil
+        do {
+                self.linkedInPosts = try await APIClient.shared.fetchLinkedInPostsParsed(personId: personId)
+        } catch {
+            socialError = error.localizedDescription
+            print("Failed to fetch LinkedIn posts: \(error)")
+        }
+        isSocialLoading = false
+    }
+
+    func deletePost(personId: String, postUrn: String) async {
+        do {
+            _ = try await APIClient.shared.deleteLinkedInPost(personId: personId, postUrn: postUrn)
+            self.linkedInPosts.removeAll { $0.urn == postUrn }
+        } catch {
+            socialError = error.localizedDescription
+            print("Failed to delete post: \(error)")
+        }
+    }
+
+    func fetchComments(personId: String, postUrn: String) async {
+        do {
+            self.linkedInComments[postUrn] = try await APIClient.shared.fetchLinkedInCommentsParsed(personId: personId, postUrn: postUrn)
+        } catch {
+            socialError = error.localizedDescription
+            print("Failed to fetch comments for \(postUrn): \(error)")
+        }
+    }
+
+    func addComment(personId: String, postUrn: String, text: String) async {
+        do {
+            _ = try await APIClient.shared.addLinkedInComment(personId: personId, postUrn: postUrn, text: text)
+            // Re-fetch comments to update the list
+            await fetchComments(personId: personId, postUrn: postUrn)
+        } catch {
+            socialError = error.localizedDescription
+            print("Failed to add comment: \(error)")
+        }
+    }
+
+    func deleteComment(personId: String, postUrn: String, commentId: String) async {
+        do {
+            _ = try await APIClient.shared.deleteLinkedInComment(personId: personId, postUrn: postUrn, commentId: commentId)
+            self.linkedInComments[postUrn]?.removeAll { $0.urn == commentId }
+        } catch {
+            socialError = error.localizedDescription
+            print("Failed to delete comment: \(error)")
+        }
+    }
+
+    func fetchReactions(personId: String, postUrn: String) async {
+        do {
+            self.linkedInReactions[postUrn] = try await APIClient.shared.fetchLinkedInReactionsParsed(personId: personId, postUrn: postUrn)
+        } catch {
+            socialError = error.localizedDescription
+            print("Failed to fetch reactions for \(postUrn): \(error)")
+        }
+    }
+
+    func toggleReaction(personId: String, postUrn: String, isAdding: Bool) async {
+        do {
+            if isAdding {
+                _ = try await APIClient.shared.addLinkedInReaction(personId: personId, postUrn: postUrn, reaction: "LIKE")
+            } else {
+                _ = try await APIClient.shared.removeLinkedInReaction(personId: personId, postUrn: postUrn)
+            }
+            // Re-fetch to update state accurately
+            await fetchReactions(personId: personId, postUrn: postUrn)
+        } catch {
+            socialError = error.localizedDescription
+            print("Failed to toggle reaction: \(error)")
+        }
     }
 }

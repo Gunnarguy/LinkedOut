@@ -702,18 +702,30 @@ struct JobDetailView: View {
             }
 
             if auth.isAuthenticated, auth.profile?.personId != "dev-user" {
-                Button {
-                    isShowingShareSheet = true
-                } label: {
-                    Label("Post to LinkedIn", systemImage: "paperplane.circle.fill")
-                        .font(.subheadline.weight(.medium))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(
-                            LinearGradient(colors: [.indigo, .blue], startPoint: .leading, endPoint: .trailing)
-                        )
-                        .foregroundStyle(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                HStack(spacing: 8) {
+                    Button {
+                        isShowingShareSheet = true
+                    } label: {
+                        Label("Post to LinkedIn", systemImage: "paperplane.circle.fill")
+                            .font(.subheadline.weight(.medium))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(
+                                LinearGradient(colors: [.indigo, .blue], startPoint: .leading, endPoint: .trailing)
+                            )
+                            .foregroundStyle(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+
+                    NavigationLink(destination: LinkedInPostsView()) {
+                        Image(systemName: "list.bullet.rectangle.portrait")
+                            .font(.subheadline.weight(.medium))
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 16)
+                            .background(Color(.systemGray5))
+                            .foregroundStyle(.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
                 }
             }
 

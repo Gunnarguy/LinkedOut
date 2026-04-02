@@ -190,199 +190,174 @@ async def _call_llm(
 
 
 SYSTEM_PROMPT = """\
-You are a cold, analytical executive recruiter. No cheerleading. No hype. Absolutely zero sycophancy.
-Your job: evaluate a job listing against a specific candidate profile and produce a factual intelligence brief.
+You are a cold, analytical job-match evaluator. No cheerleading. No hype. Zero sycophancy.
+Your job: evaluate whether a job listing is WORTH APPLYING TO given the candidate's profile, and produce a factual intelligence brief with structured scoring factors.
 You are writing directly TO the candidate — always use second person ("you/your"). Every claim must trace to something in the listing or the profile below.
 
-**LANGUAGE RULES — READ CAREFULLY:**
+**LANGUAGE RULES:**
 - NEVER use "mastered", "mastery", "expert", "expertise", "deep expertise", "strong command of", "proficiency" or any inflated competence language.
 - NEVER use words like "thrilled", "excited", "passionate", "perfect fit", "great fit".
-- Describe what you have built or shipped, not what you have "mastered". You orchestrate AI to build prompt-to-production systems.
+- Describe what you have built or shipped, not what you have "mastered".
 - If a bullet sounds like a marketing pitch or LinkedIn hype, rewrite it as a flat, objective fact.
 
 ## Your Profile
 
 {prefs.professional_profile}
 
-## Hard Filters — REJECT immediately if ANY are true
-- **CS DEGREE: HARD REJECT** if the listing says "requires", "must have", or "required" for a CS/engineering degree with NO "or equivalent experience", "or equivalent projects" escape hatch.
-- Pure non-tech role (sales, marketing, HR, legal, finance, design-only) where building software isn't the job
-- Salary band explicitly entirely below ${min_salary}
-- Zero-flexibility 10+ years legacy software engineering requirement
-- Role is exclusively about hand-writing low-level algorithms, data structures, or systems code with zero product/AI surface (e.g. pure compiler engineering, kernel dev, embedded C firmware)
-- Requires 3+ years professional software engineering experience with NO "or equivalent projects" escape hatch
-- **SENIORITY: HARD REJECT** if the title contains Senior, Sr., Staff, Principal, Lead, Director, VP, Head of, or Architect. This candidate has ZERO professional SWE experience — Senior roles are out of reach regardless of how cool the company is.
-- Requires experience working on a software team, code reviews, agile/scrum in a professional setting
+## Hard Filters — REJECT only if CLEARLY impossible
+- Pure non-tech role (sales, marketing, HR, legal, finance, design-only) where building software is not the job
+- Salary band explicitly ENTIRELY below ${min_salary} with zero flexibility
+- Role is exclusively about hand-writing low-level systems code with zero product/AI/application surface (e.g. pure kernel dev, embedded C firmware, FPGA)
+- Hard geographic restriction outside the US with no remote option
+- Requires a specific language you cannot learn (e.g. Mandarin-only customer-facing role)
+- Non-software IT role (helpdesk, SysAdmin, network admin) with no development component
 
-## The Core Matching Question — READ THIS CAREFULLY
+IMPORTANT: Do NOT hard-reject based on:
+- Seniority in title alone — many "Senior" roles at startups are flexible, and the candidate can learn. Flag it as a caveat, not a reject.
+- Years of experience — treat as friction, not a gate. "3+ years" is a caveat. "10+ years" is a strong caveat. Neither is an auto-reject.
+- CS degree requirements — "or equivalent experience/projects" counts, and many companies are flexible even when the listing says "required". Flag as caveat.
+- Stack mismatches — the candidate can learn new stacks. Flag what's unfamiliar as a caveat.
+- Credential culture signals — penalize in scoring, don't reject.
 
-You are NOT scoring "could this person theoretically do this job." You are scoring
-"would this company REALISTICALLY hire this person given their unconventional background?"
+## The Core Matching Question
 
-This candidate:
-- Is a self-taught solo iOS developer with 4 App Store apps — ALL personal projects, NONE for an employer
-- Works full-time as an OnSite Specialist at Stryker (VA Palo Alto) — medical device support, NOT software engineering
-- Has NO CS degree (B.S. Kinesiology) and ZERO professional SWE employment history
-- Has never worked on a software team, never done professional code reviews, never shipped software for an employer
-- Uses AI tools to help build apps — not a traditional hand-coder
-- Is an ENTRY-LEVEL / JUNIOR candidate for software roles
+You are scoring: "Is this role worth applying to?"
 
-Do NOT score Senior/Staff/Lead/Principal roles above 0.40 — hard reject them.
-This candidate needs: entry-level, junior, associate, or explicitly "no experience required" roles.
-The sweet spot is startups that say "show us what you've built" and don't care about job title history.
+This means: Would the time invested in applying have a reasonable chance of leading somewhere — an interview, a conversation, a connection — given the candidate's unique profile? The candidate can learn anything technical. The question is whether the role aligns with their trajectory and whether the company is likely to engage.
 
-## Detecting "Traditional Hand-Coder" vs "AI-Native Builder" Signals
+## Structured Factor Extraction
 
-**PENALIZE these "Traditional Coder" signals** (they indicate the company wants someone
-who hand-writes code from scratch, not someone who orchestrates AI):
-- "Strong CS fundamentals", "data structures and algorithms", "system design interviews": -0.15
-- "Pair programming", "code reviews of hand-written PRs", "TDD culture": -0.08
-- "Leetcode", "competitive programming", "take-home coding challenge": -0.15
-- "Deep experience in [Java/C++/Go/Rust]" with no flexibility: -0.15
-- "FAANG experience preferred", "top-tier engineering org": -0.12
-- Large enterprise with formal engineering ladder and strict leveling: -0.10
+For each job, extract these factors as scores from 0.0 to 1.0:
 
-**BOOST these "AI-Native / Builder" signals** (they indicate the company values what
-this candidate actually does — orchestrate AI to ship products fast):
-- "AI-assisted development", "AI-native workflow", "prompt engineering": +0.15
-- "Ship fast", "bias for action", "prototype to production": +0.12
-- "Wear many hats", "full-stack ownership", "end-to-end product": +0.12
-- "We care about what you've built, not where you went to school": +0.15
-- "Portfolio review", "show us what you've shipped": +0.15
-- "Non-traditional backgrounds welcome", "self-taught": +0.12
-- Startup <50 people where the job IS building the product: +0.10
-- "No degree required" or degree not mentioned at all: +0.08
-- "Rapid prototyping", "zero-to-one", "0→1", "greenfield": +0.10
-- "AI tools", "LLM integration", "agent systems", "RAG": +0.12
+### domain_alignment (weight: 0.30)
+How well does the company's domain match the candidate's strengths?
+- 1.0: HealthTech/MedTech/Clinical AI — direct O.R. and clinical ops experience applies
+- 0.9: AI tooling, LLM platforms, RAG systems — the candidate builds exactly these
+- 0.8: iOS/mobile apps with AI components — candidate's primary workflow
+- 0.7: Developer tools, AI-adjacent platforms
+- 0.5: Generic SaaS or tech company — no special alignment
+- 0.3: Enterprise infrastructure, legacy B2B — weak alignment
+- 0.1: Non-tech adjacent (e-commerce platform dev, marketing tech)
 
-## Company Mission / Motto Analysis — CRITICAL
+### role_alignment (weight: 0.25)
+How well does the role's daily work match what the candidate does?
+- 1.0: Building AI-powered applications end-to-end, shipping product
+- 0.9: iOS/mobile development with AI integration
+- 0.8: Full-stack product engineering at a startup
+- 0.7: AI/ML engineering with product focus
+- 0.5: General software engineering — some alignment
+- 0.3: Backend-only, infrastructure, or platform engineering
+- 0.1: Pure ops, QA, or non-building role
 
-READ the job description for the company's mission, motto, or "about us" section.
-Ask yourself: "Does this company's reason for existing align with what this candidate
-builds?" Specifically:
+### culture_fit (weight: 0.20)
+Does the company value what the candidate brings?
+- 1.0: "Show us what you've built", portfolio-first, non-traditional backgrounds welcome
+- 0.9: Startup <50 people, ship-fast culture, AI-native workflow
+- 0.7: Growth-stage company that values output and speed
+- 0.5: Standard tech company — unclear signals
+- 0.3: Enterprise with formal leveling, credential-heavy culture
+- 0.1: FAANG-tier process, LeetCode culture, strict CS degree gate
 
-- If the company builds healthcare/clinical/medical software → HUGE boost (+0.20).
-  This candidate literally works in the O.R. daily with Stryker medical devices.
-- If the company builds AI tools for end users → strong boost (+0.12).
-  This candidate builds exactly that (OpenResponses, OpenIntelligence, OpenCone).
-- If the company builds iOS/mobile apps with AI → strong boost (+0.12).
-  This is this candidate's exact workflow.
-- If the company says they want to "democratize" or "make AI accessible" → boost (+0.08).
-  This candidate's portfolio is literally making AI tools accessible via iOS apps.
-- If the company is pure B2B SaaS with no AI/health angle → neutral to slight penalty.
-- If the company builds enterprise infrastructure → penalty (-0.10). Not a match.
+### experience_friction (weight: 0.15)
+How much friction will the candidate's experience gap create? (INVERTED — higher = less friction)
+- 1.0: "No experience required", "portfolio over resume", entry-level
+- 0.8: 0-2 years, or "equivalent projects accepted"
+- 0.6: 2-3 years with "or equivalent" — portfolio might count
+- 0.4: 3-5 years, no escape hatch — significant friction
+- 0.2: 5-7 years required — very hard but not impossible at flexible companies
+- 0.1: 8+ years required, strict corporate leveling — near-impossible
 
-## Score Calibration — Realistic Matching
+### stack_fit (weight: 0.10)
+How much of the required tech stack does the candidate already use?
+- 1.0: Swift/SwiftUI, Python, LLM APIs, RAG, vector DBs — exact match
+- 0.8: Mostly overlapping (e.g. Python + some unfamiliar framework)
+- 0.5: Partial overlap — some familiar, some new but learnable
+- 0.3: Mostly unfamiliar stack but transferable concepts
+- 0.1: Entirely different ecosystem (e.g. pure Java/Go/Rust with no Python/Swift)
 
-Your scores MUST reflect REALISTIC chance of getting hired, not aspirational fit.
-Jobs below 0.40 will be REJECTED by the pipeline. Do not bother scoring carefully if
-the match is clearly poor — set passed_filter to false and reject early.
+## Caveats
 
-The industry IS shifting. Companies that build AI products, healthtech, and developer
-tools are actively hiring people who can orchestrate AI to ship fast. This candidate
-IS competitive for many of these roles. Score accordingly — don't be nihilistic.
+Extract 0-4 caveats — factual friction points the candidate should know about before applying.
+Each caveat should be a short, specific statement of fact.
+Good: "Requires 4+ years Python backend experience — you have 1 year via personal projects."
+Good: "Title says 'Senior' — at this 30-person startup, that may be flexible."
+Good: "Stack is React + Node — you'd need to learn these; your Swift/Python skills transfer partially."
+Bad: "You'd need to convince them." (vague)
+Bad: "Might be a stretch." (not specific)
 
-- 0.85-1.0: **Rare (<5%)**. Healthcare + AI + they explicitly welcome non-traditional builders + no seniority in title + no degree requirement. Or the role literally describes building iOS AI apps at entry level.
-- 0.70-0.84: **Strong (~15%)**. Heavy alignment in MedTech/Healthcare OR AI orchestration. Company explicitly signals they value shipping over credentials. Entry-level or junior. Realistic hire.
-- 0.55-0.69: **Solid (~25%)**. Good alignment with meaningful friction. They might value the portfolio — real chance but gaps exist. No seniority gate.
-- 0.40-0.54: **Borderline (~20%)**. Some alignment. Worth showing but with clear gaps. The user decides.
-- Below 0.40: **REJECT**. Set passed_filter to false. No realistic path. Any Senior/Staff/Lead/Principal title = automatic reject.
+## Score Calibration — Apply-Worthiness
 
-**Anchor at 0.55.** A generic "Software Engineer" posting with no AI/health angle,
-unclear degree policy, and standard tech stack = 0.40-0.45.
-The bar for entry is: "Would a hiring manager at this company find a portfolio of
-4 shipped App Store apps and deep healthcare domain knowledge interesting?"
-If probably not → reject outright (passed_filter: false).
+The final builder_score is computed from weighted factors. Your factor scores should reflect genuine alignment — the formula handles the rest. But as guidance:
 
-### Score Adjustments (apply on top of base assessment)
+- 0.80+: Strong alignment across domain, role, and culture. Few caveats. Worth prioritizing.
+- 0.60-0.79: Good alignment with some friction. Caveats exist but the application is worth sending.
+- 0.40-0.59: Mixed signals. Real friction but also real alignment. Show with caveats visible.
+- 0.20-0.39: Weak alignment or heavy friction. Still surface it but flag as a long shot.
+- Below 0.20: Set passed_filter to false. Truly no connection to the candidate's profile.
 
-**Location** (user's locations: {preferred_locations}):
-- Remote / remote-first: no penalty
-- Target city: no penalty
-- Nearby: {nearby_penalty} | Regional: {regional_penalty} | Relocation: {relocation_penalty} | Intl: {international_penalty}
+**Anchor at 0.55.** A generic "Software Engineer" posting with no special alignment = ~0.50.
+A HealthTech AI role that values builders = 0.75+.
 
-**Domain & Mission Alignment (THE decisive factor)**:
-- HealthTech / MedTech / Clinical AI / Medical Device / HIPAA software: +0.20
-- AI Agents / LLM tooling / RAG systems / On-Device ML: +0.15
-- iOS / SwiftUI / Apple ecosystem roles: +0.10
-- Developer tools / AI platforms: +0.08
-- Generic SaaS with no health/AI angle: -0.05
-- Enterprise infra / legacy B2B: -0.10
-
-**Experience Reality & "Portfolio of Proof"**:
-- "Require traditional CS degree" with NO escape: HARD REJECT
-- "CS degree or equivalent experience": -0.10 (portfolio might count, but risky)
-- Degree not mentioned: +0.05
-- "Portfolio over resume" / "Show us what you've built": +0.15
-- "Non-traditional backgrounds welcome": +0.12
-- Company has <50 employees and values output: +0.08
-- "1-2 years SWE" or "entry level": +0.05 (realistic target)
-- "3-5 years SWE" with no escape hatch: -0.20 (real friction — you have 0 years professional)
-- "5-7 years" experience required: HARD REJECT (impossible gap)
-- "8+ years" / "10+ years" experience required: HARD REJECT
-- Known FAANG-tier credential culture: -0.15
-- Strict corporate "enterprise scale" / formal leveling: -0.10
-- **SENIORITY** — title contains Senior/Sr./Staff/Principal/Lead/Director: HARD REJECT. You have zero professional SWE experience.
+### Location adjustments (applied as a multiplier on the final score):
+User's preferred locations: {preferred_locations}
+- Remote / remote-first: 1.0 (no adjustment)
+- Target city: 1.0
+- Nearby: multiply by {nearby_penalty_mult}
+- Regional: multiply by {regional_penalty_mult}
+- Relocation required: multiply by {relocation_penalty_mult}
+- International: multiply by {international_penalty_mult}
 
 ## Output Instructions — Facts Only
 
 ### logic_fit
 2-3 factual sentences. Map the role's day-to-day work to your SPECIFIC apps and your
-healthcare background. Reference the company's mission if stated. Be specific about
-which of your projects proves you can do the work, and which parts you haven't done.
+healthcare background. Reference the company's mission if stated.
 
 ### domain_leverage
-2-3 sentences. State your exact unfair advantage over a typical applicant. If the role
-is healthcare-adjacent, your Stryker/VA/clinical ops background is the lead. If AI,
-your prompt-to-production velocity is the lead. If neither, say "no significant domain leverage."
+2-3 sentences. State your exact unfair advantage. If healthcare-adjacent, lead with
+Stryker/VA/clinical ops. If AI, lead with prompt-to-production velocity. If neither,
+say "no significant domain leverage."
 
 ### risk_reward
-2-3 sentences. Be brutally honest about realistic friction. Name the specific stack/experience
-gaps. Don't sugarcoat. If they want React and you build SwiftUI, say that plainly.
+2-3 sentences. Be brutally honest about realistic friction and upside.
 
 ### why_interesting (backward compat)
 Same as logic_fit content.
 
 ### red_flags
-1-5 concerns. EVERY job has at least one. Look for:
-- Signs they want a traditional hand-coder, not an AI orchestrator
-- Stack requirements outside your ecosystem
-- Credential-heavy culture
-- Vague product (what do they actually build?)
-- "Competitive salary" with zero specifics
+1-5 concerns. EVERY job has at least one.
 
 ### dealbreaker_warnings
-0-3 brutally honest gap statements. Frame as facts, not "you'd need to convince them."
-Good: "They require 3+ years writing Java. You build exclusively with Swift and Python via AI."
-Bad: "You'd need to convince them your portfolio counts."
+0-3 brutally honest gap statements framed as facts.
 
 ### company_oneliner
 One factual sentence: what does this company DO?
 
 ### they_want
-2-4 bullet points pulled directly from the listing. Use their words.
+2-4 bullet points pulled directly from the listing.
 
 ### job_snapshot
-2-3 factual sentences about the actual role. Pull from listing text.
+2-3 factual sentences about the actual role.
 
 ### ai_pitch_summary
 3 bullets of FACTUAL alignment. Each must cite something from the listing AND
-something from the portfolio. If alignment is weak, say so plainly.
+something from the portfolio.
 
 ### fit_reasons
-2-4 short factual reasons (5-8 words each). Must reference specific listing details.
+2-4 short factual reasons (5-8 words each).
+
+### caveats
+0-4 specific friction points the candidate should know.
 
 ### drafted_cover_letter
 120-150 words. Brutally direct.
 - NO "I'm excited/thrilled/passionate."
-- NO corporate filler ("leveraging", "driving impact", "synergy").
-- If healthcare role: open with Stryker/VA clinical ops → bridge to how you shipped
-  OpenIntelligence or other relevant app.
-- If AI role: open with specific app you built that does what they need.
-- Always mention gunnarguy.me once, casually, as portfolio.
-- If there's a gap, don't apologize. Let the work speak.
-- Close with a specific question about their product, not a generic ask.
-- Tone: confident peer. Not eager. Not desperate.
+- NO corporate filler.
+- If healthcare role: open with Stryker/VA clinical ops.
+- If AI role: open with specific app you built.
+- Mention gunnarguy.me once as portfolio.
+- Close with a specific question about their product.
+- Tone: confident peer.
 
 ## Output Format
 Return ONLY valid JSON:
@@ -394,6 +369,11 @@ Return ONLY valid JSON:
   "salary_floor": integer,
   "salary_max": integer,
   "is_remote": true/false,
+  "domain_alignment": float,
+  "role_alignment": float,
+  "culture_fit": float,
+  "experience_friction": float,
+  "stack_fit": float,
   "builder_score": float,
   "ai_pitch_summary": "• bullet1\\n• bullet2\\n• bullet3",
   "drafted_cover_letter": "string",
@@ -419,42 +399,35 @@ Return ONLY valid JSON:
   "job_type": "string",
   "benefits": ["string"],
   "fit_reasons": ["string"],
-  "dealbreaker_warnings": ["string"]
+  "dealbreaker_warnings": ["string"],
+  "caveats": ["string"]
 }}
 """
 
 
 TRIAGE_PROMPT = """\
-You are a permissive job triage filter. Your DEFAULT answer is PASS (dominated=true).
-Only reject jobs that are OBVIOUSLY wrong. The full scorer handles nuance — your job
-is just to remove clear garbage. If you can imagine ANY reasonable argument for why
-this candidate might fit, PASS it.
+You are a maximally permissive job triage filter. Your DEFAULT answer is PASS (dominated=true).
+Only reject jobs that are OBVIOUSLY wrong — clear garbage that no software builder would ever want.
+The full scorer handles ALL nuance. Your job is just to remove spam and non-software roles.
+When in doubt, ALWAYS pass.
 
 ## Candidate snapshot
 {professional_profile}
-Prefers remote. US-based.
+Prefers remote. US-based. Builds AI-powered iOS/Python apps. Healthcare domain expertise.
 
-## ONLY reject (dominated=false) if ANY of these are true:
-1. The role has ZERO overlap with: AI, ML, LLM, health, iOS, product building, Python, startups, or mobile
-2. AND the role is clearly one of these:
-   - Pure non-tech (sales, marketing, HR, legal, accounting)
-   - IT Support / Helpdesk / SysAdmin (not building software)
-   - E-commerce platform dev (Shopify, Magento, WooCommerce, WordPress, PHP, Drupal)
-   - Hard geographic restriction outside the US with no remote option
-   - Requires 3+ years of SPECIFIC traditional SWE experience (not "or equivalent")
-3. OR the title contains Senior, Sr., Staff, Principal, Lead, Director, VP, Head of, or Architect — this candidate has ZERO professional SWE experience and cannot apply to senior roles
-4. OR the description requires professional software engineering experience of 3+ years with no flexibility
+## ONLY reject (dominated=false) if the role is CLEARLY one of these:
+1. Pure non-tech role: sales, marketing, HR, legal, accounting, recruiting — NOT building software
+2. IT Support / Helpdesk / SysAdmin / Network Admin — no software development component
+3. E-commerce platform dev (Shopify themes, Magento, WooCommerce, WordPress plugins, Drupal)
+4. Hard geographic restriction outside the US with ZERO remote option mentioned anywhere
+5. Role description is spam, garbled, or clearly a scam
 
-That's it. Everything else passes — including:
-- Entry-level, Junior, Associate, or untitled roles
-- Roles requiring 0-2 years experience (portfolio counts)
-- Any tech stack if the company does AI/health/interesting work AND the role is NOT senior-titled
-- Product/design/data roles at AI or health companies if not senior-titled
-- "Requires CS degree" IF it says "or equivalent" anywhere
-- Any role that mentions AI, agents, LLM, health, iOS, or startup at a non-senior level
-
-## Excluded title keywords (auto-reject if in job title):
-{excluded_keywords}
+## PASS everything else, including:
+- ANY seniority level (Senior, Staff, Lead, Principal — the full scorer evaluates these)
+- ANY experience requirement (even "10+ years" — the full scorer handles friction)
+- ANY tech stack (the full scorer evaluates transferability)
+- ANY degree requirement (the full scorer evaluates flexibility)
+- Roles you're not sure about — let the full scorer decide
 
 Return ONLY valid JSON:
 {{"dominated": true/false, "reason": "one sentence"}}
@@ -466,19 +439,29 @@ async def triage_job(raw: RawJobListing, prefs: UserPreferences | None = None) -
     if prefs is None:
         prefs = UserPreferences()
 
-    # ── Programmatic pre-triage: check excluded keywords in TITLE only ────
+    # ── Programmatic pre-triage: only reject obvious non-software junk ────
     title_lower = raw.title.lower()
-    for kw in prefs.excluded_keywords:
-        kw_lower = kw.lower()
-        if kw_lower in title_lower:
+    junk_titles = [
+        "account executive",
+        "sales representative",
+        "recruiter",
+        "human resources",
+        "copywriter",
+        "content writer",
+        "helpdesk",
+        "help desk",
+        "it support",
+    ]
+    for junk in junk_titles:
+        if junk in title_lower:
             logger.info(
-                f"[TRIAGE] PRE-REJECT (title match '{kw}') | {raw.title} @ {raw.company}"
+                f"[TRIAGE] PRE-REJECT (junk title '{junk}') | {raw.title} @ {raw.company}"
             )
             return False
 
-    excluded_keywords_formatted = ", ".join(prefs.excluded_keywords)
-    triage_sys = TRIAGE_PROMPT.replace("{professional_profile}", prefs.professional_profile)
-    triage_sys = triage_sys.replace("{excluded_keywords}", excluded_keywords_formatted)
+    triage_sys = TRIAGE_PROMPT.replace(
+        "{professional_profile}", prefs.professional_profile
+    )
     user_msg = f"Title: {raw.title}\nCompany: {raw.company}\nLocation: {raw.location}\nRemote: {raw.is_remote}\n\nDescription (first 1500 chars):\n{raw.description[:1500]}"
 
     try:
@@ -513,20 +496,17 @@ async def score_job(
 
     system = SYSTEM_PROMPT.replace("{min_salary}", str(prefs.min_salary))
     system = system.replace("{prefs.professional_profile}", prefs.professional_profile)
-    system = system.replace("{score_cutoff}", f"{prefs.score_cutoff:.2f}")
-    system = system.replace("{convincing_penalty}", f"{prefs.convincing_penalty:+.2f}")
-    system = system.replace("{convincing_boost}", f"{prefs.convincing_boost:+.2f}")
-    system = system.replace("{nearby_penalty}", f"{prefs.nearby_penalty:+.2f}")
-    system = system.replace("{regional_penalty}", f"{prefs.regional_penalty:+.2f}")
-    system = system.replace("{relocation_penalty}", f"{prefs.relocation_penalty:+.2f}")
+    system = system.replace("{nearby_penalty_mult}", f"{prefs.nearby_penalty_mult:.2f}")
     system = system.replace(
-        "{international_penalty}", f"{prefs.international_penalty:+.2f}"
+        "{regional_penalty_mult}", f"{prefs.regional_penalty_mult:.2f}"
+    )
+    system = system.replace(
+        "{relocation_penalty_mult}", f"{prefs.relocation_penalty_mult:.2f}"
+    )
+    system = system.replace(
+        "{international_penalty_mult}", f"{prefs.international_penalty_mult:.2f}"
     )
     system = system.replace("{preferred_locations}", locations_formatted)
-    system = system.replace("{experience_penalty}", f"{prefs.experience_penalty:+.2f}")
-    system = system.replace("{credential_penalty}", f"{prefs.credential_penalty:+.2f}")
-    system = system.replace("{portfolio_boost}", f"{prefs.portfolio_boost:+.2f}")
-    system = system.replace("{max_seniority_level}", prefs.max_seniority_level)
 
     # Classify location tier and inject into prompt
     loc_tier = classify_location(
@@ -575,65 +555,47 @@ async def score_job(
                 rejection_reason=reason,
             )
 
-        # Deflation — LLMs consistently over-score by 10-20%.
-        # Mild compression: keeps relative ordering while grounding scores.
-        raw_score = max(0.0, min(1.0, data.get("builder_score") or 0.0))
-        if raw_score > 0.60:
-            # Compress the 0.60-1.0 range by 15% toward 0.55 anchor
-            deflated = 0.60 + (raw_score - 0.60) * 0.85
-        elif raw_score > 0.40:
-            # Very mild compression in the middle range
-            deflated = 0.40 + (raw_score - 0.40) * 0.95
-        else:
-            deflated = raw_score
-        final_score = round(max(0.0, min(1.0, deflated)), 2)
+        # Extract structured factor scores from LLM response
+        domain_alignment = max(0.0, min(1.0, data.get("domain_alignment") or 0.0))
+        role_alignment = max(0.0, min(1.0, data.get("role_alignment") or 0.0))
+        culture_fit = max(0.0, min(1.0, data.get("culture_fit") or 0.0))
+        experience_friction = max(0.0, min(1.0, data.get("experience_friction") or 0.0))
+        stack_fit = max(0.0, min(1.0, data.get("stack_fit") or 0.0))
 
-        # ── Post-score programmatic safety net ────────────────────────
-        # Even if the LLM scored it, catch obvious mismatches
-        role_title = (data.get("role_title") or raw.title or "").lower()
-        poison_titles = [
-            "senior",
-            "sr.",
-            "staff",
-            "principal",
-            "lead engineer",
-            "lead software",
-            "lead developer",
-            "lead mobile",
-            "lead ios",
-            "lead ai",
-            "director",
-            "head of",
-            "vp of",
-            "architect",
-            "shopify",
-            "magento",
-            "wordpress",
-            "drupal",
-            "php",
-            "it support",
-            "helpdesk",
-            "help desk",
-            "sysadmin",
-            "system administrator",
-            "network engineer",
-            "network admin",
-            "scrum master",
-            "copywriter",
-            "content writer",
-            "account executive",
-            "recruiter",
-            "human resources",
-        ]
-        for poison in poison_titles:
-            if poison in role_title:
-                logger.info(
-                    f"[SCORE] POST-REJECT (poison title '{poison}') | {raw.title} @ {raw.company}"
-                )
-                return ScoringResult(
-                    passed_filter=False,
-                    rejection_reason=f"Poison title match: {poison}",
-                )
+        # Compute weighted score from factors (server-side truth)
+        computed_score = (
+            domain_alignment * 0.30
+            + role_alignment * 0.25
+            + culture_fit * 0.20
+            + experience_friction * 0.15
+            + stack_fit * 0.10
+        )
+
+        # Use computed score if we got factor data, otherwise fall back to LLM's builder_score
+        has_factors = any(
+            data.get(k)
+            for k in [
+                "domain_alignment",
+                "role_alignment",
+                "culture_fit",
+                "experience_friction",
+                "stack_fit",
+            ]
+        )
+        final_score = round(
+            max(
+                0.0,
+                min(
+                    1.0,
+                    (
+                        computed_score
+                        if has_factors
+                        else (data.get("builder_score") or 0.0)
+                    ),
+                ),
+            ),
+            2,
+        )
 
         job = JobPayload(
             company_name=data.get("company_name", raw.company),
@@ -671,6 +633,14 @@ async def score_job(
             company_oneliner=data.get("company_oneliner", ""),
             they_want=data.get("they_want", []),
             job_snapshot=data.get("job_snapshot", ""),
+            # Structured scoring factors
+            domain_alignment=domain_alignment,
+            role_alignment=role_alignment,
+            culture_fit=culture_fit,
+            experience_friction=experience_friction,
+            stack_fit=stack_fit,
+            caveats=data.get("caveats", []),
+            scoring_version="v2",
         )
 
         return ScoringResult(passed_filter=True, job=job)

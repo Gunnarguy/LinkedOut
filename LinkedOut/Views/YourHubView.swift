@@ -320,6 +320,38 @@ struct YourHubView: View {
                     )
                 }
                 .buttonStyle(.plain)
+
+                NavigationLink(destination: LinkedInPostsView()) {
+                    HStack(spacing: 14) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(.indigo.gradient)
+                                .frame(width: 40, height: 40)
+                            Image(systemName: "list.bullet.rectangle.portrait")
+                                .font(.body.bold())
+                                .foregroundStyle(.white)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("My LinkedIn Posts")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(.primary)
+                            Text("Manage your recent posts and comments")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(14)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .strokeBorder(.quaternary, lineWidth: 0.5)
+                    )
+                }
+                .buttonStyle(.plain)
             }
 
             // Preferences — the main settings CTA

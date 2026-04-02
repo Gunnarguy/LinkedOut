@@ -314,6 +314,11 @@ final class APIClient: @unchecked Sendable {
         return try await getRaw("/api/linkedin/posts?person_id=\(personId)&count=\(count)&start=\(start)")
     }
 
+        func fetchLinkedInPostsParsed(personId: String, count: Int = 20, start: Int = 0) async throws -> [LinkedInPost] {
+            let response = try await fetchLinkedInPosts(personId: personId, count: count, start: start)
+            return LinkedInPost.parseArray(from: response).sorted { $0.createdAt > $1.createdAt }
+        }
+
     func fetchLinkedInPost(personId: String, postUrn: String) async throws -> [String: Any] {
         return try await getRaw("/api/linkedin/posts/\(encode(postUrn))?person_id=\(personId)")
     }
@@ -339,6 +344,11 @@ final class APIClient: @unchecked Sendable {
     func fetchLinkedInComments(personId: String, postUrn: String) async throws -> [String: Any] {
         return try await getRaw("/api/linkedin/comments?person_id=\(personId)&post_urn=\(encode(postUrn))")
     }
+
+        func fetchLinkedInCommentsParsed(personId: String, postUrn: String) async throws -> [LinkedInComment] {
+            let response = try await fetchLinkedInComments(personId: personId, postUrn: postUrn)
+            return LinkedInComment.parseArray(from: response)
+        }
 
     func deleteLinkedInComment(personId: String, postUrn: String, commentId: String) async throws -> [String: Any] {
         guard let url = URL(string: "\(baseURL)/api/linkedin/comments/\(commentId)?person_id=\(personId)&post_urn=\(encode(postUrn))") else {
@@ -369,6 +379,11 @@ final class APIClient: @unchecked Sendable {
     func fetchLinkedInReactions(personId: String, postUrn: String) async throws -> [String: Any] {
         return try await getRaw("/api/linkedin/reactions?person_id=\(personId)&post_urn=\(encode(postUrn))")
     }
+
+        func fetchLinkedInReactionsParsed(personId: String, postUrn: String) async throws -> [LinkedInReaction] {
+            let response = try await fetchLinkedInReactions(personId: personId, postUrn: postUrn)
+            return LinkedInReaction.parseArray(from: response)
+        }
 
     // MARK: - LinkedIn Capabilities
 

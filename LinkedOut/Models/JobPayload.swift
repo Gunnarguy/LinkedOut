@@ -48,6 +48,15 @@ struct JobPayload: Codable, Identifiable, Hashable {
     var domainLeverage: String?
     var riskReward: String?
 
+    // Structured scoring factors (v2)
+    var domainAlignment: Double?
+    var roleAlignment: Double?
+    var cultureFit: Double?
+    var experienceFriction: Double?
+    var stackFit: Double?
+    var caveats: [String]?
+    var scoringVersion: String?
+
     // User-managed fields
     var notes: String?
     var applicationStatus: String?
@@ -91,6 +100,13 @@ struct JobPayload: Codable, Identifiable, Hashable {
         case logicFit = "logic_fit"
         case domainLeverage = "domain_leverage"
         case riskReward = "risk_reward"
+        case domainAlignment = "domain_alignment"
+        case roleAlignment = "role_alignment"
+        case cultureFit = "culture_fit"
+        case experienceFriction = "experience_friction"
+        case stackFit = "stack_fit"
+        case caveats
+        case scoringVersion = "scoring_version"
         case notes
         case applicationStatus = "application_status"
         case notionPageId = "notion_page_id"
