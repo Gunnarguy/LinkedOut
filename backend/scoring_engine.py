@@ -123,6 +123,11 @@ async def _call_llm(
             error_type = type(e).__name__
             is_rate_limit = "429" in error_str or "RESOURCE_EXHAUSTED" in error_str
             is_timeout = isinstance(e, asyncio.TimeoutError) or error_str == ""
+            is_auth_error = (
+                "API_KEY_INVALID" in error_str
+                or "API key expired" in error_str
+                or "PERMISSION_DENIED" in error_str
+            )
             is_transient = (
                 is_rate_limit
                 or is_timeout
@@ -130,6 +135,13 @@ async def _call_llm(
                 or "server" in error_str.lower()
                 or "connection" in error_str.lower()
             )
+
+            # API key dead — skip retries, go straight to OpenAI
+            if is_auth_error and provider != "openai" and settings.openai_api_key:
+                logger.warning(
+                    f"[LLM] Gemini auth error ({error_str[:80]}) → falling back to OpenAI"
+                )
+                return await _call_openai(system, user_msg)
 
             # On Pro timeout: don't waste retries, immediately fall through to Flash
             if is_timeout and provider == "gemini" and not use_flash:
