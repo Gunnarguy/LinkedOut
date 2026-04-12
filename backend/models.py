@@ -198,10 +198,14 @@ class UserPreferences(BaseModel):
         default_factory=lambda: [
             "AI Engineer",
             "AI Product Engineer",
+            "AI Product Builder",
             "Applied AI Engineer",
             "AI Solutions Engineer",
+            "AI Prototyper",
             "Founding Engineer",
             "Product Engineer",
+            "Prototype Engineer",
+            "Product Development Generalist",
             "iOS Engineer",
             "Mobile Engineer",
             "Healthcare AI Engineer",
@@ -250,7 +254,7 @@ class UserPreferences(BaseModel):
     )
     location_preference: str = "Remote"
     preferred_locations: list[str] = Field(
-        default_factory=lambda: ["Kalamazoo, Michigan"]
+        default_factory=lambda: ["Campbell, California", "Palo Alto, California"]
     )
 
     @property
@@ -259,7 +263,7 @@ class UserPreferences(BaseModel):
         if self.preferred_locations:
             parts = self.preferred_locations[0].split(",", 1)
             return parts[0].strip()
-        return "Kalamazoo"
+        return "Campbell"
 
     @property
     def home_state(self) -> str:
@@ -267,10 +271,10 @@ class UserPreferences(BaseModel):
         if self.preferred_locations:
             parts = self.preferred_locations[0].split(",", 1)
             return parts[1].strip() if len(parts) > 1 else ""
-        return "Michigan"
+        return "California"
 
     # ── Scoring Weights (adjustable from app) ──
-    score_cutoff: float = 0.20
+    score_cutoff: float = 0.30
     convincing_penalty: float = -0.20
     convincing_boost: float = 0.10
     nearby_penalty: float = -0.03
@@ -291,7 +295,7 @@ class UserPreferences(BaseModel):
 
 **Education**: B.S. Exercise Science (Kinesiology). No CS degree.
 
-**Builder Profile**: Self-taught AI-native iOS developer. You don't hand-write algorithms — you orchestrate AI models (Claude, GPT, Gemini) to architect and ship full-stack applications at startup velocity. 824 commits, 697 in the last year. 4 live App Store apps, all personal projects.
+**Builder Profile**: Self-taught AI-native builder. You use models as implementation leverage, but the product vision, architecture, iteration, and shipping decisions are yours. You orchestrate AI models (Claude, GPT, Gemini) to architect and ship full-stack applications at startup velocity. 824 commits, 697 in the last year. 4 live App Store apps, all personal projects.
 
 ### Shipped Apps (gunnarguy.me)
 - **OpenIntelligence**: On-device RAG engine — 102 services, 29-step pipeline, hybrid search, Core ML, runs fully offline. App Store Jan 2026.
@@ -312,6 +316,7 @@ class UserPreferences(BaseModel):
 - Healthcare domain expertise that no bootcamp grad has — you've been in the O.R. at a VA hospital for 3 years
 - AI-native development velocity — you ship full applications in weeks, not months
 - Portfolio of 4 live App Store apps proves you can ship real products
+- Small but real commercial validation — OpenIntelligence has already closed 3 cohort sales at $60 each
 - Cross-stack builder: iOS frontend + Python backend + LLM pipelines + Docker deployment
 
 ### What You're Looking For

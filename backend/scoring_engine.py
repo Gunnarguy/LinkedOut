@@ -28,6 +28,911 @@ _openai_client: AsyncOpenAI | None = None
 _gemini_client = None
 _pro_cooldown_until: float = 0  # monotonic timestamp; skip Pro until this time
 
+_REMOTE_SIGNAL_TERMS = [
+    "remote",
+    "remote-first",
+    "work from home",
+    "distributed team",
+    "fully distributed",
+    "anywhere in the us",
+    "us remote",
+    "remote within the us",
+    "remote in the united states",
+]
+
+_ONSITE_SIGNAL_TERMS = [
+    "onsite",
+    "on-site",
+    "hybrid",
+    "in office",
+    "in-office",
+    "office-first",
+    "relocation required",
+    "must relocate",
+    "5 days in office",
+    "4 days in office",
+    "3 days in office",
+]
+
+_NON_US_REMOTE_TERMS = [
+    "emea",
+    "eu only",
+    "europe only",
+    "uk only",
+    "canada only",
+    "remote canada",
+    "latam",
+    "apac",
+    "remote india",
+    "remote australia",
+    "must be based in germany",
+    "must be based in the uk",
+    "remote within canada",
+    "remote within europe",
+]
+
+_US_REMOTE_TERMS = [
+    "remote us",
+    "remote-u.s.",
+    "anywhere in the us",
+    "us-based remote",
+    "united states only",
+    "must be located in the united states",
+    "must be based in the us",
+    "u.s. remote",
+]
+
+_TARGET_SIGNAL_TERMS = [
+    "ai",
+    "llm",
+    "language model",
+    "agentic",
+    "agents",
+    "rag",
+    "prompt",
+    "applied ai",
+    "generative ai",
+    "prototype",
+    "prototyping",
+    "0-to-1",
+    "zero-to-one",
+    "product engineer",
+    "founding engineer",
+    "product development",
+    "swift",
+    "swiftui",
+    "ios",
+    "mobile",
+    "healthtech",
+    "medtech",
+    "clinical",
+    "healthcare",
+    "medical device",
+    "developer tools",
+    "mcp",
+    "automation",
+    "orchestration",
+]
+
+_PORTFOLIO_SIGNAL_TERMS = [
+    "portfolio",
+    "what you've built",
+    "what you have built",
+    "shipped",
+    "ship fast",
+    "bias for action",
+    "rapid prototyping",
+    "builders welcome",
+    "non-traditional",
+    "self-taught",
+    "founding",
+    "first engineer",
+]
+
+_ENTERPRISE_SIGNAL_TERMS = [
+    "enterprise scale",
+    "large-scale distributed systems",
+    "formal engineering ladder",
+    "staff level",
+    "principal level",
+    "leetcode",
+    "data structures and algorithms",
+    "system design interview",
+    "top-tier engineering org",
+]
+
+_STARTUP_FLEX_TERMS = [
+    "founding",
+    "first engineer",
+    "startup",
+    "0-to-1",
+    "zero-to-one",
+    "prototype",
+    "rapid prototyping",
+    "wear many hats",
+    "generalist",
+    "product development generalist",
+    "ai-leveraged",
+]
+
+_SENIOR_TITLE_TERMS = [
+    "senior",
+    "sr ",
+    "sr.",
+    "staff",
+    "principal",
+    "lead ",
+    "director",
+    "head of",
+    "vp ",
+    "architect",
+]
+
+_EXTREME_EXPERIENCE_PATTERNS = [
+    re.compile(r"\b(?:8|9|10|11|12|13|14|15)\+?\s+years\b", re.IGNORECASE),
+    re.compile(r"\b(?:eight|nine|ten|eleven|twelve)\+?\s+years\b", re.IGNORECASE),
+]
+
+_CORE_BUILDER_TITLE_TERMS = [
+    "founding engineer",
+    "product engineer",
+    "ai engineer",
+    "applied ai",
+    "llm engineer",
+    "machine learning engineer",
+    "ml engineer",
+    "ios engineer",
+    "mobile engineer",
+    "swift engineer",
+    "full-stack engineer",
+    "full stack engineer",
+    "backend engineer",
+    "software engineer",
+    "prototype engineer",
+    "product development generalist",
+    "generalist",
+    "developer platform",
+    "platform engineer",
+]
+
+_NON_BUILDER_TITLE_TERMS = [
+    "product manager",
+    "product management",
+    "project manager",
+    "program manager",
+    "engineering manager",
+    "manager, product management",
+    "design technologist",
+    "designer",
+    "product design",
+    "product designer",
+    "product operations",
+    "operations lead",
+    "category specialist",
+    "specialist",
+    "trainer",
+    "ai trainer",
+    "data scientist",
+    "data science engineer",
+    "qa engineer",
+    "quality assurance",
+    "test engineer",
+    "sdet",
+    "gtm engineer",
+    "growth engineer",
+    "solutions architect",
+    "solutions consultant",
+    "revops",
+    "customer success",
+    "sales",
+    "marketing",
+    "analyst",
+    "vp, product",
+    "vice president of product",
+]
+
+_NON_US_LOCATION_TERMS = [
+    "uk",
+    "united kingdom",
+    "europe",
+    "eu",
+    "spain",
+    "germany",
+    "poland",
+    "australia",
+    "au only",
+    "canada",
+    "latam",
+    "apac",
+    "india",
+]
+
+_HARDSTOP_DEGREE_PATTERNS = [
+    re.compile(
+        r"(?:requires?|required|must have|must hold)\s+(?:a\s+)?(?:bachelor'?s|master'?s|bs|b\.s\.|ms|m\.s\.)?\s*(?:degree\s+in\s+)?(?:computer science|software engineering|computer engineering)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:computer science|software engineering|computer engineering)\s+degree\s+(?:required|is required)",
+        re.IGNORECASE,
+    ),
+]
+
+_HARDSTOP_CLEARANCE_PATTERNS = [
+    re.compile(r"active\s+(?:ts/sci|top secret|secret)\s+clearance", re.IGNORECASE),
+    re.compile(r"security clearance required", re.IGNORECASE),
+    re.compile(
+        r"must be able to obtain a\s+(?:ts/sci|top secret|secret)\s+clearance",
+        re.IGNORECASE,
+    ),
+]
+
+_HARDSTOP_LICENSE_PATTERNS = [
+    re.compile(
+        r"must be a licensed\s+(?:rn|nurse|physician|therapist|social worker|pharmacist)",
+        re.IGNORECASE,
+    ),
+    re.compile(r"active\s+(?:rn|nursing|medical|clinical)\s+license", re.IGNORECASE),
+    re.compile(r"board certified", re.IGNORECASE),
+    re.compile(r"clinical credential required", re.IGNORECASE),
+]
+
+_ESCAPE_HATCH_TERMS = [
+    "or equivalent",
+    "equivalent experience",
+    "equivalent practical experience",
+    "equivalent professional experience",
+    "equivalent projects",
+    "comparable experience",
+    "relevant experience may substitute",
+]
+
+
+def _normalize_match_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text.lower()).strip()
+
+
+def _job_match_text(raw: RawJobListing) -> str:
+    return _normalize_match_text(
+        f"{raw.title} {raw.company} {raw.location} {raw.description}"
+    )
+
+
+def _contains_any(text: str, terms: list[str]) -> bool:
+    return any(term in text for term in terms)
+
+
+def _count_matches(text: str, terms: list[str]) -> int:
+    return sum(1 for term in terms if term in text)
+
+
+def _has_escape_hatch(text: str) -> bool:
+    return _contains_any(text, _ESCAPE_HATCH_TERMS)
+
+
+def _programmatic_hard_reject(
+    raw: RawJobListing,
+    prefs: UserPreferences,
+    loc_tier: int,
+) -> str | None:
+    text = _job_match_text(raw)
+    title = _normalize_match_text(raw.title)
+    location_text = _normalize_match_text(f"{raw.title} {raw.location}")
+    remote_signal = raw.is_remote is True or _contains_any(text, _REMOTE_SIGNAL_TERMS)
+    onsite_signal = _contains_any(text, _ONSITE_SIGNAL_TERMS)
+    us_remote_signal = _contains_any(text, _US_REMOTE_TERMS)
+    non_us_remote_signal = _contains_any(text, _NON_US_REMOTE_TERMS)
+    non_us_location_signal = _contains_any(location_text, _NON_US_LOCATION_TERMS)
+    startup_flex = _contains_any(text, _STARTUP_FLEX_TERMS)
+    portfolio_signal = _contains_any(text, _PORTFOLIO_SIGNAL_TERMS)
+    senior_exception = _contains_any(
+        title,
+        [
+            "ai product",
+            "product engineer",
+            "founding engineer",
+            "generalist",
+            "prototype engineer",
+        ],
+    )
+
+    title_rank = 1
+    if _contains_any(
+        title, ["staff", "principal", "director", "head of", "vp ", "architect"]
+    ):
+        title_rank = 3
+    elif _contains_any(title, ["senior", "sr ", "sr.", "lead "]):
+        title_rank = 2
+    elif _contains_any(title, ["junior", "jr ", "jr.", "associate", "entry", "intern"]):
+        title_rank = 0
+
+    allowed_rank = {
+        "junior": 0,
+        "mid": 1,
+        "senior": 2,
+        "any": 3,
+    }.get(prefs.max_seniority_level.lower(), 1)
+
+    if _contains_any(title, _NON_BUILDER_TITLE_TERMS):
+        return "Listing title is not a software-building role aligned with your target profile."
+
+    if not _contains_any(title, _CORE_BUILDER_TITLE_TERMS) and not _contains_any(
+        text,
+        [
+            "build and ship",
+            "ai-powered features",
+            "llm workflows",
+            "rag pipelines",
+            "native mobile",
+            "swiftui",
+            "fastapi",
+            "agents",
+            "tool-calling",
+        ],
+    ):
+        return "Listing does not look like a builder-first software role for your target profile."
+
+    if prefs.require_remote:
+        if onsite_signal:
+            return "Remote-only search: listing is onsite or hybrid."
+        if raw.is_remote is not True and not remote_signal:
+            return "Remote-only search: listing is not clearly remote."
+        if (loc_tier == 4 or non_us_location_signal) and not us_remote_signal:
+            return "International or non-US remote role does not match your US remote search."
+        if (non_us_remote_signal or non_us_location_signal) and not us_remote_signal:
+            return "Remote eligibility is restricted outside the US."
+
+    if loc_tier == 4 and not remote_signal:
+        return "International onsite role outside your target geography."
+
+    if any(
+        pattern.search(text) for pattern in _HARDSTOP_DEGREE_PATTERNS
+    ) and not _has_escape_hatch(text):
+        return "Listing hard-requires a CS or engineering degree with no equivalent-experience escape hatch."
+
+    if any(pattern.search(text) for pattern in _HARDSTOP_CLEARANCE_PATTERNS):
+        return "Listing requires an active security clearance."
+
+    if any(pattern.search(text) for pattern in _HARDSTOP_LICENSE_PATTERNS):
+        return "Listing requires a professional clinical or licensed credential."
+
+    if title_rank >= 3 and title_rank > allowed_rank:
+        return "Listing seniority exceeds your configured max seniority level."
+
+    if title_rank == 2 and title_rank > allowed_rank and not senior_exception:
+        return "Listing seniority exceeds your configured max seniority level."
+
+    return None
+
+
+def _apply_alignment_clamp(
+    raw: RawJobListing,
+    prefs: UserPreferences,
+    score: float,
+) -> tuple[float, list[str]]:
+    text = _job_match_text(raw)
+    title = _normalize_match_text(raw.title)
+    preferred_role_hits = sum(
+        1 for role in prefs.preferred_roles if _normalize_match_text(role) in text
+    )
+    target_hits = _count_matches(text, _TARGET_SIGNAL_TERMS)
+    portfolio_hits = _count_matches(text, _PORTFOLIO_SIGNAL_TERMS)
+    enterprise_hits = _count_matches(text, _ENTERPRISE_SIGNAL_TERMS)
+    startup_flex = _contains_any(text, _STARTUP_FLEX_TERMS)
+    senior_title = _contains_any(title, _SENIOR_TITLE_TERMS)
+    extreme_experience = any(
+        pattern.search(text) for pattern in _EXTREME_EXPERIENCE_PATTERNS
+    )
+
+    multiplier = 1.0
+    max_score = 1.0
+    extra_caveats: list[str] = []
+
+    if target_hits == 0 and preferred_role_hits == 0:
+        multiplier *= 0.35
+        max_score = min(max_score, 0.19)
+        extra_caveats.append(
+            "Listing does not mention AI, healthtech, mobile, product engineering, or portfolio-first builder signals."
+        )
+    elif target_hits <= 1 and preferred_role_hits == 0:
+        multiplier *= 0.60
+        max_score = min(max_score, 0.29)
+
+    if enterprise_hits > 0 and portfolio_hits == 0 and not startup_flex:
+        multiplier *= 0.70
+        max_score = min(max_score, 0.38)
+        extra_caveats.append(
+            "Listing reads like a conventional enterprise engineering role rather than a builder-first role."
+        )
+
+    if senior_title and portfolio_hits == 0 and not startup_flex:
+        multiplier *= 0.65
+        max_score = min(max_score, 0.35)
+        extra_caveats.append(
+            "Title is senior-level without obvious startup or portfolio-first flexibility."
+        )
+
+    if extreme_experience:
+        multiplier *= 0.75
+        max_score = min(max_score, 0.29)
+        extra_caveats.append(
+            "Listing asks for 8+ years or equivalent senior-level background."
+        )
+
+    if target_hits >= 3 and (portfolio_hits > 0 or startup_flex):
+        multiplier *= 1.15
+
+    adjusted = round(min(max_score, max(0.0, min(1.0, score * multiplier))), 2)
+    return adjusted, extra_caveats
+
+
+def _apply_llm_specificity_clamp(
+    raw: RawJobListing,
+    score: float,
+    domain_alignment: float,
+    role_alignment: float,
+    culture_fit: float,
+) -> tuple[float, list[str]]:
+    text = _job_match_text(raw)
+    title = _normalize_match_text(raw.title)
+    extra_caveats: list[str] = []
+    capped_score = score
+
+    if _contains_any(
+        title,
+        [
+            "backend engineer",
+            "software engineer",
+            "full stack",
+            "full-stack",
+            "platform engineer",
+        ],
+    ):
+        if (
+            not _contains_any(
+                title,
+                [
+                    "product engineer",
+                    "founding engineer",
+                    "ios engineer",
+                    "mobile engineer",
+                    "ai engineer",
+                ],
+            )
+            and domain_alignment < 0.88
+            and role_alignment < 0.82
+        ):
+            capped_score = min(capped_score, 0.68)
+            extra_caveats.append(
+                "Role reads more like a general backend or platform engineering role than a direct builder fit."
+            )
+
+    if _contains_any(
+        text,
+        [
+            "sre",
+            "data platform",
+            "platform team",
+            "infra",
+            "infrastructure",
+            "internal tools",
+            "people innovation",
+        ],
+    ):
+        if domain_alignment < 0.90 and culture_fit < 0.85:
+            capped_score = min(capped_score, 0.64)
+            extra_caveats.append(
+                "Listing centers platform or internal-systems work more than product-building leverage."
+            )
+
+    if (
+        not _contains_any(
+            text,
+            [
+                "healthtech",
+                "healthcare",
+                "medtech",
+                "clinical",
+                "swift",
+                "swiftui",
+                "ios",
+                "mobile",
+                "founding engineer",
+                "product engineer",
+                "ai product builder",
+            ],
+        )
+        and role_alignment < 0.85
+        and culture_fit < 0.85
+    ):
+        capped_score = min(capped_score, 0.72)
+
+    return round(capped_score, 2), extra_caveats
+
+
+def _is_anonymous_company_name(company_name: str) -> bool:
+    normalized = _normalize_match_text(company_name)
+    return (
+        not normalized
+        or normalized == "unknown"
+        or normalized.startswith("unknown company")
+        or "hn hiring post" in normalized
+        or normalized in {"stealth startup", "confidential"}
+    )
+
+
+def _apply_listing_confidence_penalty(
+    raw: RawJobListing,
+    score: float,
+    company_name: str,
+    company_description: str,
+    company_url: str,
+    salary_floor: int,
+    salary_max: int,
+    requirements: list[str],
+    tech_stack: list[str],
+) -> tuple[float, list[str]]:
+    url = (raw.url or "").lower()
+    is_hn = "news.ycombinator.com" in url
+    anonymous_company = _is_anonymous_company_name(
+        company_name
+    ) or _is_anonymous_company_name(raw.company or "")
+    salary_known = bool(salary_floor or salary_max)
+    company_detail_len = len((company_description or "").strip())
+    requirements_count = len(requirements or [])
+    tech_count = len(tech_stack or [])
+    description_len = len((raw.description or "").strip())
+
+    capped_score = score
+    extra_caveats: list[str] = []
+
+    if is_hn and anonymous_company and not salary_known:
+        capped_score = min(capped_score, 0.84)
+        extra_caveats.append(
+            "HN post lacks a clearly named company and compensation detail, so confidence is lower than for a normal listing."
+        )
+    elif anonymous_company and not salary_known:
+        capped_score = min(capped_score, 0.86)
+        extra_caveats.append(
+            "Company identity and compensation are both weakly specified, so confidence is capped."
+        )
+
+    thin_scope = description_len < 900 or (requirements_count < 5 and tech_count < 5)
+    weak_company_detail = company_detail_len < 120 or not company_url
+
+    if thin_scope and not salary_known:
+        capped_score = min(capped_score, 0.82)
+        extra_caveats.append(
+            "Listing is relatively thin on salary and concrete scope detail compared with stronger matches."
+        )
+    elif thin_scope and weak_company_detail:
+        capped_score = min(capped_score, 0.85)
+        extra_caveats.append(
+            "Listing leaves important company or scope detail vague, which lowers confidence in the match quality."
+        )
+
+    return round(capped_score, 2), extra_caveats
+
+
+def _infer_is_remote(raw: RawJobListing) -> bool:
+    text = _job_match_text(raw)
+    if _contains_any(text, _ONSITE_SIGNAL_TERMS):
+        return False
+    if _contains_any(text, _REMOTE_SIGNAL_TERMS) or _contains_any(
+        _normalize_match_text(f"{raw.title} {raw.location}"), _US_REMOTE_TERMS
+    ):
+        return True
+    if raw.is_remote is not None:
+        return raw.is_remote
+    return False
+
+
+def _parse_salary_bounds(salary_text: str) -> tuple[int, int]:
+    matches = [
+        int(m.replace(",", ""))
+        for m in re.findall(r"\$?([0-9]{2,3}(?:,[0-9]{3})+)", salary_text)
+    ]
+    if not matches:
+        matches = [
+            int(m) * 1000 for m in re.findall(r"\b([0-9]{2,3})k\b", salary_text.lower())
+        ]
+    if not matches:
+        return 0, 0
+    return min(matches), max(matches)
+
+
+def _local_score_job(raw: RawJobListing, prefs: UserPreferences) -> ScoringResult:
+    text = _job_match_text(raw)
+    title = _normalize_match_text(raw.title)
+    loc_tier = classify_location(
+        raw.location or "",
+        prefs.home_city,
+        prefs.home_state,
+        raw.is_remote,
+        preferred_locations=prefs.preferred_locations,
+    )
+
+    hard_reject_reason = _programmatic_hard_reject(raw, prefs, loc_tier)
+    if hard_reject_reason:
+        return ScoringResult(
+            passed_filter=False,
+            rejection_reason=hard_reject_reason,
+        )
+
+    target_hits = _count_matches(text, _TARGET_SIGNAL_TERMS)
+    portfolio_hits = _count_matches(text, _PORTFOLIO_SIGNAL_TERMS)
+    startup_hits = _count_matches(text, _STARTUP_FLEX_TERMS)
+    enterprise_hits = _count_matches(text, _ENTERPRISE_SIGNAL_TERMS)
+    core_builder_hits = _count_matches(title, _CORE_BUILDER_TITLE_TERMS)
+
+    health_hits = _count_matches(
+        text,
+        [
+            "healthtech",
+            "healthcare",
+            "medtech",
+            "clinical",
+            "medical",
+            "hipaa",
+            "patient",
+            "provider",
+            "surgical",
+        ],
+    )
+    ai_hits = _count_matches(
+        text,
+        [
+            "ai",
+            "llm",
+            "agent",
+            "agentic",
+            "rag",
+            "prompt",
+            "generative ai",
+            "applied ai",
+            "automation",
+        ],
+    )
+    mobile_hits = _count_matches(
+        text,
+        ["ios", "swift", "swiftui", "iphone", "ipad", "mobile", "apple"],
+    )
+    backend_hits = _count_matches(
+        text,
+        [
+            "python",
+            "fastapi",
+            "api",
+            "backend",
+            "full stack",
+            "docker",
+            "mcp",
+            "qdrant",
+            "pinecone",
+        ],
+    )
+    bad_stack_hits = _count_matches(
+        text,
+        [
+            "php",
+            "magento",
+            "wordpress",
+            "salesforce",
+            "power bi",
+            "power platform",
+            "c++",
+            ".net",
+            "c#",
+            "devops",
+        ],
+    )
+
+    domain_alignment = 0.30
+    if health_hits >= 2:
+        domain_alignment = 0.95
+    elif ai_hits >= 2:
+        domain_alignment = 0.85
+    elif mobile_hits >= 2:
+        domain_alignment = 0.78
+    elif "developer tools" in text or "mcp" in text:
+        domain_alignment = 0.72
+    elif enterprise_hits > 0:
+        domain_alignment = 0.22
+    elif target_hits >= 1:
+        domain_alignment = 0.55
+
+    role_alignment = 0.18
+    if _contains_any(
+        title, ["founding engineer", "product engineer", "prototype", "generalist"]
+    ):
+        role_alignment = 0.95
+    elif _contains_any(
+        title,
+        [
+            "ai engineer",
+            "applied ai",
+            "machine learning",
+            "llm engineer",
+            "ai product",
+            "backend / product engineer",
+        ],
+    ):
+        role_alignment = 0.90
+    elif _contains_any(title, ["ios", "swift", "mobile engineer"]):
+        role_alignment = 0.92
+    elif _contains_any(
+        title, ["full stack", "full-stack", "software engineer", "backend engineer"]
+    ):
+        role_alignment = 0.78
+    elif _contains_any(title, ["product manager", "designer", "devops", "sre"]):
+        role_alignment = 0.08
+
+    culture_fit = 0.22
+    if portfolio_hits >= 2 or startup_hits >= 2:
+        culture_fit = 0.88
+    elif portfolio_hits >= 1 or startup_hits >= 1 or core_builder_hits > 0:
+        culture_fit = 0.72
+    elif enterprise_hits > 0:
+        culture_fit = 0.18
+    elif target_hits >= 2:
+        culture_fit = 0.50
+
+    experience_friction = 0.38
+    if _contains_any(
+        text, ["no experience required", "entry level", "junior", "associate"]
+    ):
+        experience_friction = 0.90
+    elif re.search(r"\b(?:0|1|2)\+?\s+years\b", text):
+        experience_friction = 0.78
+    elif re.search(r"\b(?:3|4|5)\+?\s+years\b", text):
+        experience_friction = 0.55
+    elif any(pattern.search(text) for pattern in _EXTREME_EXPERIENCE_PATTERNS):
+        experience_friction = 0.15
+
+    stack_fit = 0.25
+    if mobile_hits >= 2 and (ai_hits >= 1 or backend_hits >= 1):
+        stack_fit = 0.95
+    elif ai_hits >= 2 and backend_hits >= 1:
+        stack_fit = 0.90
+    elif mobile_hits >= 1 or backend_hits >= 1:
+        stack_fit = 0.72
+    if bad_stack_hits >= 2:
+        stack_fit = min(stack_fit, 0.18)
+
+    computed_score = (
+        domain_alignment * 0.30
+        + role_alignment * 0.25
+        + culture_fit * 0.20
+        + experience_friction * 0.15
+        + stack_fit * 0.10
+    )
+    final_score, extra_caveats = _apply_alignment_clamp(raw, prefs, computed_score)
+
+    if core_builder_hits > 0 and ai_hits >= 2:
+        final_score = max(final_score, 0.82)
+    if _contains_any(title, ["founding engineer", "product engineer", "ios engineer"]):
+        final_score = max(final_score, 0.86)
+    if health_hits >= 2 and ai_hits >= 2:
+        final_score = max(final_score, 0.88)
+    final_score = round(min(final_score, 0.96), 2)
+
+    caveats: list[str] = []
+    if bad_stack_hits > 0:
+        caveats.append("Stack leans away from Swift/Python/AI-builder work.")
+    if enterprise_hits > 0:
+        caveats.append("Listing reads like a conventional enterprise role.")
+    if any(pattern.search(text) for pattern in _EXTREME_EXPERIENCE_PATTERNS):
+        caveats.append("Listing asks for 8+ years of experience.")
+    for caveat in extra_caveats:
+        if caveat not in caveats:
+            caveats.append(caveat)
+
+    tags: list[str] = []
+    if health_hits:
+        tags.append("HealthTech")
+    if ai_hits:
+        tags.append("AI")
+    if mobile_hits:
+        tags.append("iOS")
+    if startup_hits:
+        tags.append("Startup")
+    if backend_hits:
+        tags.append("Python")
+
+    fit_reasons: list[str] = []
+    if health_hits:
+        fit_reasons.append("healthcare domain leverage")
+    if ai_hits:
+        fit_reasons.append("AI-native product builder")
+    if mobile_hits:
+        fit_reasons.append("SwiftUI and mobile overlap")
+    if startup_hits or portfolio_hits:
+        fit_reasons.append("builder-first startup signals")
+    fit_reasons = fit_reasons[:4]
+
+    salary_floor, salary_max = _parse_salary_bounds(raw.salary_text or "")
+    inferred_remote = _infer_is_remote(raw)
+    company_oneliner = "Company description not extracted in local fallback mode."
+    logic_fit = (
+        "This role was scored with deterministic local fallback because both configured LLM providers failed authentication. "
+        "It lines up best when the listing shows AI, product-building, mobile, or healthcare signals that map to your shipped Swift and Python projects."
+    )
+    domain_leverage = (
+        "Your edge is strongest when the job touches healthcare workflows, AI products, or mobile app delivery. "
+        "You have real O.R. exposure plus shipped AI apps on the App Store."
+    )
+    risk_reward = (
+        "This local score is conservative and based on keyword heuristics rather than full LLM extraction. "
+        "Use the caveats to decide whether the role is still worth a quick application."
+    )
+    ai_pitch_bullets = [
+        "• Local fallback mode: deterministic score from title, domain, stack, and culture signals.",
+        f"• Signals found: AI={ai_hits}, health={health_hits}, mobile={mobile_hits}, startup={startup_hits}.",
+        (
+            f"• Seniority / enterprise friction capped this role at {final_score:.2f}."
+            if caveats
+            else f"• Local heuristic score landed at {final_score:.2f}."
+        ),
+    ]
+    cover_letter = (
+        f"I build AI-heavy products with SwiftUI and Python, and I tend to work from product idea to shipped implementation quickly. "
+        f"My portfolio at gunnarguy.me includes OpenIntelligence, OpenResponses, and LinkedOut, all built through an AI-orchestrated workflow. "
+        f"I also bring healthcare operations context from Stryker at the VA in Palo Alto. "
+        f"If this role is genuinely remote and values shipped builder work over pedigree, I would want to understand how much of the job is product creation versus maintaining an existing stack."
+    )
+
+    job = JobPayload(
+        company_name=raw.company,
+        role_title=raw.title,
+        salary_floor=salary_floor,
+        is_remote=inferred_remote,
+        builder_score=final_score,
+        ai_pitch_summary="\n".join(ai_pitch_bullets),
+        drafted_cover_letter=cover_letter,
+        source_url=raw.url,
+        posted_at=datetime.now(timezone.utc),
+        location=raw.location,
+        tags=tags,
+        description=raw.description[:12000],
+        company_description="",
+        company_size="Unknown",
+        company_stage="Unknown",
+        company_url="",
+        salary_max=salary_max,
+        requirements=[],
+        nice_to_haves=[],
+        tech_stack=[],
+        why_interesting=logic_fit,
+        red_flags=caveats[:3],
+        apply_url="",
+        experience_level="Not specified",
+        job_type="Not specified",
+        benefits=[],
+        fit_reasons=fit_reasons,
+        dealbreaker_warnings=caveats[:3],
+        logic_fit=logic_fit,
+        domain_leverage=domain_leverage,
+        risk_reward=risk_reward,
+        company_oneliner=company_oneliner,
+        they_want=[],
+        job_snapshot="Local fallback mode: factual extraction unavailable because the configured LLM providers failed.",
+        domain_alignment=domain_alignment,
+        role_alignment=role_alignment,
+        culture_fit=culture_fit,
+        experience_friction=experience_friction,
+        stack_fit=stack_fit,
+        caveats=caveats[:4],
+        scoring_version="local-v1",
+    )
+
+    if final_score < 0.15:
+        return ScoringResult(
+            passed_filter=False,
+            rejection_reason="Local fallback score too low.",
+        )
+
+    return ScoringResult(passed_filter=True, job=job)
+
 
 def _get_openai_client() -> AsyncOpenAI:
     global _openai_client
@@ -223,6 +1128,8 @@ You are writing directly TO the candidate — always use second person ("you/you
 - Hard geographic restriction outside the US with no remote option
 - Requires a specific language you cannot learn (e.g. Mandarin-only customer-facing role)
 - Non-software IT role (helpdesk, SysAdmin, network admin) with no development component
+- If remote is required, any onsite / hybrid / non-US-eligible role should be treated as a reject
+- Treat hard credential stop-signs as rejects: active security clearance, active clinical license, or CS degree explicitly required with no equivalent-experience escape hatch
 
 IMPORTANT: Do NOT hard-reject based on:
 - Seniority in title alone — many "Senior" roles at startups are flexible, and the candidate can learn. Flag it as a caveat, not a reject.
@@ -236,6 +1143,9 @@ IMPORTANT: Do NOT hard-reject based on:
 You are scoring: "Is this role worth applying to?"
 
 This means: Would the time invested in applying have a reasonable chance of leading somewhere — an interview, a conversation, a connection — given the candidate's unique profile? The candidate can learn anything technical. The question is whether the role aligns with their trajectory and whether the company is likely to engage.
+
+Important: this candidate is not a generic fit for conventional enterprise software jobs. If the listing does not show any AI-builder, healthtech, mobile, product-engineering, startup, or portfolio-friendly signals, keep the factor scores low enough that the role likely falls below the cutoff.
+Generic backend, platform, SRE, internal-tools, or people-systems roles should not rise above the high 0.60s unless the listing has unusually strong AI-product, healthtech, or iOS/mobile alignment.
 
 ## Structured Factor Extraction
 
@@ -307,7 +1217,7 @@ The final builder_score is computed from weighted factors. Your factor scores sh
 - 0.20-0.39: Weak alignment or heavy friction. Still surface it but flag as a long shot.
 - Below 0.20: Set passed_filter to false. Truly no connection to the candidate's profile.
 
-**Anchor at 0.55.** A generic "Software Engineer" posting with no special alignment = ~0.50.
+**Anchor at 0.45.** A generic "Software Engineer" posting with no AI, healthtech, mobile, startup, or product-builder alignment should land around 0.20-0.35, not 0.50.
 A HealthTech AI role that values builders = 0.75+.
 
 ### Location adjustments (applied as a multiplier on the final score):
@@ -530,6 +1440,16 @@ async def score_job(
     )
     tier_label = TIER_LABELS.get(loc_tier, "unknown")
 
+    hard_reject_reason = _programmatic_hard_reject(raw, prefs, loc_tier)
+    if hard_reject_reason:
+        logger.info(
+            f"[SCORE] PROGRAMMATIC REJECT | {raw.title} @ {raw.company} | {hard_reject_reason}"
+        )
+        return ScoringResult(
+            passed_filter=False,
+            rejection_reason=hard_reject_reason,
+        )
+
     user_msg = f"""Evaluate this job listing and extract EVERYTHING useful:
 
 **Title:** {raw.title}
@@ -608,6 +1528,44 @@ async def score_job(
             ),
             2,
         )
+        final_score, extra_caveats = _apply_alignment_clamp(raw, prefs, final_score)
+        final_score, specificity_caveats = _apply_llm_specificity_clamp(
+            raw,
+            final_score,
+            domain_alignment,
+            role_alignment,
+            culture_fit,
+        )
+        final_score, confidence_caveats = _apply_listing_confidence_penalty(
+            raw,
+            final_score,
+            data.get("company_name", raw.company),
+            data.get("company_description", ""),
+            data.get("company_url", ""),
+            data.get("salary_floor") or 0,
+            data.get("salary_max") or 0,
+            data.get("requirements", []),
+            data.get("tech_stack", []),
+        )
+
+        merged_caveats = list(data.get("caveats", []))
+        for caveat in extra_caveats:
+            if caveat not in merged_caveats:
+                merged_caveats.append(caveat)
+        for caveat in specificity_caveats:
+            if caveat not in merged_caveats:
+                merged_caveats.append(caveat)
+        for caveat in confidence_caveats:
+            if caveat not in merged_caveats:
+                merged_caveats.append(caveat)
+
+        llm_remote = data.get("is_remote")
+        if prefs.require_remote and llm_remote is False and loc_tier > 0:
+            reason = "Remote-only search: LLM classified the role as non-remote."
+            logger.info(
+                f"[SCORE] POST-LLM REJECT | {raw.title} @ {raw.company} | {reason}"
+            )
+            return ScoringResult(passed_filter=False, rejection_reason=reason)
 
         job = JobPayload(
             company_name=data.get("company_name", raw.company),
@@ -651,15 +1609,17 @@ async def score_job(
             culture_fit=culture_fit,
             experience_friction=experience_friction,
             stack_fit=stack_fit,
-            caveats=data.get("caveats", []),
+            caveats=merged_caveats,
             scoring_version="v2",
         )
 
         return ScoringResult(passed_filter=True, job=job)
 
     except Exception as e:
-        logger.warning(f"[SCORE] LLM ERROR for {raw.title} @ {raw.company}: {type(e).__name__}: {e or '(empty)'} — RETRY LATER")
-        return ScoringResult(passed_filter=False, rejection_reason="LLM_FAILURE_RETRY")
+        logger.warning(
+            f"[SCORE] LLM ERROR for {raw.title} @ {raw.company}: {type(e).__name__}: {e or '(empty)'} — using deterministic local fallback"
+        )
+        return _local_score_job(raw, prefs)
 
 
 async def score_batch(

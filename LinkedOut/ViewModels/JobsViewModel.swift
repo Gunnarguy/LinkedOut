@@ -345,6 +345,24 @@ class JobsViewModel: ObservableObject {
         try? data.write(to: file, options: .atomic)
     }
 
+    private static func clearCache(_ name: String) {
+        let file = cacheDir.appendingPathComponent("\(name).json")
+        try? FileManager.default.removeItem(at: file)
+    }
+
+    func resetLocalJobState() {
+        print("[VM] resetLocalJobState — clearing in-memory + disk cache")
+        pendingJobs = []
+        savedJobs = []
+        appliedJobs = []
+        rejectedJobs = []
+        stats = nil
+        Self.clearCache("pending")
+        Self.clearCache("saved")
+        Self.clearCache("applied")
+        Self.clearCache("rejected")
+    }
+
     private func isExpectedCancellation(_ error: Error) -> Bool {
         if error is CancellationError { return true }
         if let urlError = error as? URLError, urlError.code == .cancelled { return true }
@@ -379,16 +397,11 @@ class JobsViewModel: ObservableObject {
             isOffline = false
             error = nil
 
-            if fetched.isEmpty && !pendingJobs.isEmpty {
-                // Server returned 0 but we have cached jobs — keep them
-                print("[VM] loadPendingJobs — server returned 0, keeping \(pendingJobs.count) cached jobs")
-            } else {
-                pendingJobs = fetched
-                Self.writeCache("pending", jobs: pendingJobs)
-                print("[VM] loadPendingJobs — got \(pendingJobs.count) jobs")
-                for (i, j) in pendingJobs.prefix(5).enumerated() {
-                    print("[VM]   [\(i)] \(j.roleTitle) @ \(j.companyName) score=\(j.builderScore)")
-                }
+            pendingJobs = fetched
+            Self.writeCache("pending", jobs: pendingJobs)
+            print("[VM] loadPendingJobs — got \(pendingJobs.count) jobs")
+            for (i, j) in pendingJobs.prefix(5).enumerated() {
+                print("[VM]   [\(i)] \(j.roleTitle) @ \(j.companyName) score=\(j.builderScore)")
             }
         } catch {
                 if isExpectedCancellation(error) {
@@ -409,13 +422,9 @@ class JobsViewModel: ObservableObject {
         print("[VM] loadAppliedJobs — starting")
         do {
             let fetched = try await APIClient.shared.fetchAppliedJobs()
-            if fetched.isEmpty && !appliedJobs.isEmpty {
-                print("[VM] loadAppliedJobs — server returned 0, keeping \(appliedJobs.count) cached")
-            } else {
-                appliedJobs = fetched
-                Self.writeCache("applied", jobs: appliedJobs)
-                print("[VM] loadAppliedJobs — got \(appliedJobs.count)")
-            }
+            appliedJobs = fetched
+            Self.writeCache("applied", jobs: appliedJobs)
+            print("[VM] loadAppliedJobs — got \(appliedJobs.count)")
         } catch {
             if isExpectedCancellation(error) {
                 print("[VM] loadAppliedJobs — cancelled (superseded)")
@@ -429,13 +438,9 @@ class JobsViewModel: ObservableObject {
         print("[VM] loadSavedJobs — starting")
         do {
             let fetched = try await APIClient.shared.fetchSavedJobs()
-            if fetched.isEmpty && !savedJobs.isEmpty {
-                print("[VM] loadSavedJobs — server returned 0, keeping \(savedJobs.count) cached")
-            } else {
-                savedJobs = fetched
-                Self.writeCache("saved", jobs: savedJobs)
-                print("[VM] loadSavedJobs — got \(savedJobs.count)")
-            }
+            savedJobs = fetched
+            Self.writeCache("saved", jobs: savedJobs)
+            print("[VM] loadSavedJobs — got \(savedJobs.count)")
         } catch {
             if isExpectedCancellation(error) {
                 print("[VM] loadSavedJobs — cancelled (superseded)")
@@ -449,13 +454,9 @@ class JobsViewModel: ObservableObject {
         print("[VM] loadRejectedJobs — starting")
         do {
             let fetched = try await APIClient.shared.fetchRejectedJobs()
-            if fetched.isEmpty && !rejectedJobs.isEmpty {
-                print("[VM] loadRejectedJobs — server returned 0, keeping \(rejectedJobs.count) cached")
-            } else {
-                rejectedJobs = fetched
-                Self.writeCache("rejected", jobs: rejectedJobs)
-                print("[VM] loadRejectedJobs — got \(rejectedJobs.count)")
-            }
+            rejectedJobs = fetched
+            Self.writeCache("rejected", jobs: rejectedJobs)
+            print("[VM] loadRejectedJobs — got \(rejectedJobs.count)")
         } catch {
             if isExpectedCancellation(error) {
                 print("[VM] loadRejectedJobs — cancelled (superseded)")

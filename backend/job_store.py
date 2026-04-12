@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -34,6 +35,31 @@ class JobStore:
         )  # (job_id, action, source_bucket)
         self._load()
         self._dedup_on_load()
+
+    def _normalize_signature_text(self, value: str) -> str:
+        return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+
+    def _content_signature(self, job: JobPayload) -> str:
+        company = self._normalize_signature_text(job.company_name or "")
+        title = self._normalize_signature_text(job.role_title or "")
+        if job.is_remote:
+            location_marker = "remote"
+        else:
+            location_marker = self._normalize_signature_text(job.location or "")[:48]
+        return f"{company}|{title}|{location_marker}"
+
+    def _is_placeholder_source(self, url: str) -> bool:
+        lower = (url or "").lower()
+        return any(token in lower for token in ["example.com", "test-key-check"])
+
+    def _job_quality_key(self, job: JobPayload) -> tuple:
+        return (
+            not self._is_placeholder_source(job.source_url),
+            len(job.description or ""),
+            len(job.ai_pitch_summary or ""),
+            float(job.builder_score or 0.0),
+            bool(job.salary_floor or job.salary_max),
+        )
 
     # ── Persistence ──────────────────────────────────────────────────────
 
@@ -120,7 +146,7 @@ class JobStore:
                 self._url_index.add(job.source_url)
 
     def _dedup_on_load(self) -> None:
-        """Remove duplicate jobs (same URL) within and across buckets on startup.
+        """Remove duplicate jobs (same URL or same role signature) within and across buckets on startup.
 
         Priority: applied > saved > pending > rejected.
         If the same URL exists in saved AND pending, the pending copy is removed.
@@ -149,10 +175,40 @@ class JobStore:
                     f"[DEDUP] Removed {len(to_remove)} intra-bucket dupes from {bucket_name}"
                 )
 
+        # Phase 1b: Intra-bucket content-signature dedup (same role/company cross-posted)
+        for bucket_name, bucket in [
+            ("pending", self._pending),
+            ("applied", self._applied),
+            ("saved", self._saved),
+            ("rejected", self._rejected),
+        ]:
+            seen_signatures: dict[str, str] = {}  # signature -> winning job_id
+            to_remove: list[str] = []
+            for jid, job in bucket.items():
+                signature = self._content_signature(job)
+                if signature in seen_signatures:
+                    winner_id = seen_signatures[signature]
+                    winner = bucket[winner_id]
+                    if self._job_quality_key(job) > self._job_quality_key(winner):
+                        to_remove.append(winner_id)
+                        seen_signatures[signature] = jid
+                    else:
+                        to_remove.append(jid)
+                else:
+                    seen_signatures[signature] = jid
+            for jid in set(to_remove):
+                bucket.pop(jid, None)
+                removed += 1
+            if to_remove:
+                logger.info(
+                    f"[DEDUP] Removed {len(set(to_remove))} intra-bucket signature dupes from {bucket_name}"
+                )
+
         # Phase 2: Cross-bucket dedup — higher-priority bucket wins
         # Priority order: applied > saved > pending > rejected
         # A URL in "saved" should NOT also be in "pending" or "rejected"
         global_seen: dict[str, str] = {}  # url → bucket_name that owns it
+        global_signatures: dict[str, str] = {}  # signature -> bucket_name that owns it
         priority_order = [
             ("applied", self._applied),
             ("saved", self._saved),
@@ -162,6 +218,7 @@ class JobStore:
         for bucket_name, bucket in priority_order:
             to_remove: list[str] = []
             for jid, job in bucket.items():
+                signature = self._content_signature(job)
                 if job.source_url in global_seen:
                     owner = global_seen[job.source_url]
                     logger.info(
@@ -169,8 +226,16 @@ class JobStore:
                         f"{bucket_name} (already in {owner})"
                     )
                     to_remove.append(jid)
+                elif signature in global_signatures:
+                    owner = global_signatures[signature]
+                    logger.info(
+                        f"[DEDUP] Cross-bucket signature: removing '{job.role_title}' from "
+                        f"{bucket_name} (already in {owner})"
+                    )
+                    to_remove.append(jid)
                 else:
                     global_seen[job.source_url] = bucket_name
+                    global_signatures[signature] = bucket_name
             for jid in to_remove:
                 bucket.pop(jid)
                 removed += 1
@@ -284,6 +349,14 @@ class JobStore:
                 f"[DEDUP] Skipping duplicate URL (index): {job.source_url[:80]}"
             )
             return
+        new_signature = self._content_signature(job)
+        for bucket in (self._pending, self._applied, self._saved, self._rejected):
+            for existing in bucket.values():
+                if self._content_signature(existing) == new_signature:
+                    logger.info(
+                        f"[DEDUP] Skipping duplicate role signature: {job.role_title} @ {job.company_name}"
+                    )
+                    return
         # Fallback: linear scan in case _url_index drifted
         for bucket in (self._pending, self._applied, self._saved, self._rejected):
             for existing in bucket.values():

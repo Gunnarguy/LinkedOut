@@ -46,9 +46,15 @@ struct MainTabView: View {
         .task {
             // Run discovery once at launch
             print("[MAIN] 🔍 Initial server discovery starting...")
+            let previous = serverURL
             if let found = await ServerDiscovery.discover() {
                 serverURL = found
                 print("[MAIN] ✅ Server discovered: \(found)")
+                if found != previous {
+                    print("[MAIN] 🔄 Initial server changed: \(previous) → \(found) — clearing local cache and refreshing")
+                    jobs.resetLocalJobState()
+                    await jobs.refreshAll()
+                }
                 // Re-check auth against the discovered server (not the stale cached URL)
                 await auth.checkExistingSession()
             } else {
@@ -82,9 +88,9 @@ struct MainTabView: View {
                         serverURL = found
                         if found != previous {
                             print("[DISCOVERY] Server changed: \(previous) → \(found) — reloading jobs + re-checking auth")
+                            jobs.resetLocalJobState()
                             await auth.checkExistingSession()
-                            await jobs.loadPendingJobs()
-                            await jobs.loadStats()
+                            await jobs.refreshAll()
                         }
                     }
                 }

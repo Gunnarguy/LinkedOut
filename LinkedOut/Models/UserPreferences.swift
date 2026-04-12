@@ -64,9 +64,13 @@ struct UserPreferences: Codable {
         preferredRoles: [
             "AI Engineer",
             "AI Product Engineer",
+            "AI Product Builder",
             "Applied AI Engineer",
+            "AI Prototyper",
             "Founding Engineer",
             "Product Engineer",
+            "Prototype Engineer",
+            "Product Development Generalist",
             "iOS Engineer",
             "Mobile Engineer",
             "Machine Learning Engineer",
@@ -87,8 +91,8 @@ struct UserPreferences: Codable {
             "SRE"
         ],
         locationPreference: "Remote",
-        preferredLocations: ["Kalamazoo, Michigan"],
-        scoreCutoff: 0.20,
+        preferredLocations: ["Campbell, California", "Palo Alto, California"],
+        scoreCutoff: 0.30,
         convincingPenalty: -0.20,
         convincingBoost: 0.10,
         nearbyPenalty: -0.03,
@@ -103,6 +107,6 @@ struct UserPreferences: Codable {
         credentialPenalty: -0.15,
         portfolioBoost: 0.10,
         maxSeniorityLevel: "Mid",
-        professionalProfile: "Professional Profile"
+        professionalProfile: "AI-native builder with 4 App Store apps, SwiftUI plus Python backends, healthcare ops depth from Stryker / VA Palo Alto, and real product proof including early paid OpenIntelligence cohort sales."
     )
 }

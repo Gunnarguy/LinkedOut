@@ -27,27 +27,23 @@ struct ServerDiscovery {
     private nonisolated(unsafe) static var cachedAt: Date = .distantPast
 
     /// Probes ALL candidates in parallel. Returns the highest-priority one that responds.
-    /// If the current server is still healthy, stays on it to avoid data disruption.
-    /// Caches result for 5 minutes to avoid re-probing on every foreground.
+    /// Prefers the highest-priority healthy candidate, so local Docker wins over Render when available.
+    /// Caches result for 5 minutes only when it is already the highest-priority choice.
     static func discover() async -> String? {
-        // Return cache if fresh
+        // Return cache only if it is already the top-priority candidate
         if let cached = cachedURL,
-           Date().timeIntervalSince(cachedAt) < cacheSeconds {
+           Date().timeIntervalSince(cachedAt) < cacheSeconds,
+           candidates.first == cached {
             print("[DISCOVERY] Using cached server: \(cached)")
             return cached
         }
 
-        // Check if current server is still healthy — stay on it if so
+        // Remember any custom current server outside the built-in list as a last-resort fallback.
         let current = UserDefaults.standard.string(forKey: "serverURL") ?? ""
-        if !current.isEmpty, await probe(current) {
-            cachedURL = current
-            cachedAt = Date()
-            print("[DISCOVERY] Current server still healthy: \(current)")
-            return current
-        }
+        let customCurrent = (!current.isEmpty && !candidates.contains(current)) ? current : nil
 
-        // Current server is down — probe all in parallel
-        print("[DISCOVERY] Current server unreachable, probing all candidates...")
+        // Probe all built-in candidates in parallel and choose the highest-priority healthy one.
+        print("[DISCOVERY] Probing candidates in priority order...")
         let results = await withTaskGroup(of: (Int, String, Bool).self) { group in
             for (index, candidate) in candidates.enumerated() {
                 group.addTask {
@@ -66,16 +62,23 @@ struct ServerDiscovery {
         }
 
         // Pick the highest-priority (lowest index) that responded
-        guard let best = results.min(by: { $0.0 < $1.0 }) else {
-            print("[DISCOVERY] 🚨 ALL candidates failed! No backend available.")
-            return nil
+        if let best = results.min(by: { $0.0 < $1.0 }) {
+            cachedURL = best.1
+            cachedAt = Date()
+            UserDefaults.standard.set(best.1, forKey: "serverURL")
+            print("[DISCOVERY] Found server: \(best.1) (probed \(results.count) OK)")
+            return best.1
         }
 
-        cachedURL = best.1
-        cachedAt = Date()
-        UserDefaults.standard.set(best.1, forKey: "serverURL")
-        print("[DISCOVERY] Found server: \(best.1) (probed \(results.count) OK)")
-        return best.1
+        if let customCurrent, await probe(customCurrent) {
+            cachedURL = customCurrent
+            cachedAt = Date()
+            print("[DISCOVERY] Falling back to custom server: \(customCurrent)")
+            return customCurrent
+        }
+
+        print("[DISCOVERY] 🚨 ALL candidates failed! No backend available.")
+        return nil
     }
 
     /// Force a fresh discovery (e.g., after network error).

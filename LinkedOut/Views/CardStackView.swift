@@ -16,7 +16,7 @@ struct CardStackView: View {
     @AppStorage("lastViewedTimestamp") private var lastViewedTimestamp: Double = 0
 
     // ── Location Filtering ──
-    @AppStorage("preferredLocationsJSON") private var preferredLocationsJSON: String = "[\"Kalamazoo, Michigan\"]"
+    @AppStorage("preferredLocationsJSON") private var preferredLocationsJSON: String = "[\"Campbell, California\",\"Palo Alto, California\"]"
     @State private var selectedLocationTab: String = "All"
     @State private var showLocationManager = false
     @State private var editableLocations: [String] = []
@@ -51,7 +51,7 @@ struct CardStackView: View {
     private var preferredLocations: [String] {
         guard let data = preferredLocationsJSON.data(using: .utf8),
               let locs = try? JSONDecoder().decode([String].self, from: data) else {
-            return ["Kalamazoo, Michigan"]
+            return ["Campbell, California", "Palo Alto, California"]
         }
         return locs
     }

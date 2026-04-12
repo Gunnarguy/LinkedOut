@@ -63,25 +63,29 @@ struct SettingsView: View {
     @AppStorage("serverURL") private var serverURL: String = "http://Gunnars-Brain-Extension.local:8443"
     @AppStorage("preferredRolesJSON") private var preferredRolesJSON: String = "[]"
     @AppStorage("excludedKeywordsJSON") private var excludedKeywordsJSON: String = "[]"
-    @AppStorage("preferredLocationsJSON") private var preferredLocationsJSON: String = "[\"Kalamazoo, Michigan\"]"
+    @AppStorage("preferredLocationsJSON") private var preferredLocationsJSON: String = "[\"Campbell, California\",\"Palo Alto, California\"]"
     @AppStorage("blockedCompaniesJSON") private var blockedCompaniesJSON: String = "[]"
 
     // ── Scoring Weights ──
-    @AppStorage("scoreCutoff") private var scoreCutoff: Double = 0.35
+    @AppStorage("scoreCutoff") private var scoreCutoff: Double = 0.30
     @AppStorage("convincingPenalty") private var convincingPenalty: Double = -0.20
     @AppStorage("convincingBoost") private var convincingBoost: Double = 0.10
     @AppStorage("nearbyPenalty") private var nearbyPenalty: Double = -0.03
+    @AppStorage("nearbyPenaltyMult") private var nearbyPenaltyMult: Double = 0.97
     @AppStorage("regionalPenalty") private var regionalPenalty: Double = -0.08
+    @AppStorage("regionalPenaltyMult") private var regionalPenaltyMult: Double = 0.92
     @AppStorage("relocationPenalty") private var relocationPenalty: Double = -0.15
+    @AppStorage("relocationPenaltyMult") private var relocationPenaltyMult: Double = 0.85
     @AppStorage("internationalPenalty") private var internationalPenalty: Double = -0.25
+    @AppStorage("internationalPenaltyMult") private var internationalPenaltyMult: Double = 0.75
     @AppStorage("experiencePenalty") private var experiencePenalty: Double = -0.10
     @AppStorage("credentialPenalty") private var credentialPenalty: Double = -0.15
     @AppStorage("portfolioBoost") private var portfolioBoost: Double = 0.10
     @AppStorage("maxSeniorityLevel") private var maxSeniorityLevel: String = "Mid"
-    @AppStorage("professionalProfile") private var professionalProfile: String = "Your professional profile markdown here..."
+    @AppStorage("professionalProfile") private var professionalProfile: String = UserPreferences.default.professionalProfile
 
     @State private var preferredRoles: [String] = []
-    @State private var preferredLocations: [String] = ["Kalamazoo, Michigan"]
+    @State private var preferredLocations: [String] = UserPreferences.default.preferredLocations
     @State private var excludedKeywords: [String] = []
     @State private var blockedCompanies: [String] = []
     @State private var newRole = ""
@@ -138,9 +142,13 @@ struct SettingsView: View {
             convincingPenalty: convincingPenalty,
             convincingBoost: convincingBoost,
             nearbyPenalty: nearbyPenalty,
+            nearbyPenaltyMult: nearbyPenaltyMult,
             regionalPenalty: regionalPenalty,
+            regionalPenaltyMult: regionalPenaltyMult,
             relocationPenalty: relocationPenalty,
+            relocationPenaltyMult: relocationPenaltyMult,
             internationalPenalty: internationalPenalty,
+            internationalPenaltyMult: internationalPenaltyMult,
             experiencePenalty: experiencePenalty,
             credentialPenalty: credentialPenalty,
             portfolioBoost: portfolioBoost,
@@ -158,9 +166,13 @@ struct SettingsView: View {
             convincingPenalty = w.convincing
             convincingBoost = w.boost
             nearbyPenalty = w.nearby
+            nearbyPenaltyMult = max(0.0, 1.0 + w.nearby)
             regionalPenalty = w.regional
+            regionalPenaltyMult = max(0.0, 1.0 + w.regional)
             relocationPenalty = w.relocation
+            relocationPenaltyMult = max(0.0, 1.0 + w.relocation)
             internationalPenalty = w.international
+            internationalPenaltyMult = max(0.0, 1.0 + w.international)
             experiencePenalty = w.experience
             credentialPenalty = w.credential
             portfolioBoost = w.portfolio
@@ -717,13 +729,18 @@ struct SettingsView: View {
             .task { await checkNotionStatus() }
             .alert("Reset All Settings?", isPresented: $showResetConfirmation) {
                 Button("Reset", role: .destructive) {
-                    apply(.balanced)
                     let defaults = UserPreferences.default
                     minSalary = defaults.minSalary
                     requireRemote = defaults.requireRemote
                     preferredRoles = defaults.preferredRoles
                     excludedKeywords = defaults.excludedKeywords
+                    scoreCutoff = defaults.scoreCutoff
+                    nearbyPenaltyMult = defaults.nearbyPenaltyMult
+                    regionalPenaltyMult = defaults.regionalPenaltyMult
+                    relocationPenaltyMult = defaults.relocationPenaltyMult
+                    internationalPenaltyMult = defaults.internationalPenaltyMult
                     maxSeniorityLevel = defaults.maxSeniorityLevel
+                    professionalProfile = defaults.professionalProfile
                     preferredLocations = defaults.preferredLocations
                     saveRolesToStorage()
                     saveKeywordsToStorage()
@@ -852,7 +869,7 @@ struct SettingsView: View {
 
     private func saveLocationsToStorage() {
         if let data = try? JSONEncoder().encode(preferredLocations) {
-            preferredLocationsJSON = String(data: data, encoding: .utf8) ?? "[\"Kalamazoo, Michigan\"]"
+            preferredLocationsJSON = String(data: data, encoding: .utf8) ?? "[\"Campbell, California\",\"Palo Alto, California\"]"
         }
     }
 

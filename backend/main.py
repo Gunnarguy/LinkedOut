@@ -1021,7 +1021,13 @@ async def score_job_batch(
 # ── Re-score existing jobs ───────────────────────────────────────────────────
 
 _rescore_task: asyncio.Task | None = None
-_rescore_progress: dict = {"running": False, "done": 0, "total": 0, "errors": 0}
+_rescore_progress: dict = {
+    "running": False,
+    "done": 0,
+    "total": 0,
+    "errors": 0,
+    "evicted": 0,
+}
 
 
 @app.post("/api/jobs/rescore")
@@ -1050,7 +1056,14 @@ async def rescore_jobs(buckets: list[str] = Query(default=["pending"])):
     if not jobs_to_rescore:
         return {"status": "nothing_to_rescore", "total": 0}
 
-    _rescore_progress.update(running=True, done=0, total=len(jobs_to_rescore), errors=0)
+    requested_buckets = set(buckets)
+    _rescore_progress.update(
+        running=True,
+        done=0,
+        total=len(jobs_to_rescore),
+        errors=0,
+        evicted=0,
+    )
 
     async def _do_rescore():
         prefs = _user_prefs
@@ -1079,16 +1092,29 @@ async def rescore_jobs(buckets: list[str] = Query(default=["pending"])):
                         f"score={result.job.builder_score:.2f}"
                     )
                 else:
-                    # Non-destructive: keep the job in its current bucket, just log it
                     reason = result.rejection_reason or (
                         f"score={result.job.builder_score:.2f}"
                         if result.job
                         else "triage_rejected"
                     )
-                    logger.info(
-                        f"[RESCORE] KEPT (would have been evicted) {job.role_title} @ {job.company_name} "
-                        f"— {reason}"
-                    )
+                    if "pending" in requested_buckets and job.id in store._pending:
+                        moved = store.move_to_bucket(job.id, "rejected")
+                        if moved:
+                            _rescore_progress["evicted"] += 1
+                            logger.info(
+                                f"[RESCORE] Evicted pending {job.role_title} @ {job.company_name} "
+                                f"→ rejected | {reason}"
+                            )
+                        else:
+                            logger.info(
+                                f"[RESCORE] FAILED TO EVICT {job.role_title} @ {job.company_name} "
+                                f"— {reason}"
+                            )
+                    else:
+                        logger.info(
+                            f"[RESCORE] KEPT {job.role_title} @ {job.company_name} "
+                            f"— {reason}"
+                        )
             except Exception as e:
                 _rescore_progress["errors"] += 1
                 logger.warning(f"[RESCORE] Error on {job.role_title}: {e}")
