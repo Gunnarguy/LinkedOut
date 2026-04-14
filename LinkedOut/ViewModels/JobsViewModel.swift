@@ -651,11 +651,6 @@ class JobsViewModel: ObservableObject {
                 print("[VM] loadAppliedJobs — DISCARDED stale results (gen \(gen))")
                 return
             }
-            let fetched = try await APIClient.shared.fetchAppliedJobs()
-            guard fetchGeneration == gen else {
-                print("[VM] loadAppliedJobs — DISCARDED stale results (gen \(gen))")
-                return
-            }
             appliedJobs = fetched
             Self.writeCache("applied", jobs: appliedJobs)
             print("[VM] loadAppliedJobs — got \(appliedJobs.count)")
@@ -664,14 +659,9 @@ class JobsViewModel: ObservableObject {
                 print("[VM] loadAppliedJobs — cancelled (superseded)")
                 return
             }
-        let gen = fetchGeneration
-        print("[VM] loadSavedJobs — starting")
-        do {
-            let fetched = try await APIClient.shared.fetchSavedJobs()
-            guard fetchGeneration == gen else {
-                print("[VM] loadSavedJobs — DISCARDED stale results (gen \(gen))")
-                return
-            }
+            print("[VM] loadAppliedJobs — ERROR (suppressed): \(error)")
+        }
+    }
 
     func loadSavedJobs() async {
         let gen = fetchGeneration
@@ -703,15 +693,9 @@ class JobsViewModel: ObservableObject {
             print("[VM] loadRejectedJobs — got \(rejectedJobs.count)")
         } catch {
             if isExpectedCancellation(error) {
-        let gen = fetchGeneration
-        print("[VM] loadStats — starting")
-        do {
-            let fetched = try await APIClient.shared.fetchStats()
-            guard fetchGeneration == gen else {
-                print("[VM] loadStats — DISCARDED stale results (gen \(gen))")
+                print("[VM] loadRejectedJobs — cancelled (superseded)")
                 return
             }
-            stats = fetched
             print("[VM] loadRejectedJobs — ERROR (suppressed): \(error)")
         }
     }
