@@ -28,12 +28,11 @@ struct ServerDiscovery {
 
     /// Probes ALL candidates in parallel. Returns the highest-priority one that responds.
     /// Prefers the highest-priority healthy candidate, so local Docker wins over Render when available.
-    /// Caches result for 5 minutes only when it is already the highest-priority choice.
+    /// Caches result for 5 minutes to prevent rapid oscillation between backends.
     static func discover() async -> String? {
-        // Return cache only if it is already the top-priority candidate
+        // Return cache if still fresh — prevents oscillation between discover() calls
         if let cached = cachedURL,
-           Date().timeIntervalSince(cachedAt) < cacheSeconds,
-           candidates.first == cached {
+           Date().timeIntervalSince(cachedAt) < cacheSeconds {
             print("[DISCOVERY] Using cached server: \(cached)")
             return cached
         }

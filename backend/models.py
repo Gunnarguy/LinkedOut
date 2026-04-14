@@ -192,50 +192,68 @@ class AuthStatusResponse(BaseModel):
 
 
 class UserPreferences(BaseModel):
-    min_salary: int = 90000
-    require_remote: bool = False
+    min_salary: int = 70000
+    require_remote: bool = True
     preferred_roles: list[str] = Field(
         default_factory=lambda: [
-            "AI Engineer",
+            "Forward Deployed Engineer",
+            "Forward-Deployed Engineer",
+            "Solutions Engineer",
+            "Technical Solutions Engineer",
+            "Clinical Solutions Engineer",
+            "Implementation Engineer",
+            "Technical Implementation Engineer",
+            "Customer Engineer",
+            "Integration Engineer",
+            "Workflow Engineer",
             "AI Product Engineer",
             "AI Product Builder",
             "Applied AI Engineer",
-            "AI Solutions Engineer",
             "AI Prototyper",
             "Founding Engineer",
             "Product Engineer",
             "Prototype Engineer",
-            "Product Development Generalist",
             "iOS Engineer",
+            "iOS Developer",
+            "SwiftUI Engineer",
             "Mobile Engineer",
             "Healthcare AI Engineer",
             "MedTech Engineer",
             "Clinical Software Engineer",
             "Digital Health Engineer",
-            "Generative AI Engineer",
-            "LLM Engineer",
-            "Prompt Engineer",
+            "Workflow Automation Engineer",
         ]
     )
     excluded_keywords: list[str] = Field(
         default_factory=lambda: [
-            "Senior",
-            "Sr.",
-            "Sr ",
+            "Senior Engineer",
+            "Senior Software Engineer",
+            "Senior Backend Engineer",
+            "Senior Platform Engineer",
+            "Sr. Engineer",
             "Staff Engineer",
             "Principal Engineer",
             "Lead Engineer",
+            "Lead Software Engineer",
             "Engineering Manager",
             "Director of Engineering",
-            "VP of Engineering",
             "Head of Engineering",
             "Architect",
             "LeetCode",
             "whiteboard",
             "competitive programming",
+            "6+ years",
+            "7+ years",
+            "8+ years",
+            "9+ years",
             "10+ years",
+            "11+ years",
+            "12+ years",
             "DevOps",
             "SRE",
+            "Platform Engineer",
+            "Infrastructure Engineer",
+            "Site Reliability Engineer",
             "data structures and algorithms",
             "Shopify",
             "Magento",
@@ -250,6 +268,18 @@ class UserPreferences(BaseModel):
             "QA Engineer",
             "SDET",
             "Penetration Testing",
+            "Full-Stack Engineer",
+            "Full Stack Engineer",
+            "Full-Stack Software Engineer",
+            "Full-Stack Developer",
+            "Backend Engineer",
+            "Backend Developer",
+            "Machine Learning Engineer",
+            "ML Engineer",
+            "Cyber Security",
+            "Cybersecurity",
+            "Security Engineer",
+            "Sales Engineer",
         ]
     )
     location_preference: str = "Remote"
@@ -274,7 +304,7 @@ class UserPreferences(BaseModel):
         return "California"
 
     # ── Scoring Weights (adjustable from app) ──
-    score_cutoff: float = 0.30
+    score_cutoff: float = 0.58
     convincing_penalty: float = -0.20
     convincing_boost: float = 0.10
     nearby_penalty: float = -0.03
@@ -289,41 +319,34 @@ class UserPreferences(BaseModel):
     credential_penalty: float = -0.15
     portfolio_boost: float = 0.10
     max_seniority_level: str = "Mid"
-    professional_profile: str = """### AI Orchestrator & MedTech Bridge Builder
+    professional_profile: str = """### Target: High-Agency Product and Workflow Builder
 
-**Current Role**: OnSite Specialist at Stryker (VA Palo Alto Health Care System, since Aug 2022). You support Stanford surgical teams — setting up/troubleshooting medical devices during live surgeries, training clinical staff. Government Contractor PIV clearance. 1,000+ surgeries witnessed.
+Treat this candidate as a high-agency, AI-enabled product and workflow builder with real healthcare context, not as a conventional generic software engineer. Do not stretch into roles that only make sense if the candidate were already a traditional backend, infrastructure, security, or ML specialist.
 
-**Education**: B.S. Exercise Science (Kinesiology). No CS degree.
+### Current Role
+- OnSite Specialist at Stryker embedded at VA Palo Alto supporting Stanford surgical teams since August 2022
+- Strong healthcare workflow context, medical device troubleshooting, clinician support, training, HIPAA awareness, and government-site access
 
-**Builder Profile**: Self-taught AI-native builder. You use models as implementation leverage, but the product vision, architecture, iteration, and shipping decisions are yours. You orchestrate AI models (Claude, GPT, Gemini) to architect and ship full-stack applications at startup velocity. 824 commits, 697 in the last year. 4 live App Store apps, all personal projects.
+### Software Profile
+- Solo iOS developer with 4 shipped App Store apps
+- Strongest in SwiftUI, mobile product work, API integration, iteration speed, and turning ideas into working software
+- Uses AI heavily as implementation leverage for prototyping, architecture iteration, and shipping complete products
+- Comfortable with Python/FastAPI backends, RAG patterns, vector databases, Core ML, Docker, integrations, and workflow automation, but not as a generic backend or platform candidate
 
-### Shipped Apps (gunnarguy.me)
-- **OpenIntelligence**: On-device RAG engine — 102 services, 29-step pipeline, hybrid search, Core ML, runs fully offline. App Store Jan 2026.
-- **OpenResponses**: OpenAI Responses API client — MCP integration, 15+ models, 43+ file formats. App Store Jan 2026.
-- **OpenCone**: Pinecone vector DB RAG app — hybrid search, reranking, document ingestion. App Store May 2025.
-- **OpenAssistant**: OpenAI Assistants API v2 client — threads, runs, vector stores, Code Interpreter. App Store Oct 2024.
-- **LinkedOut**: Full-stack job matching — SwiftUI + FastAPI + Docker + LLM scoring pipeline.
-- **PlaudBlender**: Voice recordings → knowledge graph — Python, Gemini, Qdrant, Dash UI.
+### Honest Boundaries
+- No CS degree
+- No 5-10 years of traditional professional software engineering experience
+- Not a senior platform, backend, infrastructure, security, or ML specialist candidate
+- Not a fit for quota-carrying pre-sales or sales-heavy solutions roles
 
-### Technical Stack
-- **Mobile**: SwiftUI, Swift, MVVM, Combine, URLSession, XCTest, Core ML, Metal, SQLite, PDFKit, Vision
-- **Languages**: Swift, Python, HTML, CSS
-- **Backend**: RESTful APIs, JSON, Docker, MCP Servers, Async/Await, SSE
-- **AI/ML**: RAG Architecture, Vector DBs (Pinecone/Qdrant), LLM Integration (OpenAI/Gemini/Claude), Embeddings, On-Device ML, Prompt Engineering
-- **Healthcare**: HIPAA Compliance, Clinical Workflows, Medical Device Support, PIV Clearance
+### Target Lanes
+- iOS or mobile product building
+- Healthcare, clinical software, digital health, medtech, medical device, patient engagement, care navigation, provider workflow, or interoperability software
+- Forward-deployed, solutions, implementation, customer engineering, integration, or workflow roles that are genuinely technical and close to users
+- Applied-AI product builder or prototype roles where shipping, iteration, and problem-solving matter more than pedigree
 
-### What Makes You Competitive
-- Healthcare domain expertise that no bootcamp grad has — you've been in the O.R. at a VA hospital for 3 years
-- AI-native development velocity — you ship full applications in weeks, not months
-- Portfolio of 4 live App Store apps proves you can ship real products
-- Small but real commercial validation — OpenIntelligence has already closed 3 cohort sales at $60 each
-- Cross-stack builder: iOS frontend + Python backend + LLM pipelines + Docker deployment
-
-### What You're Looking For
-- Roles where building AI-powered products is the job — not maintaining legacy systems
-- Companies where the portfolio speaks louder than a resume (shipped > credentialed)
-- HealthTech, MedTech, Clinical AI, AI tooling, iOS — where your O.R. background is leverage
-- Startups and growth-stage companies that value output and speed over process and titles"""
+### Matching Rule
+Prioritize jobs where AI leverage, speed, user empathy, and workflow problem-solving are the job. Reject roles that expect a conventional software engineer first and only secondarily value builder instincts."""
 
 
 # ── Batch / Pipeline ────────────────────────────────────────────────────────

@@ -35,74 +35,58 @@ from models import RawJobListing
 
 logger = logging.getLogger(__name__)
 
-# Search queries — MedTech/AI orchestration/iOS focused
-# These determine what enters the pipeline. Every query should attract roles
-# where Gunnar's prompt-to-production + clinical domain background is an asset.
+# Search queries — career-advisor target lanes
+# These determine what enters the pipeline. Bias toward workflow, product,
+# mobile, and healthcare roles where Gunnar's AI leverage and user empathy are
+# an asset, not generic software engineering ladders.
 SEARCH_QUERIES = [
-    # Healthcare / MedTech / Clinical AI — PRIMARY TARGET
-    "healthcare AI",
-    "healthtech engineer",
-    "medtech engineer",
-    "clinical AI",
+    # Workflow / solutions / implementation — HIGHEST PROBABILITY
+    "forward deployed engineer",
+    "solutions engineer healthcare",
+    "solutions engineer AI",
+    "technical solutions engineer",
+    "clinical solutions engineer",
+    "implementation engineer healthcare",
+    "technical implementation engineer",
+    "customer engineer AI",
+    "integration engineer healthcare",
+    "workflow engineer",
+    "workflow automation engineer",
+    # Healthcare / MedTech / Clinical software — PRIMARY DOMAIN EDGE
     "medical device software",
-    "healthcare software engineer",
-    "health tech startup",
     "digital health engineer",
     "clinical software",
-    "HIPAA engineer",
-    "biotech software",
+    "healthcare AI engineer",
     "healthcare iOS",
-    "medical AI",
-    "health AI startup",
-    "healthcare technology",
-    "health informatics",
-    "clinical data",
-    # AI Orchestration / Prompt-to-Production — CORE SKILL
-    "AI engineer",
+    "care navigation software",
+    "patient engagement platform",
+    "provider workflow software",
+    "clinical workflow software",
+    "health benefits platform",
+    "remote patient monitoring",
+    "healthcare interoperability",
+    "FHIR integration engineer",
+    "HL7 integration engineer",
+    # AI product / prototype building — CORE BUILDING STYLE
     "AI product engineer",
     "applied AI engineer",
-    "AI solutions engineer",
-    "generative AI engineer",
-    "LLM engineer",
-    "RAG engineer",
-    "AI agent engineer",
-    "prompt engineer",
-    "AI app builder",
-    "AI prototyping",
-    "AI automation engineer",
-    "AI implementation",
-    "AI integration engineer",
-    "AI application developer",
-    "AI tools engineer",
-    "agentic AI",
-    "AI workflow",
-    "conversational AI",
-    # iOS / Mobile at AI companies
-    "iOS engineer AI",
-    "iOS engineer startup",
-    "SwiftUI engineer",
-    "mobile AI engineer",
-    "on-device ML",
-    "iOS developer remote",
-    "mobile engineer startup",
-    # Product / Founding / Zero-to-One — builder culture
+    "AI product builder",
+    "prototype engineer",
     "founding engineer",
-    "product engineer AI",
-    "founding engineer startup",
-    "zero to one engineer",
-    "full stack engineer AI",
-    "startup engineer",
-    "early stage engineer",
-    "first engineer",
-    # General AI + emerging roles
-    "AI startup",
+    "founding product engineer",
+    "AI workflow builder",
+    "AI integration engineer",
     "developer tools AI",
-    "machine learning startup",
-    "AI developer",
-    "AI native",
-    "no degree engineer",
-    "technical AI",
-    "AI platform engineer",
+    # iOS / Mobile — STRONGEST PROOF OF EXECUTION
+    "iOS engineer health",
+    "iOS engineer remote",
+    "iOS developer health",
+    "SwiftUI engineer",
+    "mobile product engineer",
+    "wearables engineer iOS",
+    # Adjacent but still plausible
+    "healthcare product engineer",
+    "AI implementation engineer",
 ]
 
 TIMEOUT = httpx.Timeout(15.0, connect=10.0)
@@ -259,6 +243,9 @@ async def fetch_hn_whoishiring() -> list[RawJobListing]:
                 r"agent(?:ic)?|copilot|GPT|generative.AI|deep.learning|"
                 r"(?:iOS|SwiftUI).+(?:AI|ML)|(?:AI|ML).+(?:iOS|mobile)|"
                 r"health(?:care|tech)|medtech|clinical|medical.device|HIPAA|"
+                r"forward.deployed|solutions.engineer|implementation.engineer|customer.engineer|integration.engineer|workflow.engineer|"
+                r"care.navigation|patient.engagement|provider.workflow|clinical.workflow|interoperability|\bFHIR\b|\bHL7\b|\bEHR\b|\bEMR\b|"
+                r"benefits.platform|remote.patient.monitoring|wearables?|"
                 r"prompt.engineer|AI.native|ship.fast|zero.to.one|0.to.1|"
                 r"\bstartup\b|seed.stage|series.A|early.stage|"
                 r"\biOS\b|SwiftUI|mobile.engineer|"
@@ -363,13 +350,13 @@ async def fetch_jobicy() -> list[RawJobListing]:
             "python",
             "ios",
             "healthcare",
-            "machine-learning",
-            "data-science",
+            "medical",
             "startup",
             "product",
             "mobile",
             "swift",
-            "medical",
+            "software",
+            "api",
         ]:
             try:
                 resp = await client.get(
@@ -710,21 +697,19 @@ async def fetch_serpapi_google_jobs(
 
     # Use a targeted subset of queries to stay within free tier budget
     serpapi_queries = [
-        "healthcare AI engineer remote",
-        "founding engineer AI startup",
-        "iOS engineer AI startup",
-        "LLM engineer remote",
+        "forward deployed engineer healthcare remote",
+        "solutions engineer AI remote",
+        "implementation engineer healthcare remote",
+        "customer engineer AI remote",
+        "workflow engineer healthcare remote",
         "AI product engineer",
         "medical device software engineer",
-        "generative AI engineer",
-        "health tech startup engineer",
+        "care navigation software engineer",
+        "patient engagement platform engineer",
         "SwiftUI engineer remote",
-        "machine learning engineer startup",
         "applied AI engineer",
-        "RAG engineer",
-        "AI agent engineer remote",
         "digital health engineer",
-        "clinical AI software",
+        "clinical software engineer",
     ]
 
     # Build search plan: base queries (no location) + location-scoped queries
@@ -819,15 +804,15 @@ async def fetch_adzuna(locations: list[str] | None = None) -> list[RawJobListing
     seen_urls: set[str] = set()
 
     adzuna_queries = [
-        "AI engineer",
-        "healthcare AI",
+        "forward deployed engineer",
+        "solutions engineer healthcare",
+        "implementation engineer healthcare",
+        "customer engineer AI",
         "iOS developer",
-        "machine learning engineer",
         "founding engineer",
-        "LLM engineer",
         "product engineer startup",
         "health tech software",
-        "generative AI",
+        "care navigation software",
         "medical software engineer",
     ]
 
@@ -940,12 +925,13 @@ async def fetch_findwork(locations: list[str] | None = None) -> list[RawJobListi
     seen_urls: set[str] = set()
 
     findwork_queries = [
-        "AI",
-        "machine learning",
+        "forward deployed",
+        "solutions engineer",
+        "implementation engineer",
+        "customer engineer",
         "iOS",
         "healthcare",
         "startup",
-        "LLM",
         "product engineer",
         "founding engineer",
     ]

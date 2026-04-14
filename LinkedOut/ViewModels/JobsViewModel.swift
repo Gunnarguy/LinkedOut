@@ -49,6 +49,19 @@ class JobsViewModel: ObservableObject {
 
     /// True when the last network request failed — shows offline indicator
     @Published var isOffline = false
+    @Published var locallyFilteredPendingCount = 0
+
+    /// Generation counter — incremented on every resetLocalJobState(). Fetches that
+    /// started before the latest reset are stale and their results must be discarded.
+    private var fetchGeneration: Int = 0
+
+    private var currentServerURL: String {
+        UserDefaults.standard.string(forKey: "serverURL") ?? "http://Gunnars-Brain-Extension.local:8443"
+    }
+
+    private var currentBackendLabel: String {
+        currentServerURL.contains("onrender.com") ? "cloud backend" : "local backend"
+    }
 
     // MARK: - LinkedIn Social State
     @Published var linkedInPosts: [LinkedInPost] = []
@@ -66,6 +79,191 @@ class JobsViewModel: ObservableObject {
     /// Number of pending jobs newer than lastSeenTimestamp
     var newJobCount: Int {
         pendingJobs.filter { ($0.postedAt ?? .distantPast) > lastSeenTimestamp }.count
+    }
+
+    private func portfolioFirstGuardrail(_ jobs: [JobPayload]) -> (kept: [JobPayload], dropped: Int) {
+        let kept = jobs.filter { shouldKeepPendingJob($0) }
+        return (kept, max(jobs.count - kept.count, 0))
+    }
+
+    private func shouldKeepPendingJob(_ job: JobPayload) -> Bool {
+        let textBlob = [
+            job.roleTitle,
+            job.companyName,
+            job.location,
+            job.description ?? "",
+            job.companyDescription ?? "",
+            job.whyInteresting ?? "",
+            job.jobSnapshot ?? "",
+            job.logicFit ?? "",
+            (job.fitReasons ?? []).joined(separator: " "),
+            (job.tags).joined(separator: " "),
+            (job.techStack ?? []).joined(separator: " "),
+        ].joined(separator: " ").lowercased()
+
+        let title = job.roleTitle.lowercased()
+
+        func containsAny(_ terms: [String], in text: String) -> Bool {
+            terms.contains { text.contains($0) }
+        }
+
+        func countMatches(_ terms: [String], in text: String) -> Int {
+            terms.reduce(into: 0) { count, term in
+                if text.contains(term) { count += 1 }
+            }
+        }
+
+        let hardRejectTitleTerms = [
+            "senior engineer",
+            "senior software engineer",
+            "senior backend engineer",
+            "senior platform engineer",
+            "staff engineer",
+            "principal engineer",
+            "lead engineer",
+            "lead software engineer",
+            "engineering manager",
+            "director of engineering",
+            "head of engineering",
+            "platform engineer",
+            "infrastructure engineer",
+            "site reliability engineer",
+            "full-stack engineer",
+            "full stack engineer",
+            "full-stack software engineer",
+            "full-stack developer",
+            "backend engineer",
+            "backend developer",
+            "machine learning engineer",
+            "ml engineer",
+            "security engineer",
+            "sales engineer",
+        ]
+
+        let strongTargetTitleTerms = [
+            "forward deployed engineer",
+            "forward-deployed engineer",
+            "solutions engineer",
+            "technical solutions engineer",
+            "clinical solutions engineer",
+            "implementation engineer",
+            "technical implementation engineer",
+            "customer engineer",
+            "integration engineer",
+            "workflow engineer",
+            "clinical software engineer",
+            "digital health engineer",
+            "healthcare ai engineer",
+            "medtech engineer",
+            "workflow automation engineer",
+        ]
+
+        let workflowTerms = [
+            "workflow",
+            "implementation",
+            "integration",
+            "customer deployment",
+            "customer workflow",
+            "provider workflow",
+            "clinical workflow",
+            "care navigation",
+            "patient engagement",
+            "interoperability",
+            "ehr",
+            "emr",
+            "epic",
+            "fhir",
+            "hl7",
+            "benefits",
+            "remote patient monitoring",
+            "wearable",
+            "wearables",
+        ]
+
+        let healthcareTerms = [
+            "healthcare",
+            "health tech",
+            "healthtech",
+            "digital health",
+            "medtech",
+            "clinical",
+            "medical device",
+            "patient",
+            "provider",
+            "hipaa",
+            "hospital",
+            "care delivery",
+        ]
+
+        let mobileTerms = [
+            "ios",
+            "swift",
+            "swiftui",
+            "iphone",
+            "ipad",
+            "mobile",
+            "app store",
+        ]
+
+        let aiProductTerms = [
+            "applied ai",
+            "ai product",
+            "llm",
+            "rag",
+            "agent",
+            "agentic",
+            "generative ai",
+            "automation",
+            "developer tools",
+            "mcp",
+        ]
+
+        let builderTerms = [
+            "portfolio",
+            "what you've built",
+            "what you have built",
+            "show us what you've built",
+            "builder-first",
+            "non-traditional",
+            "shipped products",
+            "ship fast",
+            "rapid prototyping",
+            "0-to-1",
+            "zero-to-one",
+            "founding",
+            "first engineer",
+        ]
+
+        let strongTitleMatch = containsAny(strongTargetTitleTerms, in: title)
+        let workflowHits = countMatches(workflowTerms, in: textBlob)
+        let healthcareHits = countMatches(healthcareTerms, in: textBlob)
+        let mobileHits = countMatches(mobileTerms, in: textBlob)
+        let aiHits = countMatches(aiProductTerms, in: textBlob)
+        let builderHits = countMatches(builderTerms, in: textBlob)
+        let strongPositiveGroups = [workflowHits > 0, healthcareHits > 0, mobileHits > 0, aiHits > 0, builderHits > 0].filter { $0 }.count
+
+        if strongTitleMatch {
+            return true
+        }
+
+        if containsAny(hardRejectTitleTerms, in: title) {
+            let escapeHatch = (healthcareHits > 0 && workflowHits > 0) || (healthcareHits > 0 && mobileHits > 0) || (aiHits > 0 && workflowHits > 0)
+            return escapeHatch
+        }
+
+        if containsAny(["ios engineer", "ios developer", "swiftui engineer", "mobile engineer"], in: title) {
+            return mobileHits > 0 && (healthcareHits > 0 || workflowHits > 0)
+        }
+
+        if containsAny(["product engineer", "prototype engineer", "founding engineer", "ai product engineer", "applied ai engineer", "ai product builder"], in: title) {
+            return workflowHits > 0 || healthcareHits > 0 || (healthcareHits > 0 && aiHits > 0)
+        }
+
+        if title.contains("software engineer") {
+            return (healthcareHits > 0 && workflowHits > 0) || (healthcareHits > 0 && mobileHits > 0) || (aiHits > 0 && workflowHits > 0)
+        }
+
+        return strongPositiveGroups >= 2 && (workflowHits > 0 || healthcareHits > 0)
     }
 
     /// Companies the user has blocked (loaded from @AppStorage via SettingsView)
@@ -319,7 +517,13 @@ class JobsViewModel: ObservableObject {
 
     /// Load cached jobs from disk immediately (no network).
     func loadCachedJobs() {
-        pendingJobs = Self.readCache("pending") ?? []
+        let cachedPending = Self.readCache("pending") ?? []
+        let filteredPending = portfolioFirstGuardrail(cachedPending)
+        pendingJobs = filteredPending.kept
+        locallyFilteredPendingCount = filteredPending.dropped
+        if filteredPending.dropped > 0 {
+            Self.writeCache("pending", jobs: pendingJobs)
+        }
         savedJobs = Self.readCache("saved") ?? []
         appliedJobs = Self.readCache("applied") ?? []
         rejectedJobs = Self.readCache("rejected") ?? []
@@ -351,7 +555,8 @@ class JobsViewModel: ObservableObject {
     }
 
     func resetLocalJobState() {
-        print("[VM] resetLocalJobState — clearing in-memory + disk cache")
+        fetchGeneration += 1
+        print("[VM] resetLocalJobState — clearing in-memory + disk cache (gen=\(fetchGeneration))")
         pendingJobs = []
         savedJobs = []
         appliedJobs = []
@@ -390,38 +595,67 @@ class JobsViewModel: ObservableObject {
     func loadPendingJobs() async {
         isLoading = true
         defer { isLoading = false }
-        print("[VM] loadPendingJobs — starting")
+        let gen = fetchGeneration
+        let server = currentServerURL
+        print("[VM] loadPendingJobs — starting (gen=\(gen), server=\(server))")
 
         do {
             let fetched = try await APIClient.shared.fetchPendingJobs()
+
+            // If the server changed while we were fetching, discard stale results
+            guard fetchGeneration == gen else {
+                print("[VM] loadPendingJobs — DISCARDED stale results (gen \(gen) != current \(fetchGeneration)) — server changed mid-fetch")
+                return
+            }
+
             isOffline = false
             error = nil
 
-            pendingJobs = fetched
+            let filteredPending = portfolioFirstGuardrail(fetched)
+            pendingJobs = filteredPending.kept
+            locallyFilteredPendingCount = filteredPending.dropped
             Self.writeCache("pending", jobs: pendingJobs)
             print("[VM] loadPendingJobs — got \(pendingJobs.count) jobs")
             for (i, j) in pendingJobs.prefix(5).enumerated() {
                 print("[VM]   [\(i)] \(j.roleTitle) @ \(j.companyName) score=\(j.builderScore)")
             }
+            if filteredPending.dropped > 0 {
+                self.info = "Locally filtered \(filteredPending.dropped) roles that missed your portfolio-first strategy"
+            }
         } catch {
-                if isExpectedCancellation(error) {
-                    print("[VM] loadPendingJobs — cancelled (superseded)")
-                    return
-                }
+            if isExpectedCancellation(error) {
+                print("[VM] loadPendingJobs — cancelled (superseded)")
+                return
+            }
+            // Also discard errors from stale fetches
+            guard fetchGeneration == gen else {
+                print("[VM] loadPendingJobs — ignoring error from stale fetch (gen \(gen))")
+                return
+            }
             print("[VM] loadPendingJobs — ERROR: \(error)")
             isOffline = true
             if pendingJobs.isEmpty {
-                self.error = "Can't reach server — check that your Mac is awake and Docker is running"
+                self.error = "Can't reach \(currentBackendLabel) — check that your Mac is awake, Docker is running, or switch servers in Settings"
             } else {
-                self.info = "Offline — showing cached jobs"
+                self.info = "Offline — showing \(pendingJobs.count) cached jobs from \(currentBackendLabel)"
             }
         }
     }
 
     func loadAppliedJobs() async {
+        let gen = fetchGeneration
         print("[VM] loadAppliedJobs — starting")
         do {
             let fetched = try await APIClient.shared.fetchAppliedJobs()
+            guard fetchGeneration == gen else {
+                print("[VM] loadAppliedJobs — DISCARDED stale results (gen \(gen))")
+                return
+            }
+            let fetched = try await APIClient.shared.fetchAppliedJobs()
+            guard fetchGeneration == gen else {
+                print("[VM] loadAppliedJobs — DISCARDED stale results (gen \(gen))")
+                return
+            }
             appliedJobs = fetched
             Self.writeCache("applied", jobs: appliedJobs)
             print("[VM] loadAppliedJobs — got \(appliedJobs.count)")
@@ -430,14 +664,24 @@ class JobsViewModel: ObservableObject {
                 print("[VM] loadAppliedJobs — cancelled (superseded)")
                 return
             }
-            print("[VM] loadAppliedJobs — ERROR (suppressed): \(error)")
-        }
-    }
-
-    func loadSavedJobs() async {
+        let gen = fetchGeneration
         print("[VM] loadSavedJobs — starting")
         do {
             let fetched = try await APIClient.shared.fetchSavedJobs()
+            guard fetchGeneration == gen else {
+                print("[VM] loadSavedJobs — DISCARDED stale results (gen \(gen))")
+                return
+            }
+
+    func loadSavedJobs() async {
+        let gen = fetchGeneration
+        print("[VM] loadSavedJobs — starting")
+        do {
+            let fetched = try await APIClient.shared.fetchSavedJobs()
+            guard fetchGeneration == gen else {
+                print("[VM] loadSavedJobs — DISCARDED stale results (gen \(gen))")
+                return
+            }
             savedJobs = fetched
             Self.writeCache("saved", jobs: savedJobs)
             print("[VM] loadSavedJobs — got \(savedJobs.count)")
@@ -459,9 +703,15 @@ class JobsViewModel: ObservableObject {
             print("[VM] loadRejectedJobs — got \(rejectedJobs.count)")
         } catch {
             if isExpectedCancellation(error) {
-                print("[VM] loadRejectedJobs — cancelled (superseded)")
+        let gen = fetchGeneration
+        print("[VM] loadStats — starting")
+        do {
+            let fetched = try await APIClient.shared.fetchStats()
+            guard fetchGeneration == gen else {
+                print("[VM] loadStats — DISCARDED stale results (gen \(gen))")
                 return
             }
+            stats = fetched
             print("[VM] loadRejectedJobs — ERROR (suppressed): \(error)")
         }
     }
@@ -469,9 +719,15 @@ class JobsViewModel: ObservableObject {
     func loadStats() async {
         statsLoading = true
         defer { statsLoading = false }
+        let gen = fetchGeneration
         print("[VM] loadStats — starting")
         do {
-            stats = try await APIClient.shared.fetchStats()
+            let fetched = try await APIClient.shared.fetchStats()
+            guard fetchGeneration == gen else {
+                print("[VM] loadStats — DISCARDED stale results (gen \(gen))")
+                return
+            }
+            stats = fetched
             if let s = stats {
                 print("[VM] loadStats — pending=\(s.pending) applied=\(s.applied) saved=\(s.saved) rejected=\(s.rejected)")
             }

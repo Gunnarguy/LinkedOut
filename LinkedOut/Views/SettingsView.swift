@@ -58,7 +58,7 @@ private enum StrictnessPreset: String, CaseIterable, Identifiable {
 
 struct SettingsView: View {
     @EnvironmentObject var jobs: JobsViewModel
-    @AppStorage("minSalary") private var minSalary: Int = 90000
+    @AppStorage("minSalary") private var minSalary: Int = UserPreferences.default.minSalary
     @AppStorage("requireRemote") private var requireRemote: Bool = true
     @AppStorage("serverURL") private var serverURL: String = "http://Gunnars-Brain-Extension.local:8443"
     @AppStorage("preferredRolesJSON") private var preferredRolesJSON: String = "[]"
@@ -67,20 +67,20 @@ struct SettingsView: View {
     @AppStorage("blockedCompaniesJSON") private var blockedCompaniesJSON: String = "[]"
 
     // ── Scoring Weights ──
-    @AppStorage("scoreCutoff") private var scoreCutoff: Double = 0.30
-    @AppStorage("convincingPenalty") private var convincingPenalty: Double = -0.20
-    @AppStorage("convincingBoost") private var convincingBoost: Double = 0.10
-    @AppStorage("nearbyPenalty") private var nearbyPenalty: Double = -0.03
-    @AppStorage("nearbyPenaltyMult") private var nearbyPenaltyMult: Double = 0.97
-    @AppStorage("regionalPenalty") private var regionalPenalty: Double = -0.08
-    @AppStorage("regionalPenaltyMult") private var regionalPenaltyMult: Double = 0.92
-    @AppStorage("relocationPenalty") private var relocationPenalty: Double = -0.15
-    @AppStorage("relocationPenaltyMult") private var relocationPenaltyMult: Double = 0.85
-    @AppStorage("internationalPenalty") private var internationalPenalty: Double = -0.25
-    @AppStorage("internationalPenaltyMult") private var internationalPenaltyMult: Double = 0.75
-    @AppStorage("experiencePenalty") private var experiencePenalty: Double = -0.10
-    @AppStorage("credentialPenalty") private var credentialPenalty: Double = -0.15
-    @AppStorage("portfolioBoost") private var portfolioBoost: Double = 0.10
+    @AppStorage("scoreCutoff") private var scoreCutoff: Double = UserPreferences.default.scoreCutoff
+    @AppStorage("convincingPenalty") private var convincingPenalty: Double = UserPreferences.default.convincingPenalty
+    @AppStorage("convincingBoost") private var convincingBoost: Double = UserPreferences.default.convincingBoost
+    @AppStorage("nearbyPenalty") private var nearbyPenalty: Double = UserPreferences.default.nearbyPenalty
+    @AppStorage("nearbyPenaltyMult") private var nearbyPenaltyMult: Double = UserPreferences.default.nearbyPenaltyMult
+    @AppStorage("regionalPenalty") private var regionalPenalty: Double = UserPreferences.default.regionalPenalty
+    @AppStorage("regionalPenaltyMult") private var regionalPenaltyMult: Double = UserPreferences.default.regionalPenaltyMult
+    @AppStorage("relocationPenalty") private var relocationPenalty: Double = UserPreferences.default.relocationPenalty
+    @AppStorage("relocationPenaltyMult") private var relocationPenaltyMult: Double = UserPreferences.default.relocationPenaltyMult
+    @AppStorage("internationalPenalty") private var internationalPenalty: Double = UserPreferences.default.internationalPenalty
+    @AppStorage("internationalPenaltyMult") private var internationalPenaltyMult: Double = UserPreferences.default.internationalPenaltyMult
+    @AppStorage("experiencePenalty") private var experiencePenalty: Double = UserPreferences.default.experiencePenalty
+    @AppStorage("credentialPenalty") private var credentialPenalty: Double = UserPreferences.default.credentialPenalty
+    @AppStorage("portfolioBoost") private var portfolioBoost: Double = UserPreferences.default.portfolioBoost
     @AppStorage("maxSeniorityLevel") private var maxSeniorityLevel: String = "Mid"
     @AppStorage("professionalProfile") private var professionalProfile: String = UserPreferences.default.professionalProfile
 
@@ -332,7 +332,7 @@ struct SettingsView: View {
                                 .font(.subheadline.weight(.semibold))
                             Spacer()
                         }
-                        Text("Jobs above this level are rejected. \"Mid\" rejects Senior/Staff. \"Any\" allows all levels.")
+                        Text("Jobs above this level are rejected. \"Mid\" rejects Senior/Staff and usually conventional 6+ year roles. \"Any\" allows all levels.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Picker("", selection: $maxSeniorityLevel) {
@@ -380,7 +380,7 @@ struct SettingsView: View {
                 } header: {
                     Text("The Basics")
                 } footer: {
-                    Text("These are hard filters — jobs that don't pass get rejected before scoring.")
+                    Text("These are hard filters — jobs that don't pass get rejected before scoring, including obvious seniority and experience mismatches.")
                 }
 
                 // ── Acceptable Locations ────────────────────────────

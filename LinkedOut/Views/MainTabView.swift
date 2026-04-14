@@ -13,6 +13,15 @@ struct MainTabView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("serverURL") private var serverURL: String = "http://Gunnars-Brain-Extension.local:8443"
 
+    private func syncCurrentPreferencesToActiveServer() async {
+        do {
+            _ = try await APIClient.shared.syncPreferences(UserPreferences.currentFromUserDefaults())
+            print("[MAIN] ✅ Synced current preferences to active backend")
+        } catch {
+            print("[MAIN] ⚠️ Failed to sync preferences to active backend: \(error.localizedDescription)")
+        }
+    }
+
     var body: some View {
         TabView {
             CardStackView()
@@ -46,11 +55,16 @@ struct MainTabView: View {
         .task {
             // Run discovery once at launch
             print("[MAIN] 🔍 Initial server discovery starting...")
+            let migrated = UserPreferences.migrateLegacyCareerPrefsIfNeeded()
+            if migrated {
+                print("[MAIN] 🔁 Migrated stale broad career prefs to portfolio-first defaults")
+            }
             let previous = serverURL
             if let found = await ServerDiscovery.discover() {
                 serverURL = found
                 print("[MAIN] ✅ Server discovered: \(found)")
-                if found != previous {
+                await syncCurrentPreferencesToActiveServer()
+                if migrated || found != previous {
                     print("[MAIN] 🔄 Initial server changed: \(previous) → \(found) — clearing local cache and refreshing")
                     jobs.resetLocalJobState()
                     await jobs.refreshAll()
@@ -83,10 +97,12 @@ struct MainTabView: View {
             print("[MAIN] 📱 Scene phase: \(phase == .active ? "active" : phase == .inactive ? "inactive" : "background")")
             if phase == .active {
                 Task {
+                    let migrated = UserPreferences.migrateLegacyCareerPrefsIfNeeded()
                     let previous = serverURL
                     if let found = await ServerDiscovery.discover() {
                         serverURL = found
-                        if found != previous {
+                        await syncCurrentPreferencesToActiveServer()
+                        if migrated || found != previous {
                             print("[DISCOVERY] Server changed: \(previous) → \(found) — reloading jobs + re-checking auth")
                             jobs.resetLocalJobState()
                             await auth.checkExistingSession()

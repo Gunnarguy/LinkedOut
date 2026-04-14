@@ -14,6 +14,7 @@ struct CardStackView: View {
     @State private var showFilters = false
     @State private var filters = JobFilters()
     @AppStorage("lastViewedTimestamp") private var lastViewedTimestamp: Double = 0
+    @AppStorage("serverURL") private var serverURL: String = "http://Gunnars-Brain-Extension.local:8443"
 
     // ── Location Filtering ──
     @AppStorage("preferredLocationsJSON") private var preferredLocationsJSON: String = "[\"Campbell, California\",\"Palo Alto, California\"]"
@@ -102,6 +103,16 @@ struct CardStackView: View {
         return posted > lastViewedDate
     }
 
+    private var isCloudBackend: Bool {
+        serverURL.contains("onrender.com")
+    }
+
+    private var backendBadge: some View {
+        Label(isCloudBackend ? "Cloud" : "Local", systemImage: isCloudBackend ? "icloud.fill" : "desktopcomputer")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(isCloudBackend ? .purple : .green)
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -139,6 +150,8 @@ struct CardStackView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     HStack(spacing: 12) {
+                        backendBadge
+
                         if jobs.isOffline {
                             Label("Offline", systemImage: "wifi.slash")
                                 .font(.caption2.weight(.semibold))
@@ -207,7 +220,7 @@ struct CardStackView: View {
 
                         if let stats = jobs.stats {
                             HStack(spacing: 12) {
-                                Label("\(stats.pending)", systemImage: "tray")
+                                Label("\(jobs.pendingJobs.count)", systemImage: "tray")
                                 Label("\(stats.applied)", systemImage: "checkmark.circle")
                             }
                             .font(.caption)

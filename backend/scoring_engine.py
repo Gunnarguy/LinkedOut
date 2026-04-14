@@ -112,6 +112,27 @@ _TARGET_SIGNAL_TERMS = [
     "mcp",
     "automation",
     "orchestration",
+    "forward deployed",
+    "solutions engineer",
+    "implementation engineer",
+    "customer engineer",
+    "integration engineer",
+    "workflow engineer",
+    "workflow automation",
+    "care navigation",
+    "patient engagement",
+    "provider workflow",
+    "clinical workflow",
+    "interoperability",
+    "ehr",
+    "emr",
+    "epic",
+    "fhir",
+    "hl7",
+    "health benefits",
+    "remote patient monitoring",
+    "wearable",
+    "wearables",
 ]
 
 _PORTFOLIO_SIGNAL_TERMS = [
@@ -173,6 +194,25 @@ _EXTREME_EXPERIENCE_PATTERNS = [
     re.compile(r"\b(?:eight|nine|ten|eleven|twelve)\+?\s+years\b", re.IGNORECASE),
 ]
 
+_EXPERIENCE_REQUIREMENT_PATTERNS = [
+    re.compile(
+        r"\b(\d{1,2})\+?\s*(?:-|to)?\s*(\d{1,2})?\s+years?(?:\s+of)?\s+(?:professional\s+)?(?:software\s+)?experience\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(\d{1,2})\+?\s+years?(?:\s+of)?\s+(?:building|developing|shipping|working)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bminimum\s+of\s+(\d{1,2})\s+years?(?:\s+of)?\s+experience\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bat\s+least\s+(\d{1,2})\s+years?(?:\s+of)?\s+experience\b",
+        re.IGNORECASE,
+    ),
+]
+
 _CORE_BUILDER_TITLE_TERMS = [
     "founding engineer",
     "product engineer",
@@ -191,6 +231,16 @@ _CORE_BUILDER_TITLE_TERMS = [
     "prototype engineer",
     "product development generalist",
     "generalist",
+    "forward deployed engineer",
+    "forward-deployed engineer",
+    "solutions engineer",
+    "technical solutions engineer",
+    "clinical solutions engineer",
+    "implementation engineer",
+    "technical implementation engineer",
+    "customer engineer",
+    "integration engineer",
+    "workflow engineer",
     "developer platform",
     "platform engineer",
 ]
@@ -218,6 +268,7 @@ _NON_BUILDER_TITLE_TERMS = [
     "quality assurance",
     "test engineer",
     "sdet",
+    "sales engineer",
     "gtm engineer",
     "growth engineer",
     "solutions architect",
@@ -277,6 +328,150 @@ _HARDSTOP_LICENSE_PATTERNS = [
     re.compile(r"clinical credential required", re.IGNORECASE),
 ]
 
+_DESCRIPTION_SENIORITY_TERMS = [
+    "senior-level",
+    "senior level",
+    "staff-level",
+    "staff level",
+    "principal-level",
+    "principal level",
+    "technical lead",
+    "team lead",
+    "lead engineer",
+]
+
+_NARROW_TARGET_TITLE_TERMS = [
+    "ios engineer",
+    "ios developer",
+    "mobile engineer",
+    "swift engineer",
+    "swiftui",
+    "product engineer",
+    "prototype engineer",
+    "founding engineer",
+    "clinical software",
+    "healthcare ai",
+    "digital health",
+    "medtech",
+    "medical device",
+    "applied ai",
+    "ai product",
+    "ai product builder",
+    "ai prototyper",
+]
+
+_GENERIC_GENERALIST_TITLE_TERMS = [
+    "full-stack engineer",
+    "full stack engineer",
+    "full-stack software engineer",
+    "full stack software engineer",
+    "full-stack developer",
+    "full stack developer",
+    "backend engineer",
+    "backend developer",
+]
+
+_SPECIALIST_MISMATCH_TITLE_TERMS = [
+    "machine learning engineer",
+    "ml engineer",
+    "security engineer",
+    "cyber security",
+    "cybersecurity",
+]
+
+_WORKFLOW_OR_SOLUTIONS_TITLE_TERMS = [
+    "forward deployed engineer",
+    "forward-deployed engineer",
+    "solutions engineer",
+    "technical solutions engineer",
+    "clinical solutions engineer",
+    "implementation engineer",
+    "technical implementation engineer",
+    "customer engineer",
+    "integration engineer",
+    "workflow engineer",
+]
+
+_WORKFLOW_SIGNAL_TERMS = [
+    "workflow",
+    "workflow automation",
+    "implementation",
+    "integration",
+    "deployment",
+    "customer deployment",
+    "onboarding",
+    "provider workflow",
+    "clinical workflow",
+    "care navigation",
+    "patient engagement",
+    "care coordination",
+    "care management",
+    "interoperability",
+    "ehr",
+    "emr",
+    "epic",
+    "cerner",
+    "fhir",
+    "hl7",
+    "benefits",
+    "claims",
+    "prior authorization",
+    "remote patient monitoring",
+    "wearable",
+    "wearables",
+]
+
+_HEALTHCARE_LANE_TERMS = [
+    "healthtech",
+    "healthcare",
+    "medtech",
+    "clinical",
+    "medical device",
+    "digital health",
+    "patient",
+    "provider",
+    "hipaa",
+    "hospital",
+    "surgical",
+    "care delivery",
+]
+
+_MOBILE_LANE_TERMS = [
+    "ios",
+    "swift",
+    "swiftui",
+    "iphone",
+    "ipad",
+    "mobile",
+    "apple",
+]
+
+_PRODUCT_BUILDER_LANE_TERMS = [
+    "product engineer",
+    "prototype engineer",
+    "founding engineer",
+    "show us what you've built",
+    "what you've built",
+    "what you have built",
+    "portfolio",
+    "shipped products",
+    "rapid prototyping",
+    "0-to-1",
+    "zero-to-one",
+    "builder-first",
+]
+
+_APPLIED_AI_PRODUCT_TERMS = [
+    "applied ai",
+    "ai product",
+    "llm",
+    "rag",
+    "agent",
+    "agentic",
+    "generative ai",
+    "automation",
+]
+
 _ESCAPE_HATCH_TERMS = [
     "or equivalent",
     "equivalent experience",
@@ -310,6 +505,83 @@ def _has_escape_hatch(text: str) -> bool:
     return _contains_any(text, _ESCAPE_HATCH_TERMS)
 
 
+def _matching_excluded_keyword(text: str, excluded_keywords: list[str]) -> str | None:
+    for keyword in excluded_keywords:
+        normalized = _normalize_match_text(keyword)
+        if normalized and normalized in text:
+            return keyword.strip()
+    return None
+
+
+def _extract_required_years(text: str) -> int | None:
+    matches: list[int] = []
+    for pattern in _EXPERIENCE_REQUIREMENT_PATTERNS:
+        for match in pattern.finditer(text):
+            numeric_groups = [
+                int(group)
+                for group in match.groups()
+                if group is not None and group.isdigit()
+            ]
+            if numeric_groups:
+                matches.append(max(numeric_groups))
+    return max(matches) if matches else None
+
+
+def _max_required_years_for_target(prefs: UserPreferences) -> int | None:
+    return {
+        "junior": 2,
+        "mid": 5,
+        "senior": 7,
+        "any": None,
+    }.get(prefs.max_seniority_level.lower(), 5)
+
+
+def _has_flexible_senior_exception(title: str, text: str) -> bool:
+    founder_style_title = _contains_any(title, ["founding engineer", "first engineer"])
+    return founder_style_title and (
+        _contains_any(text, _STARTUP_FLEX_TERMS)
+        or _contains_any(text, _PORTFOLIO_SIGNAL_TERMS)
+    )
+
+
+def _has_realistic_target_lane(title: str, text: str) -> bool:
+    if _contains_any(title, _NARROW_TARGET_TITLE_TERMS):
+        return True
+
+    healthcare_hits = _count_matches(text, _HEALTHCARE_LANE_TERMS)
+    mobile_hits = _count_matches(text, _MOBILE_LANE_TERMS)
+    builder_hits = _count_matches(text, _PRODUCT_BUILDER_LANE_TERMS)
+    ai_product_hits = _count_matches(text, _APPLIED_AI_PRODUCT_TERMS)
+    workflow_hits = _count_matches(text, _WORKFLOW_SIGNAL_TERMS)
+    workflow_title = _contains_any(title, _WORKFLOW_OR_SOLUTIONS_TITLE_TERMS)
+
+    if healthcare_hits >= 1:
+        return True
+    if mobile_hits >= 1:
+        return True
+    if workflow_title and (
+        workflow_hits >= 2
+        or healthcare_hits >= 1
+        or ai_product_hits >= 1
+        or builder_hits >= 1
+    ):
+        return True
+    if ai_product_hits >= 2 and builder_hits >= 1:
+        return True
+    return False
+
+
+def _is_generic_generalist_title(title: str) -> bool:
+    return _contains_any(title, _GENERIC_GENERALIST_TITLE_TERMS) or (
+        "software engineer" in title
+        and not _contains_any(title, _NARROW_TARGET_TITLE_TERMS)
+    )
+
+
+def _is_specialist_mismatch_title(title: str) -> bool:
+    return _contains_any(title, _SPECIALIST_MISMATCH_TITLE_TERMS)
+
+
 def _programmatic_hard_reject(
     raw: RawJobListing,
     prefs: UserPreferences,
@@ -325,16 +597,11 @@ def _programmatic_hard_reject(
     non_us_location_signal = _contains_any(location_text, _NON_US_LOCATION_TERMS)
     startup_flex = _contains_any(text, _STARTUP_FLEX_TERMS)
     portfolio_signal = _contains_any(text, _PORTFOLIO_SIGNAL_TERMS)
-    senior_exception = _contains_any(
-        title,
-        [
-            "ai product",
-            "product engineer",
-            "founding engineer",
-            "generalist",
-            "prototype engineer",
-        ],
-    )
+    flexible_senior_exception = _has_flexible_senior_exception(title, text)
+    description_seniority = _contains_any(text, _DESCRIPTION_SENIORITY_TERMS)
+    excluded_keyword = _matching_excluded_keyword(text, prefs.excluded_keywords)
+    required_years = _extract_required_years(text)
+    realistic_target_lane = _has_realistic_target_lane(title, text)
 
     title_rank = 1
     if _contains_any(
@@ -352,6 +619,7 @@ def _programmatic_hard_reject(
         "senior": 2,
         "any": 3,
     }.get(prefs.max_seniority_level.lower(), 1)
+    max_required_years = _max_required_years_for_target(prefs)
 
     if _contains_any(title, _NON_BUILDER_TITLE_TERMS):
         return "Listing title is not a software-building role aligned with your target profile."
@@ -371,6 +639,15 @@ def _programmatic_hard_reject(
         ],
     ):
         return "Listing does not look like a builder-first software role for your target profile."
+
+    if excluded_keyword:
+        return f"Listing matches excluded keyword '{excluded_keyword}'."
+
+    if _is_specialist_mismatch_title(title) and not realistic_target_lane:
+        return "Listing is a specialist ML or security role rather than the product-builder lane you're targeting."
+
+    if _is_generic_generalist_title(title) and not realistic_target_lane:
+        return "Listing is a generic full-stack or backend software role rather than a realistic fit for your narrower target lanes."
 
     if prefs.require_remote:
         if onsite_signal:
@@ -399,8 +676,28 @@ def _programmatic_hard_reject(
     if title_rank >= 3 and title_rank > allowed_rank:
         return "Listing seniority exceeds your configured max seniority level."
 
-    if title_rank == 2 and title_rank > allowed_rank and not senior_exception:
+    if title_rank == 2 and title_rank > allowed_rank and not flexible_senior_exception:
         return "Listing seniority exceeds your configured max seniority level."
+
+    if description_seniority and allowed_rank < 2 and not flexible_senior_exception:
+        return "Listing reads as a senior-level seat in the description, not just the title."
+
+    if required_years is not None and max_required_years is not None:
+        if required_years >= max_required_years + 2 and not flexible_senior_exception:
+            return (
+                f"Listing asks for {required_years}+ years, which exceeds your configured "
+                f"{prefs.max_seniority_level.lower()}-level target."
+            )
+
+        if (
+            required_years > max_required_years
+            and not _has_escape_hatch(text)
+            and not flexible_senior_exception
+        ):
+            return (
+                f"Listing asks for {required_years}+ years with no equivalent-experience "
+                f"escape hatch, which exceeds your configured {prefs.max_seniority_level.lower()}-level target."
+            )
 
     return None
 
@@ -423,6 +720,17 @@ def _apply_alignment_clamp(
     extreme_experience = any(
         pattern.search(text) for pattern in _EXTREME_EXPERIENCE_PATTERNS
     )
+    flexible_senior_exception = _has_flexible_senior_exception(title, text)
+    required_years = _extract_required_years(text)
+    realistic_target_lane = _has_realistic_target_lane(title, text)
+    workflow_hits = _count_matches(text, _WORKFLOW_SIGNAL_TERMS)
+    allowed_rank = {
+        "junior": 0,
+        "mid": 1,
+        "senior": 2,
+        "any": 3,
+    }.get(prefs.max_seniority_level.lower(), 1)
+    max_required_years = _max_required_years_for_target(prefs)
 
     multiplier = 1.0
     max_score = 1.0
@@ -438,6 +746,27 @@ def _apply_alignment_clamp(
         multiplier *= 0.60
         max_score = min(max_score, 0.29)
 
+    if _is_specialist_mismatch_title(title) and not realistic_target_lane:
+        multiplier *= 0.35
+        max_score = min(max_score, 0.16)
+        extra_caveats.append(
+            "Listing is a specialist ML or security role rather than your current product-builder lane."
+        )
+
+    if _is_generic_generalist_title(title) and not realistic_target_lane:
+        multiplier *= 0.45
+        max_score = min(max_score, 0.20)
+        extra_caveats.append(
+            "Listing is a generic full-stack or backend software role rather than your narrower target lanes."
+        )
+
+    if _contains_any(title, _WORKFLOW_OR_SOLUTIONS_TITLE_TERMS) and workflow_hits == 0:
+        multiplier *= 0.85
+        max_score = min(max_score, 0.52)
+        extra_caveats.append(
+            "Title suggests solutions or implementation work, but the listing is thin on concrete technical workflow detail."
+        )
+
     if enterprise_hits > 0 and portfolio_hits == 0 and not startup_flex:
         multiplier *= 0.70
         max_score = min(max_score, 0.38)
@@ -452,11 +781,35 @@ def _apply_alignment_clamp(
             "Title is senior-level without obvious startup or portfolio-first flexibility."
         )
 
+    if (
+        _contains_any(text, _DESCRIPTION_SENIORITY_TERMS)
+        and allowed_rank < 2
+        and not flexible_senior_exception
+    ):
+        multiplier *= 0.70
+        max_score = min(max_score, 0.24)
+        extra_caveats.append(
+            "Listing reads like a senior-level seat in the description, not just the title."
+        )
+
     if extreme_experience:
         multiplier *= 0.75
         max_score = min(max_score, 0.29)
         extra_caveats.append(
             "Listing asks for 8+ years or equivalent senior-level background."
+        )
+
+    if (
+        required_years is not None
+        and max_required_years is not None
+        and required_years > max_required_years
+    ):
+        overflow_years = required_years - max_required_years
+        multiplier *= 0.75 if overflow_years == 1 else 0.55
+        if not flexible_senior_exception:
+            max_score = min(max_score, 0.26 if overflow_years == 1 else 0.18)
+        extra_caveats.append(
+            f"Listing asks for {required_years}+ years, above your configured {prefs.max_seniority_level.lower()} target."
         )
 
     if target_hits >= 3 and (portfolio_hits > 0 or startup_flex):
@@ -477,6 +830,19 @@ def _apply_llm_specificity_clamp(
     title = _normalize_match_text(raw.title)
     extra_caveats: list[str] = []
     capped_score = score
+    realistic_target_lane = _has_realistic_target_lane(title, text)
+
+    if _is_specialist_mismatch_title(title) and not realistic_target_lane:
+        capped_score = min(capped_score, 0.18)
+        extra_caveats.append(
+            "Role is specialized ML or security work rather than the lane you're actually targeting."
+        )
+
+    if _is_generic_generalist_title(title) and not realistic_target_lane:
+        capped_score = min(capped_score, 0.24)
+        extra_caveats.append(
+            "Role is generic full-stack or backend work rather than the narrower builder lanes you're targeting."
+        )
 
     if _contains_any(
         title,
@@ -697,6 +1063,7 @@ def _local_score_job(raw: RawJobListing, prefs: UserPreferences) -> ScoringResul
         text,
         ["ios", "swift", "swiftui", "iphone", "ipad", "mobile", "apple"],
     )
+    workflow_hits = _count_matches(text, _WORKFLOW_SIGNAL_TERMS)
     backend_hits = _count_matches(
         text,
         [
@@ -730,8 +1097,12 @@ def _local_score_job(raw: RawJobListing, prefs: UserPreferences) -> ScoringResul
     domain_alignment = 0.30
     if health_hits >= 2:
         domain_alignment = 0.95
+    elif workflow_hits >= 2 and health_hits >= 1:
+        domain_alignment = 0.90
     elif ai_hits >= 2:
         domain_alignment = 0.85
+    elif workflow_hits >= 2 and ai_hits >= 1:
+        domain_alignment = 0.80
     elif mobile_hits >= 2:
         domain_alignment = 0.78
     elif "developer tools" in text or "mcp" in text:
@@ -746,24 +1117,29 @@ def _local_score_job(raw: RawJobListing, prefs: UserPreferences) -> ScoringResul
         title, ["founding engineer", "product engineer", "prototype", "generalist"]
     ):
         role_alignment = 0.95
+    elif _contains_any(title, _WORKFLOW_OR_SOLUTIONS_TITLE_TERMS):
+        role_alignment = (
+            0.88 if (workflow_hits >= 2 or health_hits >= 1 or ai_hits >= 1) else 0.62
+        )
     elif _contains_any(
         title,
         [
             "ai engineer",
             "applied ai",
-            "machine learning",
             "llm engineer",
             "ai product",
             "backend / product engineer",
         ],
     ):
         role_alignment = 0.90
+    elif _contains_any(title, ["machine learning engineer", "ml engineer"]):
+        role_alignment = 0.18 if not _has_realistic_target_lane(title, text) else 0.42
     elif _contains_any(title, ["ios", "swift", "mobile engineer"]):
         role_alignment = 0.92
     elif _contains_any(
         title, ["full stack", "full-stack", "software engineer", "backend engineer"]
     ):
-        role_alignment = 0.78
+        role_alignment = 0.28 if not _has_realistic_target_lane(title, text) else 0.55
     elif _contains_any(title, ["product manager", "designer", "devops", "sre"]):
         role_alignment = 0.08
 
@@ -834,6 +1210,8 @@ def _local_score_job(raw: RawJobListing, prefs: UserPreferences) -> ScoringResul
         tags.append("AI")
     if mobile_hits:
         tags.append("iOS")
+    if workflow_hits:
+        tags.append("Workflow")
     if startup_hits:
         tags.append("Startup")
     if backend_hits:
@@ -846,6 +1224,8 @@ def _local_score_job(raw: RawJobListing, prefs: UserPreferences) -> ScoringResul
         fit_reasons.append("AI-native product builder")
     if mobile_hits:
         fit_reasons.append("SwiftUI and mobile overlap")
+    if workflow_hits:
+        fit_reasons.append("workflow and implementation leverage")
     if startup_hits or portfolio_hits:
         fit_reasons.append("builder-first startup signals")
     fit_reasons = fit_reasons[:4]
@@ -855,10 +1235,10 @@ def _local_score_job(raw: RawJobListing, prefs: UserPreferences) -> ScoringResul
     company_oneliner = "Company description not extracted in local fallback mode."
     logic_fit = (
         "This role was scored with deterministic local fallback because both configured LLM providers failed authentication. "
-        "It lines up best when the listing shows AI, product-building, mobile, or healthcare signals that map to your shipped Swift and Python projects."
+        "It lines up best when the listing shows AI, product-building, workflow, mobile, or healthcare signals that map to your shipped Swift and Python projects."
     )
     domain_leverage = (
-        "Your edge is strongest when the job touches healthcare workflows, AI products, or mobile app delivery. "
+        "Your edge is strongest when the job touches healthcare workflows, AI products, implementation-heavy software, or mobile app delivery. "
         "You have real O.R. exposure plus shipped AI apps on the App Store."
     )
     risk_reward = (
@@ -867,7 +1247,7 @@ def _local_score_job(raw: RawJobListing, prefs: UserPreferences) -> ScoringResul
     )
     ai_pitch_bullets = [
         "• Local fallback mode: deterministic score from title, domain, stack, and culture signals.",
-        f"• Signals found: AI={ai_hits}, health={health_hits}, mobile={mobile_hits}, startup={startup_hits}.",
+        f"• Signals found: AI={ai_hits}, health={health_hits}, mobile={mobile_hits}, workflow={workflow_hits}, startup={startup_hits}.",
         (
             f"• Seniority / enterprise friction capped this role at {final_score:.2f}."
             if caveats
@@ -1130,10 +1510,12 @@ You are writing directly TO the candidate — always use second person ("you/you
 - Non-software IT role (helpdesk, SysAdmin, network admin) with no development component
 - If remote is required, any onsite / hybrid / non-US-eligible role should be treated as a reject
 - Treat hard credential stop-signs as rejects: active security clearance, active clinical license, or CS degree explicitly required with no equivalent-experience escape hatch
+- Respect the user's max seniority setting. Conventional senior/staff/principal roles that clearly exceed it should be rejected.
+- If the user is targeting junior or mid-level work, conventional roles asking for clearly more experience than that band should be rejected unless the listing is unusually founder-style and portfolio-friendly.
 
 IMPORTANT: Do NOT hard-reject based on:
-- Seniority in title alone — many "Senior" roles at startups are flexible, and the candidate can learn. Flag it as a caveat, not a reject.
-- Years of experience — treat as friction, not a gate. "3+ years" is a caveat. "10+ years" is a strong caveat. Neither is an auto-reject.
+- Seniority title inflation alone when the listing is clearly founder-style, startup-flexible, or portfolio-first. In those cases, flag it as a caveat instead of a reject.
+- Small stretches in years of experience. "3+ years" is a caveat. "6+ years" for a conventional role is usually too senior for a mid-level target.
 - CS degree requirements — "or equivalent experience/projects" counts, and many companies are flexible even when the listing says "required". Flag as caveat.
 - Stack mismatches — the candidate can learn new stacks. Flag what's unfamiliar as a caveat.
 - Credential culture signals — penalize in scoring, don't reject.
@@ -1146,6 +1528,8 @@ This means: Would the time invested in applying have a reasonable chance of lead
 
 Important: this candidate is not a generic fit for conventional enterprise software jobs. If the listing does not show any AI-builder, healthtech, mobile, product-engineering, startup, or portfolio-friendly signals, keep the factor scores low enough that the role likely falls below the cutoff.
 Generic backend, platform, SRE, internal-tools, or people-systems roles should not rise above the high 0.60s unless the listing has unusually strong AI-product, healthtech, or iOS/mobile alignment.
+Technical forward-deployed, implementation, customer-engineering, integration, or workflow roles can be strong fits when they are hands-on, product-adjacent, and close to real user problems rather than quota-carrying pre-sales.
+User max seniority target: {max_seniority_level}
 
 ## Structured Factor Extraction
 
@@ -1164,8 +1548,8 @@ How well does the company's domain match the candidate's strengths?
 ### role_alignment (weight: 0.25)
 How well does the role's daily work match what the candidate does?
 - 1.0: Building AI-powered applications end-to-end, shipping product
-- 0.9: iOS/mobile development with AI integration
-- 0.8: Full-stack product engineering at a startup
+- 0.9: iOS/mobile development, or technical forward-deployed / workflow engineering for healthcare or AI products
+- 0.8: Product engineering, implementation engineering, or customer/integration work with real build ownership
 - 0.7: AI/ML engineering with product focus
 - 0.5: General software engineering — some alignment
 - 0.3: Backend-only, infrastructure, or platform engineering
@@ -1336,6 +1720,7 @@ When in doubt, ALWAYS pass.
 ## Candidate snapshot
 {professional_profile}
 Prefers remote. US-based. Builds AI-powered iOS/Python apps. Healthcare domain expertise.
+Max seniority target: {max_seniority_level}
 
 ## ONLY reject (dominated=false) if the role is CLEARLY one of these:
 1. Pure non-tech role: sales, marketing, HR, legal, accounting, recruiting — NOT building software
@@ -1343,10 +1728,12 @@ Prefers remote. US-based. Builds AI-powered iOS/Python apps. Healthcare domain e
 3. E-commerce platform dev (Shopify themes, Magento, WooCommerce, WordPress plugins, Drupal)
 4. Hard geographic restriction outside the US with ZERO remote option mentioned anywhere
 5. Role description is spam, garbled, or clearly a scam
+6. Conventional senior/staff/principal/lead role that clearly exceeds the candidate's max seniority target
+7. Conventional role asking for clearly too many years for that target band, with no obvious founder-style or portfolio-first flexibility
 
 ## PASS everything else, including:
-- ANY seniority level (Senior, Staff, Lead, Principal — the full scorer evaluates these)
-- ANY experience requirement (even "10+ years" — the full scorer handles friction)
+- Founder-style or startup-flexible roles even if the title is inflated
+- Small experience stretches when the role is otherwise aligned
 - ANY tech stack (the full scorer evaluates transferability)
 - ANY degree requirement (the full scorer evaluates flexibility)
 - Roles you're not sure about — let the full scorer decide
@@ -1384,6 +1771,7 @@ async def triage_job(raw: RawJobListing, prefs: UserPreferences | None = None) -
     triage_sys = TRIAGE_PROMPT.replace(
         "{professional_profile}", prefs.professional_profile
     )
+    triage_sys = triage_sys.replace("{max_seniority_level}", prefs.max_seniority_level)
     user_msg = f"Title: {raw.title}\nCompany: {raw.company}\nLocation: {raw.location}\nRemote: {raw.is_remote}\n\nDescription (first 1500 chars):\n{raw.description[:1500]}"
 
     try:
@@ -1418,6 +1806,7 @@ async def score_job(
 
     system = SYSTEM_PROMPT.replace("{min_salary}", str(prefs.min_salary))
     system = system.replace("{prefs.professional_profile}", prefs.professional_profile)
+    system = system.replace("{max_seniority_level}", prefs.max_seniority_level)
     system = system.replace("{nearby_penalty_mult}", f"{prefs.nearby_penalty_mult:.2f}")
     system = system.replace(
         "{regional_penalty_mult}", f"{prefs.regional_penalty_mult:.2f}"
@@ -1466,6 +1855,7 @@ async def score_job(
 **User preferences:**
 - Min salary: ${prefs.min_salary}
 - Remote required: {prefs.require_remote}
+- Max seniority level: {prefs.max_seniority_level}
 - Preferred roles: {", ".join(prefs.preferred_roles)}
 - Excluded keywords: {", ".join(prefs.excluded_keywords)}
 - Location pref: {prefs.location_preference}
