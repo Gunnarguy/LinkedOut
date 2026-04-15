@@ -624,30 +624,11 @@ def _programmatic_hard_reject(
     if _contains_any(title, _NON_BUILDER_TITLE_TERMS):
         return "Listing title is not a software-building role aligned with your target profile."
 
-    if not _contains_any(title, _CORE_BUILDER_TITLE_TERMS) and not _contains_any(
-        text,
-        [
-            "build and ship",
-            "ai-powered features",
-            "llm workflows",
-            "rag pipelines",
-            "native mobile",
-            "swiftui",
-            "fastapi",
-            "agents",
-            "tool-calling",
-        ],
-    ):
-        return "Listing does not look like a builder-first software role for your target profile."
-
     if excluded_keyword:
         return f"Listing matches excluded keyword '{excluded_keyword}'."
 
     if _is_specialist_mismatch_title(title) and not realistic_target_lane:
         return "Listing is a specialist ML or security role rather than the product-builder lane you're targeting."
-
-    if _is_generic_generalist_title(title) and not realistic_target_lane:
-        return "Listing is a generic full-stack or backend software role rather than a realistic fit for your narrower target lanes."
 
     if prefs.require_remote:
         if onsite_signal:
