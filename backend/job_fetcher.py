@@ -33,6 +33,29 @@ import httpx
 
 from models import RawJobListing
 
+
+def _parse_iso_date(val: str | None) -> datetime | None:
+    """Best-effort ISO date parse. Returns None on failure."""
+    if not val:
+        return None
+    try:
+        return datetime.fromisoformat(val.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return None
+
+
+def _parse_rss_date(val: str | None) -> datetime | None:
+    """Parse RFC-2822 dates from RSS <pubDate> elements."""
+    if not val:
+        return None
+    try:
+        from email.utils import parsedate_to_datetime
+
+        return parsedate_to_datetime(val)
+    except (ValueError, TypeError):
+        return None
+
+
 logger = logging.getLogger(__name__)
 
 # Search queries — career-advisor target lanes
@@ -131,6 +154,7 @@ async def fetch_remotive(queries: list[str] | None = None) -> list[RawJobListing
                             salary_text=salary_text,
                             location=job.get("candidate_required_location", "Remote"),
                             is_remote=True,
+                            posted_at=_parse_iso_date(job.get("publication_date")),
                         )
                     )
 
@@ -185,6 +209,9 @@ async def fetch_himalayas() -> list[RawJobListing]:
                             salary_text=salary_text,
                             location=job.get("location", "Remote"),
                             is_remote=True,
+                            posted_at=_parse_iso_date(
+                                job.get("pubDate") or job.get("publishedDate")
+                            ),
                         )
                     )
 
@@ -318,6 +345,14 @@ async def fetch_hn_whoishiring() -> list[RawJobListing]:
                     f"https://news.ycombinator.com/item?id={child.get('id', story_id)}"
                 )
 
+                # Capture actual HN comment timestamp
+                comment_posted_at = None
+                created_at_i = child.get("created_at_i")
+                if created_at_i:
+                    comment_posted_at = datetime.fromtimestamp(
+                        created_at_i, tz=timezone.utc
+                    )
+
                 all_listings.append(
                     RawJobListing(
                         title=title[:200],
@@ -327,6 +362,7 @@ async def fetch_hn_whoishiring() -> list[RawJobListing]:
                         salary_text="",
                         location=location or ("Remote" if is_remote else ""),
                         is_remote=is_remote,
+                        posted_at=comment_posted_at,
                     )
                 )
 
@@ -393,6 +429,7 @@ async def fetch_jobicy() -> list[RawJobListing]:
                             salary_text=salary_text,
                             location=location,
                             is_remote=True,
+                            posted_at=_parse_iso_date(job.get("pubDate")),
                         )
                     )
 
@@ -447,6 +484,7 @@ async def fetch_remoteok() -> list[RawJobListing]:
                         salary_text=salary_text,
                         location=location,
                         is_remote=True,
+                        posted_at=_parse_iso_date(job.get("date")),
                     )
                 )
 
@@ -500,6 +538,8 @@ async def fetch_weworkremotely() -> list[RawJobListing]:
                     desc = re.sub(r"&[a-z]+;", " ", desc)
                     desc = re.sub(r"\s+", " ", desc).strip()
 
+                    pub_date_str = (item.findtext("pubDate") or "").strip()
+
                     all_listings.append(
                         RawJobListing(
                             title=title[:200],
@@ -509,6 +549,7 @@ async def fetch_weworkremotely() -> list[RawJobListing]:
                             salary_text="",
                             location="Remote",
                             is_remote=True,
+                            posted_at=_parse_rss_date(pub_date_str),
                         )
                     )
 
@@ -566,6 +607,7 @@ async def fetch_arbeitnow() -> list[RawJobListing]:
                                 location if not is_remote else f"{location} (Remote)"
                             ),
                             is_remote=is_remote,
+                            posted_at=_parse_iso_date(job.get("created_at")),
                         )
                     )
 
@@ -661,6 +703,7 @@ async def fetch_themuse(locations: list[str] | None = None) -> list[RawJobListin
                             salary_text="",
                             location=location_str,
                             is_remote=is_remote,
+                            posted_at=_parse_iso_date(job.get("publication_date")),
                         )
                     )
 
@@ -895,6 +938,7 @@ async def fetch_adzuna(locations: list[str] | None = None) -> list[RawJobListing
                             salary_text=salary_text,
                             location=location,
                             is_remote=is_remote,
+                            posted_at=_parse_iso_date(job.get("created")),
                         )
                     )
 
@@ -986,6 +1030,7 @@ async def fetch_findwork(locations: list[str] | None = None) -> list[RawJobListi
                             salary_text="",
                             location=location,
                             is_remote=is_remote,
+                            posted_at=_parse_iso_date(job.get("date_posted")),
                         )
                     )
 
@@ -1093,6 +1138,7 @@ async def fetch_reed(locations: list[str] | None = None) -> list[RawJobListing]:
                             salary_text=salary_text,
                             location=location,
                             is_remote=is_remote,
+                            posted_at=_parse_iso_date(job.get("date")),
                         )
                     )
 
@@ -1222,6 +1268,9 @@ async def fetch_usajobs(locations: list[str] | None = None) -> list[RawJobListin
                             salary_text=salary_text,
                             location=location,
                             is_remote=is_remote,
+                            posted_at=_parse_iso_date(
+                                matched.get("PublicationStartDate")
+                            ),
                         )
                     )
 
@@ -1287,6 +1336,7 @@ async def fetch_workingnomads() -> list[RawJobListing]:
                         salary_text="",
                         location=location,
                         is_remote=True,
+                        posted_at=_parse_iso_date(job.get("pub_date")),
                     )
                 )
 
@@ -1377,6 +1427,8 @@ async def fetch_jobspresso() -> list[RawJobListing]:
                     if job_type:
                         desc = f"{desc}\n\nCategory: {job_type}"
 
+                    pub_date_str = (item.findtext("pubDate") or "").strip()
+
                     all_listings.append(
                         RawJobListing(
                             title=title,
@@ -1386,6 +1438,7 @@ async def fetch_jobspresso() -> list[RawJobListing]:
                             salary_text="",
                             location=location,
                             is_remote=True,
+                            posted_at=_parse_rss_date(pub_date_str),
                         )
                     )
 

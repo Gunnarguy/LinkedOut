@@ -362,6 +362,7 @@ class RawJobListing(BaseModel):
     salary_text: str = ""
     location: str = ""
     is_remote: bool | None = None
+    posted_at: datetime | None = None
 
 
 class ScoringResult(BaseModel):

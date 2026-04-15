@@ -537,11 +537,54 @@ def _max_required_years_for_target(prefs: UserPreferences) -> int | None:
 
 
 def _has_flexible_senior_exception(title: str, text: str) -> bool:
+    """Allow 'Senior'-titled roles through when the company/role shows startup
+    signals — small teams, early-stage funding, equity, or founder-style scope.
+    Staff/Principal/Director are NOT covered by this exception."""
     founder_style_title = _contains_any(title, ["founding engineer", "first engineer"])
-    return founder_style_title and (
-        _contains_any(text, _STARTUP_FLEX_TERMS)
-        or _contains_any(text, _PORTFOLIO_SIGNAL_TERMS)
+    startup_body = _contains_any(text, _STARTUP_FLEX_TERMS)
+    portfolio_body = _contains_any(text, _PORTFOLIO_SIGNAL_TERMS)
+
+    # Original: founding/first engineer titles at startups always pass
+    if founder_style_title and (startup_body or portfolio_body):
+        return True
+
+    # NEW: any "Senior"-level title (but NOT staff/principal/director/lead) at a
+    # company that reads like a startup gets the benefit of the doubt.
+    senior_but_not_extreme = _contains_any(
+        title, ["senior", "sr ", "sr."]
+    ) and not _contains_any(
+        title,
+        ["staff", "principal", "director", "head of", "vp ", "architect", "lead "],
     )
+    _STARTUP_COMPANY_SIGNALS = [
+        "seed",
+        "series a",
+        "series b",
+        "pre-seed",
+        "early stage",
+        "early-stage",
+        "small team",
+        "equity",
+        "stock options",
+        "rsu",
+        "first 10",
+        "first 20",
+        "first 50",
+        "growing team",
+        "founding team",
+        "backed by",
+        "yc ",
+        "y combinator",
+        "techstars",
+        "a]6z",
+        "a16z",
+    ]
+    if senior_but_not_extreme and (
+        startup_body or _contains_any(text, _STARTUP_COMPANY_SIGNALS)
+    ):
+        return True
+
+    return False
 
 
 def _has_realistic_target_lane(title: str, text: str) -> bool:
@@ -599,7 +642,25 @@ def _programmatic_hard_reject(
     portfolio_signal = _contains_any(text, _PORTFOLIO_SIGNAL_TERMS)
     flexible_senior_exception = _has_flexible_senior_exception(title, text)
     description_seniority = _contains_any(text, _DESCRIPTION_SENIORITY_TERMS)
-    excluded_keyword = _matching_excluded_keyword(text, prefs.excluded_keywords)
+    # Check excluded keywords against TITLE only (not full description) to
+    # avoid false positives like "architect" the verb or "10+ years nice to have".
+    # Experience-year patterns are checked against full text since they're specific.
+    _YEAR_KEYWORDS = {
+        "6+ years",
+        "7+ years",
+        "8+ years",
+        "9+ years",
+        "10+ years",
+        "11+ years",
+        "12+ years",
+    }
+    title_excluded = _matching_excluded_keyword(
+        title, [k for k in prefs.excluded_keywords if k not in _YEAR_KEYWORDS]
+    )
+    text_excluded = _matching_excluded_keyword(
+        text, [k for k in prefs.excluded_keywords if k in _YEAR_KEYWORDS]
+    )
+    excluded_keyword = title_excluded or text_excluded
     required_years = _extract_required_years(text)
     realistic_target_lane = _has_realistic_target_lane(title, text)
 
@@ -1251,7 +1312,7 @@ def _local_score_job(raw: RawJobListing, prefs: UserPreferences) -> ScoringResul
         ai_pitch_summary="\n".join(ai_pitch_bullets),
         drafted_cover_letter=cover_letter,
         source_url=raw.url,
-        posted_at=datetime.now(timezone.utc),
+        posted_at=raw.posted_at or datetime.now(timezone.utc),
         location=raw.location,
         tags=tags,
         description=raw.description[:12000],
@@ -1709,15 +1770,18 @@ Max seniority target: {max_seniority_level}
 3. E-commerce platform dev (Shopify themes, Magento, WooCommerce, WordPress plugins, Drupal)
 4. Hard geographic restriction outside the US with ZERO remote option mentioned anywhere
 5. Role description is spam, garbled, or clearly a scam
-6. Conventional senior/staff/principal/lead role that clearly exceeds the candidate's max seniority target
-7. Conventional role asking for clearly too many years for that target band, with no obvious founder-style or portfolio-first flexibility
+6. Staff/Principal/Director/VP/Head-of-Engineering role — these clearly exceed the candidate's level
+7. Role explicitly requiring 10+ years with no flexibility signals
 
 ## PASS everything else, including:
+- "Senior" titled roles at startups, small companies, or early-stage companies — these are usually just normal engineer roles with inflated titles
+- "Senior" titled roles that mention equity, small team, founding team, seed/Series A/B, or any startup signal
 - Founder-style or startup-flexible roles even if the title is inflated
-- Small experience stretches when the role is otherwise aligned
+- Small experience stretches when the role is otherwise aligned (e.g. "3-5 years" or even "5+ years" is fine)
 - ANY tech stack (the full scorer evaluates transferability)
 - ANY degree requirement (the full scorer evaluates flexibility)
 - Roles you're not sure about — let the full scorer decide
+- Full-stack, backend, frontend, mobile, ML, DevOps, platform, infrastructure roles — all valid
 
 Return ONLY valid JSON:
 {{"dominated": true/false, "reason": "one sentence"}}
@@ -1947,7 +2011,7 @@ async def score_job(
             ai_pitch_summary=data.get("ai_pitch_summary", ""),
             drafted_cover_letter=data.get("drafted_cover_letter", ""),
             source_url=raw.url,
-            posted_at=datetime.now(timezone.utc),
+            posted_at=raw.posted_at or datetime.now(timezone.utc),
             location=data.get("location", raw.location),
             tags=data.get("tags", []),
             # Rich company intelligence
