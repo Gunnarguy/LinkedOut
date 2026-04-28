@@ -35,6 +35,7 @@ class JobStore:
         )  # (job_id, action, source_bucket)
         self._load()
         self._dedup_on_load()
+        self._normalize_scoring_on_load()
 
     def _normalize_signature_text(self, value: str) -> str:
         return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
@@ -60,6 +61,128 @@ class JobStore:
             float(job.builder_score or 0.0),
             bool(job.salary_floor or job.salary_max),
         )
+
+    def _normalize_assessment_text(self, value: str) -> str:
+        trimmed = (value or "").strip()
+        normalized = trimmed.lower()
+
+        if (
+            "generic full-stack or backend software role" in normalized
+            and "target lanes" in normalized
+        ):
+            return (
+                "Listing leans toward a general full-stack or backend seat and looks less tied "
+                "to your strongest product, workflow, mobile, or healthcare angles."
+            )
+
+        if (
+            "generic full-stack or backend work" in normalized
+            and "builder lanes" in normalized
+        ):
+            return (
+                "Role reads more like a general full-stack or backend seat than one built around "
+                "your strongest product, workflow, mobile, or healthcare angles."
+            )
+
+        if (
+            "specialist ml or security role" in normalized
+            and "product-builder lane" in normalized
+        ):
+            return (
+                "Role leans toward specialized ML or security work and looks less aligned with "
+                "your strongest product, workflow, mobile, or healthcare angles."
+            )
+
+        if (
+            "specialized ml or security work" in normalized
+            and "lane you're actually targeting" in normalized
+        ):
+            return (
+                "Role leans toward specialized ML or security work and looks less aligned with "
+                "your strongest product, workflow, mobile, or healthcare angles."
+            )
+
+        return trimmed
+
+    def _normalized_builder_score(self, job: JobPayload) -> float:
+        adjusted = max(0.0, min(1.0, float(job.builder_score or 0.0)))
+        weighted_composite = (
+            (float(job.domain_alignment or 0.0) * 0.20)
+            + (float(job.role_alignment or 0.0) * 0.30)
+            + (float(job.culture_fit or 0.0) * 0.20)
+            + (float(job.experience_friction or 0.0) * 0.15)
+            + (float(job.stack_fit or 0.0) * 0.15)
+        )
+
+        if job.scoring_version == "apple-intelligence-v1" and weighted_composite > 0:
+            adjusted = min(adjusted, min(1.0, weighted_composite + 0.05))
+
+        role_alignment = float(job.role_alignment or 0.0)
+        if role_alignment > 0:
+            if role_alignment < 0.25:
+                adjusted = min(adjusted, 0.35)
+            elif role_alignment < 0.35:
+                adjusted = min(adjusted, 0.45)
+            elif role_alignment < 0.45:
+                adjusted = min(adjusted, 0.60)
+
+        return round(adjusted, 2)
+
+    def _normalize_scoring_on_load(self) -> None:
+        changed = False
+
+        for bucket_name, bucket in [
+            ("pending", self._pending),
+            ("applied", self._applied),
+            ("saved", self._saved),
+            ("rejected", self._rejected),
+        ]:
+            for job in bucket.values():
+                if job.posted_at and job.posted_at.tzinfo is None:
+                    job.posted_at = job.posted_at.replace(tzinfo=timezone.utc)
+                    changed = True
+
+                normalized_warnings = [
+                    self._normalize_assessment_text(item)
+                    for item in (job.dealbreaker_warnings or [])
+                    if self._normalize_assessment_text(item)
+                ]
+                normalized_caveats = [
+                    self._normalize_assessment_text(item)
+                    for item in (job.caveats or [])
+                    if self._normalize_assessment_text(item)
+                ]
+                normalized_red_flags = [
+                    self._normalize_assessment_text(item)
+                    for item in (job.red_flags or [])
+                    if self._normalize_assessment_text(item)
+                ]
+
+                if normalized_warnings != (job.dealbreaker_warnings or []):
+                    job.dealbreaker_warnings = normalized_warnings
+                    changed = True
+                if normalized_caveats != (job.caveats or []):
+                    job.caveats = normalized_caveats
+                    changed = True
+                if normalized_red_flags != (job.red_flags or []):
+                    job.red_flags = normalized_red_flags
+                    changed = True
+
+                normalized_score = self._normalized_builder_score(job)
+                if abs(normalized_score - float(job.builder_score or 0.0)) >= 0.01:
+                    logger.info(
+                        "[STORE] Normalized inflated score for %s @ %s in %s: %.2f -> %.2f",
+                        job.role_title,
+                        job.company_name,
+                        bucket_name,
+                        float(job.builder_score or 0.0),
+                        normalized_score,
+                    )
+                    job.builder_score = normalized_score
+                    changed = True
+
+        if changed:
+            self._save()
 
     # ── Persistence ──────────────────────────────────────────────────────
 

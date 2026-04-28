@@ -57,7 +57,7 @@ struct JobDetailView: View {
                         Divider().padding(.horizontal)
                         techStackSection
                     }
-                    if !(job.dealbreakerWarnings ?? []).isEmpty {
+                    if !job.displayDealbreakerWarnings.isEmpty {
                         Divider().padding(.horizontal)
                         dealbreakerSection
                     }
@@ -228,7 +228,7 @@ struct JobDetailView: View {
     private var scoreMetaSection: some View {
         HStack(spacing: 24) {
             VStack(spacing: 4) {
-                ScoreRing(score: job.builderScore, size: 70, lineWidth: 7)
+                ScoreRing(score: job.effectiveBuilderScore, size: 70, lineWidth: 7)
                 Text("Builder Score")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -437,7 +437,7 @@ struct JobDetailView: View {
                 .font(.headline)
                 .foregroundStyle(.red)
 
-            ForEach(job.dealbreakerWarnings ?? [], id: \.self) { warning in
+            ForEach(job.displayDealbreakerWarnings, id: \.self) { warning in
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.caption)

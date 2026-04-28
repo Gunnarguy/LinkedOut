@@ -11,7 +11,9 @@ struct MainTabView: View {
     @EnvironmentObject var auth: AuthViewModel
     @EnvironmentObject var jobs: JobsViewModel
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("serverURL") private var serverURL: String = "http://Gunnars-Brain-Extension.local:8443"
+    @AppStorage("serverURL") private var serverURL: String = BackendConfig.defaultServerURL
+    @State private var lifecycleRefreshTask: Task<Void, Never>?
+    @State private var didCompleteInitialLifecycleRefresh = false
 
     private func syncCurrentPreferencesToActiveServer() async {
         do {
@@ -20,6 +22,65 @@ struct MainTabView: View {
         } catch {
             print("[MAIN] ⚠️ Failed to sync preferences to active backend: \(error.localizedDescription)")
         }
+    }
+
+    private func refreshReason(previous: String, found: String, migrated: Bool) -> String? {
+        if found != previous {
+            return "server changed: \(previous) → \(found)"
+        }
+        if migrated {
+            return "preferences migrated"
+        }
+        return nil
+    }
+
+    private func queueLifecycleRefresh(trigger: String, allowBeforeInitial: Bool = false) {
+        if lifecycleRefreshTask != nil {
+            print("[MAIN] ⏭️ Skipping lifecycle refresh (\(trigger)) — refresh already running")
+            return
+        }
+
+        if !allowBeforeInitial && !didCompleteInitialLifecycleRefresh {
+            print("[MAIN] ⏭️ Skipping lifecycle refresh (\(trigger)) — initial refresh still pending")
+            return
+        }
+
+        lifecycleRefreshTask = Task {
+            defer {
+                lifecycleRefreshTask = nil
+                didCompleteInitialLifecycleRefresh = true
+            }
+            await runLifecycleRefresh(trigger: trigger)
+        }
+    }
+
+    private func runLifecycleRefresh(trigger: String) async {
+        print("[MAIN] 🔄 Lifecycle refresh started (\(trigger))")
+
+        let migrated = UserPreferences.migrateLegacyCareerPrefsIfNeeded()
+        if migrated {
+            print("[MAIN] 🔁 Migrated stale broad career prefs to portfolio-first defaults")
+        }
+
+        let previous = serverURL
+        if let found = await ServerDiscovery.discover() {
+            serverURL = found
+            print("[MAIN] ✅ Server discovered: \(found)")
+            await syncCurrentPreferencesToActiveServer()
+
+            if let reason = refreshReason(previous: previous, found: found, migrated: migrated) {
+                print("[MAIN] 🔄 Hard refresh triggered (\(reason)) — clearing local cache before reload")
+                jobs.resetLocalJobState()
+            }
+
+            await auth.checkExistingSession()
+            await jobs.refreshAll()
+            await jobs.autoIngestIfNeeded()
+        } else {
+            print("[MAIN] ❌ Server discovery failed — no backend available")
+        }
+
+        jobs.startTelemetryLogger()
     }
 
     var body: some View {
@@ -53,29 +114,8 @@ struct MainTabView: View {
                 }
         }
         .task {
-            // Run discovery once at launch
             print("[MAIN] 🔍 Initial server discovery starting...")
-            let migrated = UserPreferences.migrateLegacyCareerPrefsIfNeeded()
-            if migrated {
-                print("[MAIN] 🔁 Migrated stale broad career prefs to portfolio-first defaults")
-            }
-            let previous = serverURL
-            if let found = await ServerDiscovery.discover() {
-                serverURL = found
-                print("[MAIN] ✅ Server discovered: \(found)")
-                await syncCurrentPreferencesToActiveServer()
-                if migrated || found != previous {
-                    print("[MAIN] 🔄 Initial server changed: \(previous) → \(found) — clearing local cache and refreshing")
-                    jobs.resetLocalJobState()
-                    await jobs.refreshAll()
-                }
-                // Re-check auth against the discovered server (not the stale cached URL)
-                await auth.checkExistingSession()
-            } else {
-                print("[MAIN] ❌ Server discovery failed — no backend available")
-            }
-            // Start background telemetry logging to Xcode console
-            jobs.startTelemetryLogger()
+            queueLifecycleRefresh(trigger: "initial launch", allowBeforeInitial: true)
         }
         .sheet(isPresented: $auth.showOAuth) {
             if let url = auth.oauthURL {
@@ -96,20 +136,7 @@ struct MainTabView: View {
         .onChange(of: scenePhase) { _, phase in
             print("[MAIN] 📱 Scene phase: \(phase == .active ? "active" : phase == .inactive ? "inactive" : "background")")
             if phase == .active {
-                Task {
-                    let migrated = UserPreferences.migrateLegacyCareerPrefsIfNeeded()
-                    let previous = serverURL
-                    if let found = await ServerDiscovery.discover() {
-                        serverURL = found
-                        await syncCurrentPreferencesToActiveServer()
-                        if migrated || found != previous {
-                            print("[DISCOVERY] Server changed: \(previous) → \(found) — reloading jobs + re-checking auth")
-                            jobs.resetLocalJobState()
-                            await auth.checkExistingSession()
-                            await jobs.refreshAll()
-                        }
-                    }
-                }
+                queueLifecycleRefresh(trigger: "scene active")
             }
         }
     }

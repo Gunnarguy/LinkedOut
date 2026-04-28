@@ -72,3 +72,31 @@ struct InfoBanner: View {
         .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
     }
 }
+
+struct RecoveryBanner: View {
+    let message: String
+    let mode: HeuristicRecoveryMode
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ProgressView()
+                .tint(.white)
+
+            Image(systemName: mode.icon)
+                .foregroundStyle(.white)
+
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(mode.tint.gradient, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+    }
+}

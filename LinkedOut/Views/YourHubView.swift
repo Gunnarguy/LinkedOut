@@ -389,6 +389,38 @@ struct YourHubView: View {
             }
             .buttonStyle(.plain)
 
+            NavigationLink(destination: TargetsView()) {
+                HStack(spacing: 14) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(.green.gradient)
+                            .frame(width: 40, height: 40)
+                        Image(systemName: "building.2")
+                            .font(.body.bold())
+                            .foregroundStyle(.white)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Pitch Targets")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text("Startup buyers, partner targets, and category comps")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(14)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(.quaternary, lineWidth: 0.5)
+                )
+            }
+            .buttonStyle(.plain)
+
             // Re-score all jobs
             Button {
                 Task { await triggerRescore() }

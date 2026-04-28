@@ -234,6 +234,12 @@ struct RescoreResponse: Codable {
     let errors: Int?
 }
 
+struct ImportJobsResponse: Codable {
+    let imported: Int
+    let updated: Int
+    let skipped: Int
+}
+
 struct IngestStatusResponse: Codable {
     let taskRunning: Bool
     let manualRunning: Bool
@@ -530,6 +536,11 @@ struct TelemetryLLM: Codable {
     let openaiModel: String
     let hasGeminiKey: Bool
     let hasOpenaiKey: Bool
+    let circuitOpen: Bool
+    let circuitReason: String
+    let circuitRemainingSeconds: Int
+    let proCooldownActive: Bool
+    let proCooldownRemainingSeconds: Int
 
     enum CodingKeys: String, CodingKey {
         case provider
@@ -538,6 +549,26 @@ struct TelemetryLLM: Codable {
         case openaiModel = "openai_model"
         case hasGeminiKey = "has_gemini_key"
         case hasOpenaiKey = "has_openai_key"
+        case circuitOpen = "circuit_open"
+        case circuitReason = "circuit_reason"
+        case circuitRemainingSeconds = "circuit_remaining_seconds"
+        case proCooldownActive = "pro_cooldown_active"
+        case proCooldownRemainingSeconds = "pro_cooldown_remaining_seconds"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        provider = try container.decode(String.self, forKey: .provider)
+        geminiModel = try container.decode(String.self, forKey: .geminiModel)
+        geminiFlashModel = try container.decode(String.self, forKey: .geminiFlashModel)
+        openaiModel = try container.decode(String.self, forKey: .openaiModel)
+        hasGeminiKey = try container.decode(Bool.self, forKey: .hasGeminiKey)
+        hasOpenaiKey = try container.decode(Bool.self, forKey: .hasOpenaiKey)
+        circuitOpen = try container.decodeIfPresent(Bool.self, forKey: .circuitOpen) ?? false
+        circuitReason = try container.decodeIfPresent(String.self, forKey: .circuitReason) ?? ""
+        circuitRemainingSeconds = try container.decodeIfPresent(Int.self, forKey: .circuitRemainingSeconds) ?? 0
+        proCooldownActive = try container.decodeIfPresent(Bool.self, forKey: .proCooldownActive) ?? false
+        proCooldownRemainingSeconds = try container.decodeIfPresent(Int.self, forKey: .proCooldownRemainingSeconds) ?? 0
     }
 }
 

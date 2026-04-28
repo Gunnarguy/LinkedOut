@@ -212,6 +212,23 @@ struct TelemetryView: View {
             StatusRow(label: "OpenAI Model", value: l.openaiModel, icon: "circle.hexagonpath")
             StatusRow(label: "Gemini Key", value: l.hasGeminiKey ? "SET" : "MISSING", icon: "key", tint: l.hasGeminiKey ? .green : .red)
             StatusRow(label: "OpenAI Key", value: l.hasOpenaiKey ? "SET" : "MISSING", icon: "key", tint: l.hasOpenaiKey ? .green : .red)
+            StatusRow(
+                label: "Circuit",
+                value: l.circuitOpen ? "OPEN (\(l.circuitRemainingSeconds)s left)" : "Closed",
+                icon: "waveform.path.ecg",
+                tint: l.circuitOpen ? .orange : .green
+            )
+            if l.circuitOpen, !l.circuitReason.isEmpty {
+                Text(l.circuitReason)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            StatusRow(
+                label: "Pro Cooldown",
+                value: l.proCooldownActive ? "ACTIVE (\(l.proCooldownRemainingSeconds)s left)" : "Inactive",
+                icon: "timer",
+                tint: l.proCooldownActive ? .yellow : .secondary
+            )
         } header: {
             Label("LLM Config", systemImage: "cpu")
         }

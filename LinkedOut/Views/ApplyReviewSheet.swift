@@ -32,7 +32,7 @@ struct ApplyReviewSheet: View {
                             .foregroundStyle(.secondary)
 
                         HStack(spacing: 12) {
-                            ScoreRing(score: job.builderScore, size: 40, lineWidth: 4)
+                            ScoreRing(score: job.effectiveBuilderScore, size: 40, lineWidth: 4)
                             Text(job.salaryDisplay)
                                 .font(.subheadline.weight(.medium))
                             if job.isRemote {
@@ -71,13 +71,13 @@ struct ApplyReviewSheet: View {
                     }
 
                     // Dealbreaker check
-                    if let warnings = job.dealbreakerWarnings, !warnings.isEmpty {
+                    if !job.displayDealbreakerWarnings.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Label("Heads Up", systemImage: "exclamationmark.triangle.fill")
                                 .font(.headline)
                                 .foregroundStyle(.orange)
 
-                            ForEach(warnings, id: \.self) { warning in
+                            ForEach(job.displayDealbreakerWarnings, id: \.self) { warning in
                                 HStack(alignment: .top, spacing: 8) {
                                     Image(systemName: "exclamationmark.triangle")
                                         .font(.caption)

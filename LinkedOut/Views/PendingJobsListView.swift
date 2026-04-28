@@ -13,7 +13,7 @@ struct PendingJobsListView: View {
 
     var body: some View {
         Group {
-            if jobs.pendingJobs.isEmpty {
+            if jobs.visiblePendingJobs.isEmpty {
                 emptyState
             } else {
                 List(jobs.visiblePendingJobs) { job in

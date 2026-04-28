@@ -7,7 +7,7 @@ LinkedOut is a **"Tinder for jobs"** app: a FastAPI backend fetches listings fro
 ## Architecture
 
 - **Backend**: FastAPI (Python 3.12) in Docker on port 8443
-- **iOS App**: SwiftUI, iOS 17+, MVVM, NavigationStack
+- **iOS App**: SwiftUI, iOS 26.2+, MVVM, NavigationStack, Foundation Models fallback
 - **LLM Scoring**: Gemini Pro/Flash (primary) → OpenAI GPT-5.4 (fallback)
 - **Storage**: JSON file-backed (`job_store.json`, `seen_urls.json`, `user_prefs.json`, `sessions.json`)
 - **Notion Sync**: Bidirectional sync with Notion database via API v2026-03-11 (`backend/notion_sync.py`)

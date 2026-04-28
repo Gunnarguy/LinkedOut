@@ -11,7 +11,7 @@ struct LoginView: View {
     @EnvironmentObject var auth: AuthViewModel
     @State private var backendReachable: Bool?
     @State private var discovering = true
-    @AppStorage("serverURL") private var serverURL: String = "http://Gunnars-Brain-Extension.local:8443"
+    @AppStorage("serverURL") private var serverURL: String = BackendConfig.defaultServerURL
 
     var body: some View {
         VStack(spacing: 0) {

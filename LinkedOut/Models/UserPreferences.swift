@@ -153,7 +153,7 @@ struct UserPreferences: Codable {
 
     Treat this candidate as a high-agency, AI-enabled product and workflow builder with real healthcare context, not as a conventional generic software engineer.
 
-    Best-fit lanes:
+    Higher-confidence directions:
     - iOS or mobile product work
     - Healthcare, digital health, clinical software, or medtech
     - Forward-deployed, solutions, implementation, integration, or workflow roles that are genuinely technical
@@ -202,7 +202,7 @@ struct UserPreferences: Codable {
         let staleLocations = current.preferredLocations.contains { $0.contains("Michigan") }
         let staleBroadRoles = current.preferredRoles.contains("Full Stack Engineer") || current.preferredRoles.contains("Machine Learning Engineer") || current.preferredRoles.contains("AI Engineer")
         let staleLowCutoff = current.scoreCutoff <= 0.25
-        let staleProfile = current.professionalProfile.contains("Best-fit lanes:") && !current.professionalProfile.contains("patient engagement")
+        let staleProfile = current.professionalProfile.contains("healthcare operator and workflow-minded builder")
 
         guard staleLocations || staleBroadRoles || staleLowCutoff || staleProfile else {
             return false

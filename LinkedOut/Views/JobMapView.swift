@@ -53,7 +53,7 @@ struct JobMapView: View {
                     ForEach(filteredPins) { pin in
                         Annotation(pin.job.companyName, coordinate: pin.coordinate) {
                             JobMapPin(
-                                score: pin.job.builderScore,
+                                score: pin.job.effectiveBuilderScore,
                                 isRemote: pin.isRemoteHQ,
                                 groupCount: pin.locationGroup
                             )
@@ -141,12 +141,12 @@ struct JobMapView: View {
                     .stroke(Color.secondary.opacity(0.2), lineWidth: 3)
                     .frame(width: 44, height: 44)
                 Circle()
-                    .trim(from: 0, to: job.builderScore)
-                    .stroke(job.builderScore >= 0.7 ? .green : job.builderScore >= 0.5 ? .orange : .red,
+                    .trim(from: 0, to: job.effectiveBuilderScore)
+                    .stroke(job.effectiveBuilderScore >= 0.7 ? .green : job.effectiveBuilderScore >= 0.5 ? .orange : .red,
                             style: StrokeStyle(lineWidth: 3, lineCap: .round))
                     .frame(width: 44, height: 44)
                     .rotationEffect(.degrees(-90))
-                Text("\(Int(job.builderScore * 100))")
+                Text("\(Int(job.effectiveBuilderScore * 100))")
                     .font(.system(size: 13, weight: .bold, design: .rounded))
             }
 

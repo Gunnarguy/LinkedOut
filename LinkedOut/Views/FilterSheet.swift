@@ -177,7 +177,7 @@ struct JobFilters {
         if minSalary > 0 && job.salaryFloor < minSalary { return false }
 
         // Score
-        if minScore > 0 && job.builderScore < minScore { return false }
+        if minScore > 0 && job.effectiveBuilderScore < minScore { return false }
 
         // Experience level
         if !experienceLevels.isEmpty {

@@ -1,0 +1,117 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build LinkedOut iOS app",
+			"type": "shell",
+			"command": "xcodebuild",
+			"args": [
+				"-project",
+				"LinkedOut.xcodeproj",
+				"-scheme",
+				"LinkedOut",
+				"-destination",
+				"generic/platform=iOS Simulator",
+				"build"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Build LinkedOut iOS app",
+			"type": "shell",
+			"command": "xcodebuild",
+			"args": [
+				"-project",
+				"LinkedOut.xcodeproj",
+				"-scheme",
+				"LinkedOut",
+				"-destination",
+				"generic/platform=iOS Simulator",
+				"build"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Build LinkedOut iOS app",
+			"type": "shell",
+			"command": "xcodebuild",
+			"args": [
+				"-project",
+				"LinkedOut.xcodeproj",
+				"-scheme",
+				"LinkedOut",
+				"-destination",
+				"generic/platform=iOS Simulator",
+				"build"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Build LinkedOut iOS app",
+			"type": "shell",
+			"command": "xcodebuild",
+			"args": [
+				"-project",
+				"LinkedOut.xcodeproj",
+				"-scheme",
+				"LinkedOut",
+				"-destination",
+				"generic/platform=iOS Simulator",
+				"build"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Build LinkedOut iOS app",
+			"type": "shell",
+			"command": "xcodebuild",
+			"args": [
+				"-project",
+				"LinkedOut.xcodeproj",
+				"-scheme",
+				"LinkedOut",
+				"-destination",
+				"generic/platform=iOS Simulator",
+				"build"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Build LinkedOut iOS app",
+			"type": "shell",
+			"command": "xcodebuild",
+			"args": [
+				"-project",
+				"LinkedOut.xcodeproj",
+				"-scheme",
+				"LinkedOut",
+				"-destination",
+				"generic/platform=iOS Simulator",
+				"build"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Build LinkedOut iOS app",
+			"type": "shell",
+			"command": "xcodebuild",
+			"args": [
+				"-project",
+				"LinkedOut.xcodeproj",
+				"-scheme",
+				"LinkedOut",
+				"-destination",
+				"generic/platform=iOS Simulator",
+				"build"
+			],
+			"isBackground": false,
+			"group": "build"
+		}
+	]
+}

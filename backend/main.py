@@ -61,7 +61,12 @@ from models import (
     TokenExchangeRequest,
     UserPreferences,
 )
-from scoring_engine import score_batch, score_job, triage_and_score
+from scoring_engine import (
+    get_llm_runtime_state,
+    score_batch,
+    score_job,
+    triage_and_score,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -1031,7 +1036,10 @@ _rescore_progress: dict = {
 
 
 @app.post("/api/jobs/rescore")
-async def rescore_jobs(buckets: list[str] = Query(default=["pending"])):
+async def rescore_jobs(
+    buckets: list[str] = Query(default=["pending"]),
+    heuristic_only: bool = Query(default=False),
+):
     """Re-run LLM scoring on existing jobs (non-blocking).
 
     Reconstructs RawJobListing from each stored job and re-scores with the
@@ -1052,6 +1060,11 @@ async def rescore_jobs(buckets: list[str] = Query(default=["pending"])):
     for b in buckets:
         if b in bucket_map:
             jobs_to_rescore.extend(bucket_map[b].values())
+
+    if heuristic_only:
+        jobs_to_rescore = [
+            job for job in jobs_to_rescore if (job.scoring_version or "") == "local-v1"
+        ]
 
     if not jobs_to_rescore:
         return {"status": "nothing_to_rescore", "total": 0}
@@ -1127,6 +1140,7 @@ async def rescore_jobs(buckets: list[str] = Query(default=["pending"])):
         "status": "started",
         "total": len(jobs_to_rescore),
         "buckets": buckets,
+        "heuristic_only": heuristic_only,
     }
 
 
@@ -2269,6 +2283,7 @@ async def get_telemetry(log_lines: int = Query(50, ge=0, le=500)):
     }
 
     # ── LLM config ──
+    llm_runtime = get_llm_runtime_state()
     llm = {
         "provider": settings.llm_provider,
         "gemini_model": settings.gemini_model,
@@ -2276,6 +2291,7 @@ async def get_telemetry(log_lines: int = Query(50, ge=0, le=500)):
         "openai_model": settings.openai_model,
         "has_gemini_key": bool(settings.gemini_api_key),
         "has_openai_key": bool(settings.openai_api_key),
+        **llm_runtime,
     }
 
     # ── Recent logs ──

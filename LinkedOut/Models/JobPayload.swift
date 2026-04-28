@@ -120,6 +120,96 @@ struct JobPayload: Codable, Identifiable, Hashable {
         lhs.id == rhs.id
     }
 
+    private static func normalizedAssessmentText(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = trimmed.lowercased()
+
+        if normalized.contains("generic full-stack or backend software role")
+            && normalized.contains("target lanes") {
+            return "Listing leans toward a general full-stack or backend seat and looks less tied to your strongest product, workflow, mobile, or healthcare angles."
+        }
+
+        if normalized.contains("generic full-stack or backend work")
+            && normalized.contains("builder lanes") {
+            return "Role reads more like a general full-stack or backend seat than one built around your strongest product, workflow, mobile, or healthcare angles."
+        }
+
+        if normalized.contains("specialist ml or security role")
+            && normalized.contains("product-builder lane") {
+            return "Role leans toward specialized ML or security work and looks less aligned with your strongest product, workflow, mobile, or healthcare angles."
+        }
+
+        if normalized.contains("specialized ml or security work")
+            && normalized.contains("lane you're actually targeting") {
+            return "Role leans toward specialized ML or security work and looks less aligned with your strongest product, workflow, mobile, or healthcare angles."
+        }
+
+        return trimmed
+    }
+
+    static func normalizedBuilderScore(
+        rawScore: Double,
+        scoringVersion: String?,
+        domainAlignment: Double?,
+        roleAlignment: Double?,
+        cultureFit: Double?,
+        experienceFriction: Double?,
+        stackFit: Double?
+    ) -> Double {
+        var adjusted = min(max(rawScore, 0.0), 1.0)
+
+        let factors = [
+            (domainAlignment ?? 0.0, 0.20),
+            (roleAlignment ?? 0.0, 0.30),
+            (cultureFit ?? 0.0, 0.20),
+            (experienceFriction ?? 0.0, 0.15),
+            (stackFit ?? 0.0, 0.15),
+        ]
+        let weightedComposite = factors.reduce(0.0) { partial, item in
+            partial + (item.0 * item.1)
+        }
+
+        if scoringVersion == "apple-intelligence-v1", weightedComposite > 0 {
+            adjusted = min(adjusted, min(1.0, weightedComposite + 0.05))
+        }
+
+        if let roleAlignment {
+            if roleAlignment < 0.25 {
+                adjusted = min(adjusted, 0.35)
+            } else if roleAlignment < 0.35 {
+                adjusted = min(adjusted, 0.45)
+            } else if roleAlignment < 0.45 {
+                adjusted = min(adjusted, 0.60)
+            }
+        }
+
+        return (adjusted * 100).rounded() / 100
+    }
+
+    var effectiveBuilderScore: Double {
+        Self.normalizedBuilderScore(
+            rawScore: builderScore,
+            scoringVersion: scoringVersion,
+            domainAlignment: domainAlignment,
+            roleAlignment: roleAlignment,
+            cultureFit: cultureFit,
+            experienceFriction: experienceFriction,
+            stackFit: stackFit
+        )
+    }
+
+    var displayDealbreakerWarnings: [String] {
+        (dealbreakerWarnings ?? [])
+            .map(Self.normalizedAssessmentText)
+            .filter { !$0.isEmpty }
+    }
+
+    var displayCaveats: [String] {
+        (caveats ?? [])
+            .map(Self.normalizedAssessmentText)
+            .filter { !$0.isEmpty }
+    }
+
     /// Formatted salary string (range if max available)
     var salaryDisplay: String {
         let formatter = NumberFormatter()
@@ -135,7 +225,7 @@ struct JobPayload: Codable, Identifiable, Hashable {
 
     /// Score as percentage (0–100)
     var scorePercent: Int {
-        Int(builderScore * 100)
+        Int(effectiveBuilderScore * 100)
     }
 
     /// Pitch bullets as array

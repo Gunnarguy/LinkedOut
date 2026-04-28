@@ -331,7 +331,7 @@ Treat this candidate as a high-agency, AI-enabled product and workflow builder w
 - Solo iOS developer with 4 shipped App Store apps
 - Strongest in SwiftUI, mobile product work, API integration, iteration speed, and turning ideas into working software
 - Uses AI heavily as implementation leverage for prototyping, architecture iteration, and shipping complete products
-- Comfortable with Python/FastAPI backends, RAG patterns, vector databases, Core ML, Docker, integrations, and workflow automation, but not as a generic backend or platform candidate
+- Comfortable with Python/FastAPI backends, RAG patterns, vector databases, Core ML, Docker, integrations, and workflow automation, with the strongest fit when that work stays close to product delivery, workflow tooling, AI features, or mobile-adjacent execution
 
 ### Honest Boundaries
 - No CS degree
@@ -339,14 +339,14 @@ Treat this candidate as a high-agency, AI-enabled product and workflow builder w
 - Not a senior platform, backend, infrastructure, security, or ML specialist candidate
 - Not a fit for quota-carrying pre-sales or sales-heavy solutions roles
 
-### Target Lanes
+### Higher-Confidence Directions
 - iOS or mobile product building
 - Healthcare, clinical software, digital health, medtech, medical device, patient engagement, care navigation, provider workflow, or interoperability software
 - Forward-deployed, solutions, implementation, customer engineering, integration, or workflow roles that are genuinely technical and close to users
 - Applied-AI product builder or prototype roles where shipping, iteration, and problem-solving matter more than pedigree
 
 ### Matching Rule
-Prioritize jobs where AI leverage, speed, user empathy, and workflow problem-solving are the job. Reject roles that expect a conventional software engineer first and only secondarily value builder instincts."""
+Prioritize jobs where AI leverage, speed, user empathy, and workflow problem-solving are central to the work. De-prioritize roles that mainly want a conventional backend, platform, or specialist profile and only secondarily value builder instincts."""
 
 
 # ── Batch / Pipeline ────────────────────────────────────────────────────────

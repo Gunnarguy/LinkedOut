@@ -27,6 +27,37 @@ logger = logging.getLogger(__name__)
 _openai_client: AsyncOpenAI | None = None
 _gemini_client = None
 _pro_cooldown_until: float = 0  # monotonic timestamp; skip Pro until this time
+_llm_circuit_open_until: float = 0
+_llm_circuit_reason: str = ""
+
+
+def _open_llm_circuit(seconds: int, reason: str) -> None:
+    global _llm_circuit_open_until, _llm_circuit_reason
+    until = _time_mod.monotonic() + seconds
+    if until > _llm_circuit_open_until:
+        _llm_circuit_open_until = until
+        _llm_circuit_reason = reason
+        logger.warning(f"[LLM] Circuit open for {seconds}s — {reason}")
+
+
+def _close_llm_circuit() -> None:
+    global _llm_circuit_open_until, _llm_circuit_reason
+    _llm_circuit_open_until = 0
+    _llm_circuit_reason = ""
+
+
+def get_llm_runtime_state() -> dict[str, object]:
+    now = _time_mod.monotonic()
+    circuit_remaining = max(0, int(round(_llm_circuit_open_until - now)))
+    pro_remaining = max(0, int(round(_pro_cooldown_until - now)))
+    return {
+        "circuit_open": circuit_remaining > 0,
+        "circuit_reason": _llm_circuit_reason,
+        "circuit_remaining_seconds": circuit_remaining,
+        "pro_cooldown_active": pro_remaining > 0,
+        "pro_cooldown_remaining_seconds": pro_remaining,
+    }
+
 
 _REMOTE_SIGNAL_TERMS = [
     "remote",
@@ -278,6 +309,16 @@ _NON_BUILDER_TITLE_TERMS = [
     "sales",
     "marketing",
     "analyst",
+    "social worker",
+    "therapist",
+    "counselor",
+    "licensed clinical",
+    "licensed master",
+    "medical science liaison",
+    "registered nurse",
+    "nurse practitioner",
+    "pharmacist",
+    "physician assistant",
     "vp, product",
     "vice president of product",
 ]
@@ -321,6 +362,10 @@ _HARDSTOP_CLEARANCE_PATTERNS = [
 _HARDSTOP_LICENSE_PATTERNS = [
     re.compile(
         r"must be a licensed\s+(?:rn|nurse|physician|therapist|social worker|pharmacist)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\blicensed\s+(?:master\s+)?(?:clinical\s+)?(?:social worker|therapist|counselor|professional counselor|marriage and family therapist|rn|registered nurse|nurse practitioner|physician|pharmacist|clinical social worker)\b",
         re.IGNORECASE,
     ),
     re.compile(r"active\s+(?:rn|nursing|medical|clinical)\s+license", re.IGNORECASE),
@@ -792,14 +837,14 @@ def _apply_alignment_clamp(
         multiplier *= 0.35
         max_score = min(max_score, 0.16)
         extra_caveats.append(
-            "Listing is a specialist ML or security role rather than your current product-builder lane."
+            "Role leans toward specialized ML or security work and looks less aligned with your strongest product, workflow, mobile, or healthcare angles."
         )
 
     if _is_generic_generalist_title(title) and not realistic_target_lane:
         multiplier *= 0.45
         max_score = min(max_score, 0.20)
         extra_caveats.append(
-            "Listing is a generic full-stack or backend software role rather than your narrower target lanes."
+            "Listing leans toward a general full-stack or backend seat and looks less tied to your strongest product, workflow, mobile, or healthcare angles."
         )
 
     if _contains_any(title, _WORKFLOW_OR_SOLUTIONS_TITLE_TERMS) and workflow_hits == 0:
@@ -877,13 +922,13 @@ def _apply_llm_specificity_clamp(
     if _is_specialist_mismatch_title(title) and not realistic_target_lane:
         capped_score = min(capped_score, 0.18)
         extra_caveats.append(
-            "Role is specialized ML or security work rather than the lane you're actually targeting."
+            "Role leans toward specialized ML or security work and looks less aligned with your strongest product, workflow, mobile, or healthcare angles."
         )
 
     if _is_generic_generalist_title(title) and not realistic_target_lane:
         capped_score = min(capped_score, 0.24)
         extra_caveats.append(
-            "Role is generic full-stack or backend work rather than the narrower builder lanes you're targeting."
+            "Role reads more like a general full-stack or backend seat than one built around your strongest product, workflow, mobile, or healthcare angles."
         )
 
     if _contains_any(
@@ -1273,10 +1318,19 @@ def _local_score_job(raw: RawJobListing, prefs: UserPreferences) -> ScoringResul
     fit_reasons = fit_reasons[:4]
 
     salary_floor, salary_max = _parse_salary_bounds(raw.salary_text or "")
+    salary_ceiling = salary_max or salary_floor
+    if salary_ceiling and salary_ceiling < prefs.min_salary:
+        return ScoringResult(
+            passed_filter=False,
+            rejection_reason=(
+                f"Listing compensation tops out below your ${prefs.min_salary} minimum salary target."
+            ),
+        )
+
     inferred_remote = _infer_is_remote(raw)
-    company_oneliner = "Company description not extracted in local fallback mode."
+    company_oneliner = "Company description unavailable in heuristic scoring mode."
     logic_fit = (
-        "This role was scored with deterministic local fallback because both configured LLM providers failed authentication. "
+        "This role was scored heuristically from title, domain, stack, and workflow signals because structured AI scoring was unavailable for this ingest. "
         "It lines up best when the listing shows AI, product-building, workflow, mobile, or healthcare signals that map to your shipped Swift and Python projects."
     )
     domain_leverage = (
@@ -1288,7 +1342,7 @@ def _local_score_job(raw: RawJobListing, prefs: UserPreferences) -> ScoringResul
         "Use the caveats to decide whether the role is still worth a quick application."
     )
     ai_pitch_bullets = [
-        "• Local fallback mode: deterministic score from title, domain, stack, and culture signals.",
+        "• Heuristic score: based on title, domain, stack, and culture signals.",
         f"• Signals found: AI={ai_hits}, health={health_hits}, mobile={mobile_hits}, workflow={workflow_hits}, startup={startup_hits}.",
         (
             f"• Seniority / enterprise friction capped this role at {final_score:.2f}."
@@ -1337,7 +1391,7 @@ def _local_score_job(raw: RawJobListing, prefs: UserPreferences) -> ScoringResul
         risk_reward=risk_reward,
         company_oneliner=company_oneliner,
         they_want=[],
-        job_snapshot="Local fallback mode: factual extraction unavailable because the configured LLM providers failed.",
+        job_snapshot="Heuristic score: detailed extraction was unavailable for this ingest.",
         domain_alignment=domain_alignment,
         role_alignment=role_alignment,
         culture_fit=culture_fit,
@@ -1425,6 +1479,9 @@ async def _call_llm(
     provider = settings.llm_provider.lower()
     max_retries = 3
 
+    if _llm_circuit_open_until and _time_mod.monotonic() < _llm_circuit_open_until:
+        raise RuntimeError(f"LLM_CIRCUIT_OPEN:{_llm_circuit_reason}")
+
     # If Pro is in cooldown, go directly to Flash
     if (
         provider == "gemini"
@@ -1437,11 +1494,15 @@ async def _call_llm(
     for attempt in range(max_retries):
         try:
             if provider == "openai":
-                return await _call_openai(system, user_msg)
+                result = await _call_openai(system, user_msg)
+                _close_llm_circuit()
+                return result
             elif provider == "gemini":
-                return await _call_gemini(
+                result = await _call_gemini(
                     system, user_msg, use_flash=use_flash, timeout=timeout
                 )
+                _close_llm_circuit()
+                return result
             else:
                 raise ValueError(f"Unknown LLM provider: {provider}")
 
@@ -1454,6 +1515,13 @@ async def _call_llm(
                 "API_KEY_INVALID" in error_str
                 or "API key expired" in error_str
                 or "PERMISSION_DENIED" in error_str
+                or "invalid api key" in error_str.lower()
+                or "incorrect api key" in error_str.lower()
+                or (
+                    "authentication" in error_str.lower()
+                    and "failed" in error_str.lower()
+                )
+                or ("401" in error_str and "key" in error_str.lower())
             )
             is_transient = (
                 is_rate_limit
@@ -1463,12 +1531,39 @@ async def _call_llm(
                 or "connection" in error_str.lower()
             )
 
-            # API key dead — skip retries, go straight to OpenAI
-            if is_auth_error and provider != "openai" and settings.openai_api_key:
-                logger.warning(
-                    f"[LLM] Gemini auth error ({error_str[:80]}) → falling back to OpenAI"
-                )
-                return await _call_openai(system, user_msg)
+            if is_auth_error:
+                if provider != "openai" and settings.openai_api_key:
+                    logger.warning(
+                        f"[LLM] Gemini auth error ({error_str[:80]}) → falling back to OpenAI"
+                    )
+                    try:
+                        result = await _call_openai(system, user_msg)
+                        _close_llm_circuit()
+                        return result
+                    except Exception as oai_err:
+                        _open_llm_circuit(
+                            600, "gemini auth failure and OpenAI fallback failure"
+                        )
+                        raise oai_err from e
+
+                if provider == "openai" and settings.gemini_api_key:
+                    logger.warning(
+                        f"[LLM] OpenAI auth error ({error_str[:80]}) → falling back to Gemini Flash"
+                    )
+                    try:
+                        result = await _call_gemini(
+                            system, user_msg, use_flash=True, timeout=timeout
+                        )
+                        _close_llm_circuit()
+                        return result
+                    except Exception as gemini_err:
+                        _open_llm_circuit(
+                            600, "openai auth failure and Gemini fallback failure"
+                        )
+                        raise gemini_err from e
+
+                _open_llm_circuit(600, "configured LLM provider authentication failed")
+                raise RuntimeError("LLM_AUTH_UNAVAILABLE") from e
 
             # On Pro timeout: don't waste retries, immediately fall through to Flash
             if is_timeout and provider == "gemini" and not use_flash:
@@ -1478,16 +1573,23 @@ async def _call_llm(
                     f"(Pro cooldown for 5 min)..."
                 )
                 try:
-                    return await _call_gemini(
+                    result = await _call_gemini(
                         system, user_msg, use_flash=True, timeout=timeout
                     )
+                    _close_llm_circuit()
+                    return result
                 except Exception as flash_err:
                     logger.warning(f"Flash also failed: {flash_err}")
                 if settings.openai_api_key:
                     logger.warning("Flash failed → falling back to OpenAI GPT-5.4")
                     try:
-                        return await _call_openai(system, user_msg)
+                        result = await _call_openai(system, user_msg)
+                        _close_llm_circuit()
+                        return result
                     except Exception as oai_err:
+                        _open_llm_circuit(
+                            120, "Gemini timeout and OpenAI fallback failure"
+                        )
                         logger.error(f"OpenAI fallback also failed: {oai_err}")
                         raise oai_err from e
                 raise
@@ -1506,19 +1608,43 @@ async def _call_llm(
                 if provider == "gemini" and not use_flash:
                     logger.warning("Gemini Pro exhausted → trying Flash...")
                     try:
-                        return await _call_gemini(
+                        result = await _call_gemini(
                             system, user_msg, use_flash=True, timeout=timeout
                         )
+                        _close_llm_circuit()
+                        return result
                     except Exception as flash_err:
                         logger.warning(f"Flash also failed: {flash_err}")
 
                 if provider != "openai" and settings.openai_api_key:
                     logger.warning("Gemini exhausted → falling back to OpenAI GPT-5.4")
                     try:
-                        return await _call_openai(system, user_msg)
+                        result = await _call_openai(system, user_msg)
+                        _close_llm_circuit()
+                        return result
                     except Exception as oai_err:
+                        _open_llm_circuit(
+                            120, "Gemini exhausted and OpenAI fallback failure"
+                        )
                         logger.error(f"OpenAI fallback also failed: {oai_err}")
                         raise oai_err from e
+
+                if provider == "openai" and settings.gemini_api_key:
+                    logger.warning("OpenAI exhausted → falling back to Gemini Flash")
+                    try:
+                        result = await _call_gemini(
+                            system, user_msg, use_flash=True, timeout=timeout
+                        )
+                        _close_llm_circuit()
+                        return result
+                    except Exception as gemini_err:
+                        _open_llm_circuit(
+                            120, "OpenAI exhausted and Gemini fallback failure"
+                        )
+                        logger.error(f"Gemini fallback also failed: {gemini_err}")
+                        raise gemini_err from e
+
+                _open_llm_circuit(120, "all configured LLM providers exhausted")
 
             logger.error(
                 f"[LLM] Final failure ({error_type}): {error_str or '(empty)'}"
@@ -2051,9 +2177,14 @@ async def score_job(
         return ScoringResult(passed_filter=True, job=job)
 
     except Exception as e:
-        logger.warning(
-            f"[SCORE] LLM ERROR for {raw.title} @ {raw.company}: {type(e).__name__}: {e or '(empty)'} — using deterministic local fallback"
-        )
+        if "LLM_CIRCUIT_OPEN:" in str(e) or "LLM_AUTH_UNAVAILABLE" in str(e):
+            logger.info(
+                f"[SCORE] LLM unavailable for {raw.title} @ {raw.company} — using deterministic local fallback"
+            )
+        else:
+            logger.warning(
+                f"[SCORE] LLM ERROR for {raw.title} @ {raw.company}: {type(e).__name__}: {e or '(empty)'} — using deterministic local fallback"
+            )
         return _local_score_job(raw, prefs)
 
 

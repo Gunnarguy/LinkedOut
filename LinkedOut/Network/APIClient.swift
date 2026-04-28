@@ -65,9 +65,35 @@ enum APIError: LocalizedError {
 final class APIClient: @unchecked Sendable {
     static let shared = APIClient()
 
+    private static let iso8601WithFractionalSeconds: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let iso8601WithoutFractionalSeconds: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    private static let naiveDateFormatters: [DateFormatter] = {
+        let secondPrecision = DateFormatter()
+        secondPrecision.locale = Locale(identifier: "en_US_POSIX")
+        secondPrecision.timeZone = TimeZone(secondsFromGMT: 0)
+        secondPrecision.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+
+        let fractionalPrecision = DateFormatter()
+        fractionalPrecision.locale = Locale(identifier: "en_US_POSIX")
+        fractionalPrecision.timeZone = TimeZone(secondsFromGMT: 0)
+        fractionalPrecision.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS"
+
+        return [fractionalPrecision, secondPrecision]
+    }()
+
     /// Reads the server URL from UserDefaults (synced with Settings @AppStorage)
     private var baseURL: String {
-        UserDefaults.standard.string(forKey: "serverURL") ?? "http://Gunnars-Brain-Extension.local:8443"
+        BackendConfig.storedServerURL()
     }
 
     private let session: URLSession
@@ -87,18 +113,23 @@ final class APIClient: @unchecked Sendable {
         self.decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let str = try container.decode(String.self)
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            let fallbackFormatter = ISO8601DateFormatter()
-            fallbackFormatter.formatOptions = [.withInternetDateTime]
             // Try ISO 8601 with fractional seconds first
-            if let date = formatter.date(from: str) { return date }
+            if let date = Self.iso8601WithFractionalSeconds.date(from: str) { return date }
             // Without fractional seconds
-            if let date = fallbackFormatter.date(from: str) { return date }
+            if let date = Self.iso8601WithoutFractionalSeconds.date(from: str) { return date }
             // Python's space-separated format: "2025-01-01 12:00:00+00:00"
             let spaceFixed = str.replacingOccurrences(of: " ", with: "T")
-            if let date = formatter.date(from: spaceFixed) { return date }
-            if let date = fallbackFormatter.date(from: spaceFixed) { return date }
+            if let date = Self.iso8601WithFractionalSeconds.date(from: spaceFixed) { return date }
+            if let date = Self.iso8601WithoutFractionalSeconds.date(from: spaceFixed) { return date }
+            // Naive backend timestamps are interpreted as UTC to avoid dropping the whole payload.
+            for formatter in Self.naiveDateFormatters {
+                if let date = formatter.date(from: str) {
+                    return date
+                }
+                if let date = formatter.date(from: spaceFixed) {
+                    return date
+                }
+            }
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot decode date: \(str)")
         }
     }
@@ -138,6 +169,11 @@ final class APIClient: @unchecked Sendable {
         return try await get("/api/jobs/stats")
     }
 
+    func importJobs(_ jobs: [JobPayload], force: Bool = false) async throws -> ImportJobsResponse {
+        let suffix = force ? "?force=true" : ""
+        return try await post("/api/jobs/import\(suffix)", body: jobs)
+    }
+
     func seedMockData() async throws -> [String: Int] {
         return try await post("/api/dev/seed", body: Optional<String>.none)
     }
@@ -172,8 +208,15 @@ final class APIClient: @unchecked Sendable {
 
     // MARK: - Re-score
 
-    func rescoreJobs(buckets: [String] = ["pending"]) async throws -> RescoreResponse {
-        let query = buckets.map { "buckets=\($0)" }.joined(separator: "&")
+    func rescoreJobs(
+        buckets: [String] = ["pending"],
+        heuristicOnly: Bool = false
+    ) async throws -> RescoreResponse {
+        var params = buckets.map { "buckets=\($0)" }
+        if heuristicOnly {
+            params.append("heuristic_only=true")
+        }
+        let query = params.joined(separator: "&")
         return try await post("/api/jobs/rescore?\(query)", body: Optional<String>.none)
     }
 
@@ -580,7 +623,7 @@ final class APIClient: @unchecked Sendable {
                         print("[API] 🔍 Re-discovering server after network error...")
                         ServerDiscovery.invalidateCache()
                         if let found = await ServerDiscovery.discover() {
-                            let current = UserDefaults.standard.string(forKey: "serverURL") ?? ""
+                            let current = BackendConfig.storedServerURL()
                             if found != current {
                                 print("[API] 🔄 Server URL changed: \(current) → \(found)")
                                 UserDefaults.standard.set(found, forKey: "serverURL")

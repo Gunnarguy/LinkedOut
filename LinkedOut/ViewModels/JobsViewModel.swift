@@ -33,6 +33,29 @@ enum JobSortMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum HeuristicRecoveryMode {
+    case onDevice
+    case cloud
+
+    var icon: String {
+        switch self {
+        case .onDevice:
+            return "iphone"
+        case .cloud:
+            return "icloud"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .onDevice:
+            return .green
+        case .cloud:
+            return .blue
+        }
+    }
+}
+
 @MainActor
 class JobsViewModel: ObservableObject {
     @Published var pendingJobs: [JobPayload] = []
@@ -50,18 +73,24 @@ class JobsViewModel: ObservableObject {
     /// True when the last network request failed — shows offline indicator
     @Published var isOffline = false
     @Published var locallyFilteredPendingCount = 0
+    @Published var isRecoveringHeuristicJobs = false
+    @Published var heuristicRecoveryBannerMessage: String?
+    @Published var heuristicRecoveryMode: HeuristicRecoveryMode?
 
     /// Generation counter — incremented on every resetLocalJobState(). Fetches that
     /// started before the latest reset are stale and their results must be discarded.
     private var fetchGeneration: Int = 0
+    private var lastHeuristicRecoveryAttempt: Date = .distantPast
 
     private var currentServerURL: String {
-        UserDefaults.standard.string(forKey: "serverURL") ?? "http://Gunnars-Brain-Extension.local:8443"
+        BackendConfig.storedServerURL()
     }
 
     private var currentBackendLabel: String {
-        currentServerURL.contains("onrender.com") ? "cloud backend" : "local backend"
+        BackendConfig.backendLabel(for: currentServerURL)
     }
+
+    private var heuristicRecoveryCooldown: TimeInterval { 180 }
 
     // MARK: - LinkedIn Social State
     @Published var linkedInPosts: [LinkedInPost] = []
@@ -78,7 +107,7 @@ class JobsViewModel: ObservableObject {
 
     /// Number of pending jobs newer than lastSeenTimestamp
     var newJobCount: Int {
-        pendingJobs.filter { ($0.postedAt ?? .distantPast) > lastSeenTimestamp }.count
+        visiblePendingJobs.filter { ($0.postedAt ?? .distantPast) > lastSeenTimestamp }.count
     }
 
     private func portfolioFirstGuardrail(_ jobs: [JobPayload]) -> (kept: [JobPayload], dropped: Int) {
@@ -103,6 +132,20 @@ class JobsViewModel: ObservableObject {
 
         let title = job.roleTitle.lowercased()
 
+        let practitionerTitleTerms = [
+            "licensed master social worker",
+            "social worker",
+            "therapist",
+            "counselor",
+            "registered nurse",
+            "nurse practitioner",
+            "physician assistant",
+            "pharmacist",
+            "medical science liaison",
+            "case manager",
+            "care manager",
+        ]
+
         func containsAny(_ terms: [String], in text: String) -> Bool {
             terms.contains { text.contains($0) }
         }
@@ -111,6 +154,10 @@ class JobsViewModel: ObservableObject {
             terms.reduce(into: 0) { count, term in
                 if text.contains(term) { count += 1 }
             }
+        }
+
+        if containsAny(practitionerTitleTerms, in: title) {
+            return false
         }
 
         let hardRejectTitleTerms = [
@@ -273,14 +320,55 @@ class JobsViewModel: ObservableObject {
         return Set(decoded.map { $0.lowercased() })
     }
 
+    private var currentPreferences: UserPreferences {
+        UserPreferences.currentFromUserDefaults()
+    }
+
+    private func matchesUserPendingPreferences(_ job: JobPayload, prefs: UserPreferences) -> Bool {
+        if prefs.requireRemote && !job.isRemote {
+            return false
+        }
+
+        let salaryCeiling = (job.salaryMax ?? 0) > 0 ? (job.salaryMax ?? 0) : job.salaryFloor
+        if salaryCeiling > 0 && salaryCeiling < prefs.minSalary {
+            return false
+        }
+
+        let searchableText = [
+            job.roleTitle,
+            job.companyName,
+            job.location,
+            job.description ?? "",
+            job.companyDescription ?? "",
+            job.logicFit ?? "",
+            job.whyInteresting ?? "",
+            job.jobSnapshot ?? "",
+            (job.tags).joined(separator: " "),
+            (job.techStack ?? []).joined(separator: " "),
+        ]
+        .joined(separator: " ")
+        .lowercased()
+
+        for keyword in prefs.excludedKeywords {
+            let normalized = keyword.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if !normalized.isEmpty && searchableText.contains(normalized) {
+                return false
+            }
+        }
+
+        return true
+    }
+
     /// Pending jobs with blocked companies and already-decided URLs filtered out, sorted by current mode
     var visiblePendingJobs: [JobPayload] {
         let blocked = blockedCompanies
         let decided = decidedURLs
+        let prefs = currentPreferences
 
         let filtered = pendingJobs.filter { job in
             if !blocked.isEmpty && blocked.contains(job.companyName.lowercased()) { return false }
             if decided.contains(job.sourceUrl) { return false }
+            if !matchesUserPendingPreferences(job, prefs: prefs) { return false }
             return true
         }
 
@@ -292,7 +380,7 @@ class JobsViewModel: ObservableObject {
         jobs.sorted { a, b in
             switch sortMode {
             case .score:
-                if a.builderScore != b.builderScore { return a.builderScore > b.builderScore }
+                if a.effectiveBuilderScore != b.effectiveBuilderScore { return a.effectiveBuilderScore > b.effectiveBuilderScore }
                 // Tiebreak: newer first, then alphabetical for full determinism
                 let aDate = a.postedAt ?? .distantPast
                 let bDate = b.postedAt ?? .distantPast
@@ -304,13 +392,13 @@ class JobsViewModel: ObservableObject {
                 let bDate = b.postedAt ?? .distantPast
                 if aDate != bDate { return aDate > bDate }
                 // Tiebreak: higher score first
-                if a.builderScore != b.builderScore { return a.builderScore > b.builderScore }
+                if a.effectiveBuilderScore != b.effectiveBuilderScore { return a.effectiveBuilderScore > b.effectiveBuilderScore }
                 return a.roleTitle < b.roleTitle
 
             case .salary:
                 if a.salaryFloor != b.salaryFloor { return a.salaryFloor > b.salaryFloor }
                 // Tiebreak: higher score first
-                if a.builderScore != b.builderScore { return a.builderScore > b.builderScore }
+                if a.effectiveBuilderScore != b.effectiveBuilderScore { return a.effectiveBuilderScore > b.effectiveBuilderScore }
                 return a.roleTitle < b.roleTitle
             }
         }
@@ -467,6 +555,11 @@ class JobsViewModel: ObservableObject {
         lines.append("│ 🖥  \(s.hostname):\(s.port)  up \(s.uptimeHuman)  \(s.render ? "☁️ Render" : "🐳 Docker")  debug=\(s.debug)")
         lines.append("│ 📦 Store: \(st.pending)P / \(st.applied)A / \(st.saved)S / \(st.rejected)R  seen=\(st.seenUrls ?? 0)")
         lines.append("│ 🤖 LLM: \(l.provider)  gemini=\(l.hasGeminiKey ? "✅" : "❌")  openai=\(l.hasOpenaiKey ? "✅" : "❌")")
+        if l.circuitOpen {
+            lines.append("│    circuit=OPEN \(l.circuitRemainingSeconds)s  reason=\(l.circuitReason)")
+        } else if l.proCooldownActive {
+            lines.append("│    gemini-pro-cooldown=\(l.proCooldownRemainingSeconds)s")
+        }
 
         // Ingest
         let lockIcon = i.lockHeld ? "🔒" : "🔓"
@@ -592,6 +685,206 @@ class JobsViewModel: ObservableObject {
         return false
     }
 
+    private func applyFetchedPendingJobs(_ fetched: [JobPayload]) {
+        let filteredPending = portfolioFirstGuardrail(fetched)
+        pendingJobs = filteredPending.kept
+        locallyFilteredPendingCount = filteredPending.dropped
+        Self.writeCache("pending", jobs: pendingJobs)
+        if filteredPending.dropped > 0 {
+            self.info = "Locally filtered \(filteredPending.dropped) roles that missed your portfolio-first strategy"
+        }
+    }
+
+    private func replacePendingJob(_ updated: JobPayload) {
+        if let idx = pendingJobs.firstIndex(where: { $0.id == updated.id || $0.sourceUrl == updated.sourceUrl }) {
+            pendingJobs[idx] = updated
+            Self.writeCache("pending", jobs: pendingJobs)
+        }
+    }
+
+    private func setHeuristicRecoveryBanner(_ message: String?, mode: HeuristicRecoveryMode?) {
+        heuristicRecoveryBannerMessage = message
+        heuristicRecoveryMode = mode
+    }
+
+    private func staleCloudQueueReason(for jobs: [JobPayload]) -> String? {
+        guard BackendConfig.isCloud(url: currentServerURL), !jobs.isEmpty else {
+            return nil
+        }
+
+        let datedJobs = jobs.compactMap(\ .postedAt)
+        guard let newest = datedJobs.max() else {
+            return nil
+        }
+
+        let ancientCutoff = Calendar.current.date(from: DateComponents(year: 2020, month: 1, day: 1)) ?? .distantPast
+        if newest < ancientCutoff {
+            return "newest job date is \(newest.formatted(date: .abbreviated, time: .omitted))"
+        }
+
+        let age = Date().timeIntervalSince(newest)
+        if age > (21 * 24 * 60 * 60) {
+            return "newest job is over 3 weeks old (\(newest.formatted(date: .abbreviated, time: .omitted)))"
+        }
+
+        return nil
+    }
+
+    private func recoverFromStaleCloudQueue(reason: String) async -> Bool {
+        let current = currentServerURL
+        print("[VM] stale cloud queue detected on \(current): \(reason)")
+
+        if let alternative = await ServerDiscovery.discoverPreferredNonCloudAlternative(excluding: current),
+           alternative != current {
+            info = "Cloud queue looked stale — switched to \(BackendConfig.backendLabel(for: alternative)) and refreshing"
+            resetLocalJobState()
+            await loadPendingJobs()
+            return true
+        }
+
+        info = "Cloud backend queue looks stale (\(reason)). Turn on Tailscale or switch servers in Settings."
+        return false
+    }
+
+    private func maybeRecoverHeuristicPendingJobs() {
+        let heuristicJobs = pendingJobs.filter { $0.scoringVersion == "local-v1" }
+        guard !heuristicJobs.isEmpty else {
+            setHeuristicRecoveryBanner(nil, mode: nil)
+            return
+        }
+        guard !isRecoveringHeuristicJobs, !isRescoring, !isOffline else { return }
+        guard Date().timeIntervalSince(lastHeuristicRecoveryAttempt) >= heuristicRecoveryCooldown else { return }
+
+        lastHeuristicRecoveryAttempt = Date()
+#if canImport(FoundationModels)
+        let availability = OnDeviceJobScorer.availability
+        if availability.isAvailable {
+            Task {
+                await recoverHeuristicPendingJobsOnDevice(heuristicJobs)
+            }
+            return
+        }
+#endif
+        Task {
+            await recoverHeuristicPendingJobsInBackend(expectedCount: heuristicJobs.count)
+        }
+    }
+
+    private func recoverHeuristicPendingJobsOnDevice(_ jobs: [JobPayload]) async {
+        guard !isRecoveringHeuristicJobs else { return }
+        isRecoveringHeuristicJobs = true
+        setHeuristicRecoveryBanner(
+            "Recovering \(jobs.count) fallback jobs on-device with Apple Intelligence...",
+            mode: .onDevice
+        )
+
+        var recovered = 0
+        var persistFailures = 0
+        let prefs = currentPreferences
+
+        for (index, job) in jobs.enumerated() {
+            setHeuristicRecoveryBanner(
+                "Apple Intelligence rescoring \(index + 1)/\(jobs.count) fallback jobs...",
+                mode: .onDevice
+            )
+
+            do {
+#if canImport(FoundationModels)
+                let rescored = try await OnDeviceJobScorer.rescore(job: job, preferences: prefs)
+                replacePendingJob(rescored)
+                do {
+                    _ = try await APIClient.shared.importJobs([rescored], force: true)
+                } catch {
+                    persistFailures += 1
+                    print("[VM] recoverHeuristicPendingJobsOnDevice — persist ERROR: \(error)")
+                }
+                recovered += 1
+#endif
+            } catch {
+                print("[VM] recoverHeuristicPendingJobsOnDevice — scoring ERROR: \(error)")
+            }
+        }
+
+        isRecoveringHeuristicJobs = false
+        setHeuristicRecoveryBanner(nil, mode: nil)
+
+        if recovered > 0 {
+            do {
+                let refreshed = try await APIClient.shared.fetchPendingJobs()
+                applyFetchedPendingJobs(refreshed)
+                await loadStats()
+            } catch {
+                print("[VM] recoverHeuristicPendingJobsOnDevice — refresh ERROR: \(error)")
+            }
+            info = "Recovered AI scoring on-device for \(recovered) jobs" + (persistFailures > 0 ? " (\(persistFailures) sync errors)" : "")
+            return
+        }
+
+        await recoverHeuristicPendingJobsInBackend(expectedCount: jobs.count)
+    }
+
+    private func recoverHeuristicPendingJobsInBackend(expectedCount: Int) async {
+        guard !isRecoveringHeuristicJobs else { return }
+        isRecoveringHeuristicJobs = true
+        setHeuristicRecoveryBanner(
+            "Retrying \(expectedCount) fallback jobs with backend scorers...",
+            mode: .cloud
+        )
+
+        do {
+            let kickoff = try await APIClient.shared.rescoreJobs(
+                buckets: ["pending"],
+                heuristicOnly: true
+            )
+            let total = kickoff.total ?? 0
+            if total == 0 {
+                setHeuristicRecoveryBanner(nil, mode: nil)
+                isRecoveringHeuristicJobs = false
+                return
+            }
+
+            var pollCount = 0
+            let maxPolls = 180
+            while pollCount < maxPolls {
+                try await Task.sleep(nanoseconds: 2_000_000_000)
+                pollCount += 1
+
+                let status = try await APIClient.shared.fetchRescoreStatus()
+                if status.running == true {
+                    let done = status.done ?? 0
+                    let statusTotal = status.total ?? total
+                    setHeuristicRecoveryBanner(
+                        "Retrying fallback jobs with backend scorers... \(done)/\(statusTotal)",
+                        mode: .cloud
+                    )
+                    continue
+                }
+
+                let refreshed = try await APIClient.shared.fetchPendingJobs()
+                applyFetchedPendingJobs(refreshed)
+                await loadStats()
+
+                let done = status.done ?? total
+                let errors = status.errors ?? 0
+                isRecoveringHeuristicJobs = false
+                setHeuristicRecoveryBanner(nil, mode: nil)
+                info = "Recovered AI scoring for \(done) jobs" + (errors > 0 ? " (\(errors) errors)" : "")
+                return
+            }
+
+            let refreshed = try await APIClient.shared.fetchPendingJobs()
+            applyFetchedPendingJobs(refreshed)
+            await loadStats()
+            isRecoveringHeuristicJobs = false
+            setHeuristicRecoveryBanner(nil, mode: nil)
+            info = "AI recovery still running — refreshed current queue"
+        } catch {
+            isRecoveringHeuristicJobs = false
+            setHeuristicRecoveryBanner(nil, mode: nil)
+            print("[VM] recoverHeuristicPendingJobsInBackend — ERROR: \(error)")
+        }
+    }
+
     func loadPendingJobs() async {
         isLoading = true
         defer { isLoading = false }
@@ -611,17 +904,19 @@ class JobsViewModel: ObservableObject {
             isOffline = false
             error = nil
 
-            let filteredPending = portfolioFirstGuardrail(fetched)
-            pendingJobs = filteredPending.kept
-            locallyFilteredPendingCount = filteredPending.dropped
-            Self.writeCache("pending", jobs: pendingJobs)
+            if let staleReason = staleCloudQueueReason(for: fetched) {
+                let switched = await recoverFromStaleCloudQueue(reason: staleReason)
+                if switched || fetchGeneration != gen {
+                    return
+                }
+            }
+
+            applyFetchedPendingJobs(fetched)
             print("[VM] loadPendingJobs — got \(pendingJobs.count) jobs")
             for (i, j) in pendingJobs.prefix(5).enumerated() {
                 print("[VM]   [\(i)] \(j.roleTitle) @ \(j.companyName) score=\(j.builderScore)")
             }
-            if filteredPending.dropped > 0 {
-                self.info = "Locally filtered \(filteredPending.dropped) roles that missed your portfolio-first strategy"
-            }
+            maybeRecoverHeuristicPendingJobs()
         } catch {
             if isExpectedCancellation(error) {
                 print("[VM] loadPendingJobs — cancelled (superseded)")
@@ -794,8 +1089,7 @@ class JobsViewModel: ObservableObject {
                     print("[VM] ingestNewJobs — pending grew \(lastObservedPendingCount) → \(status.store.pending), live-refreshing queue")
                     do {
                         let fetchedPending = try await APIClient.shared.fetchPendingJobs()
-                        pendingJobs = fetchedPending
-                        Self.writeCache("pending", jobs: pendingJobs)
+                        applyFetchedPendingJobs(fetchedPending)
                         stats = status.store
                         lastObservedPendingCount = pendingJobs.count
                         let newCount = max(pendingJobs.count - startingPendingCount, 0)
@@ -820,8 +1114,8 @@ class JobsViewModel: ObservableObject {
                     print("[VM] ingestNewJobs — done after \(pollCount) polls, ingested=\(ingested)")
                     ingestProgress = "Loading results..."
                     do {
-                        pendingJobs = try await APIClient.shared.fetchPendingJobs()
-                        Self.writeCache("pending", jobs: pendingJobs)
+                        let refreshed = try await APIClient.shared.fetchPendingJobs()
+                        applyFetchedPendingJobs(refreshed)
                     } catch {
                         if isTransientBackendFailure(error) {
                             print("[VM] ingestNewJobs — transient final pending fetch failure: \(error.localizedDescription)")
@@ -836,7 +1130,8 @@ class JobsViewModel: ObservableObject {
                     // queued jobs while we were waiting for the lock.
                     if pendingJobs.isEmpty && status.store.pending > 0 {
                         print("[VM] ingestNewJobs — store has \(status.store.pending) but fetch returned 0, retrying...")
-                        pendingJobs = try await APIClient.shared.fetchPendingJobs()
+                        let refreshed = try await APIClient.shared.fetchPendingJobs()
+                        applyFetchedPendingJobs(refreshed)
                     }
 
                     if ingested == 0 && pendingJobs.isEmpty {
@@ -876,7 +1171,8 @@ class JobsViewModel: ObservableObject {
 
             // Timed out polling — still load what we have
             print("[VM] ingestNewJobs — polling timed out, loading current state")
-            pendingJobs = try await APIClient.shared.fetchPendingJobs()
+            let refreshed = try await APIClient.shared.fetchPendingJobs()
+            applyFetchedPendingJobs(refreshed)
             await loadStats()
             info = "Scoring is still running — pull to refresh for latest results"
 
@@ -894,8 +1190,16 @@ class JobsViewModel: ObservableObject {
     /// Auto-ingest once per session when the queue loads empty
     func autoIngestIfNeeded() async {
         let visible = visiblePendingJobs.count
-        print("[VM] autoIngestIfNeeded — pending=\(pendingJobs.count) visible=\(visible) ingesting=\(isIngesting) loading=\(isLoading) alreadyDone=\(hasAutoIngested)")
-        guard pendingJobs.isEmpty && !isIngesting && !isLoading && !hasAutoIngested else {
+        let statsPending = stats?.pending ?? 0
+        print("[VM] autoIngestIfNeeded — pending=\(pendingJobs.count) visible=\(visible) statsPending=\(statsPending) ingesting=\(isIngesting) loading=\(isLoading) offline=\(isOffline) alreadyDone=\(hasAutoIngested) errorPresent=\(error != nil)")
+        guard visible == 0,
+              pendingJobs.isEmpty,
+              statsPending == 0,
+              !isIngesting,
+              !isLoading,
+              !isOffline,
+              error == nil,
+              !hasAutoIngested else {
             print("[VM] autoIngestIfNeeded — skipped (guard failed)")
             return
         }
@@ -950,8 +1254,8 @@ class JobsViewModel: ObservableObject {
                 } else {
                     // Rescore finished
                     print("[VM] rescoreAllJobs — done: \(done)/\(statusTotal), errors=\(errors)")
-                    pendingJobs = try await APIClient.shared.fetchPendingJobs()
-                    Self.writeCache("pending", jobs: pendingJobs)
+                    let refreshed = try await APIClient.shared.fetchPendingJobs()
+                    applyFetchedPendingJobs(refreshed)
                     await loadStats()
                     info = "Rescored \(done) jobs" + (errors > 0 ? " (\(errors) errors)" : "")
                     return
@@ -960,8 +1264,8 @@ class JobsViewModel: ObservableObject {
 
             // Timed out
             print("[VM] rescoreAllJobs — polling timed out")
-            pendingJobs = try await APIClient.shared.fetchPendingJobs()
-            Self.writeCache("pending", jobs: pendingJobs)
+            let refreshed = try await APIClient.shared.fetchPendingJobs()
+            applyFetchedPendingJobs(refreshed)
             await loadStats()
             info = "Rescore still running — pull to refresh for latest"
         } catch {

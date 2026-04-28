@@ -276,7 +276,7 @@ struct JobListRow: View {
         VStack(alignment: .leading, spacing: 10) {
             // ── Row 1: Score + Title + Salary + NEW badge ──
             HStack(spacing: 14) {
-                ScoreRing(score: job.builderScore, size: 48, lineWidth: 4.5)
+                ScoreRing(score: job.effectiveBuilderScore, size: 48, lineWidth: 4.5)
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
@@ -422,13 +422,13 @@ struct JobListRow: View {
             }
 
             // ── Row 7: Red flags / dealbreakers (if any) ──
-            if let warnings = job.dealbreakerWarnings, !warnings.isEmpty {
+            if !job.displayDealbreakerWarnings.isEmpty {
                 HStack(spacing: 0) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.caption2)
                         .foregroundStyle(.red)
                         .frame(width: 16)
-                    Text(warnings.joined(separator: " \u{00B7} "))
+                    Text(job.displayDealbreakerWarnings.joined(separator: " \u{00B7} "))
                         .font(.caption2)
                         .foregroundStyle(.red)
                         .lineLimit(1)

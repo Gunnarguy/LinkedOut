@@ -60,7 +60,7 @@ struct SettingsView: View {
     @EnvironmentObject var jobs: JobsViewModel
     @AppStorage("minSalary") private var minSalary: Int = UserPreferences.default.minSalary
     @AppStorage("requireRemote") private var requireRemote: Bool = true
-    @AppStorage("serverURL") private var serverURL: String = "http://Gunnars-Brain-Extension.local:8443"
+    @AppStorage("serverURL") private var serverURL: String = BackendConfig.defaultServerURL
     @AppStorage("preferredRolesJSON") private var preferredRolesJSON: String = "[]"
     @AppStorage("excludedKeywordsJSON") private var excludedKeywordsJSON: String = "[]"
     @AppStorage("preferredLocationsJSON") private var preferredLocationsJSON: String = "[\"Campbell, California\",\"Palo Alto, California\"]"

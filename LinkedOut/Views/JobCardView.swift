@@ -42,7 +42,7 @@ struct JobCardView: View {
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 4) {
-                    ScoreRing(score: job.builderScore, size: 56, lineWidth: 5)
+                    ScoreRing(score: job.effectiveBuilderScore, size: 56, lineWidth: 5)
 
                     if let pos = queuePosition {
                         Text(pos)
@@ -281,9 +281,9 @@ struct JobCardView: View {
                     }
 
                     // Dealbreaker warnings
-                    if let warnings = job.dealbreakerWarnings, !warnings.isEmpty {
+                    if !job.displayDealbreakerWarnings.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
-                            ForEach(warnings.prefix(2), id: \.self) { warning in
+                            ForEach(job.displayDealbreakerWarnings.prefix(2), id: \.self) { warning in
                                 HStack(alignment: .top, spacing: 4) {
                                     Image(systemName: "exclamationmark.triangle.fill")
                                         .font(.system(size: 8))

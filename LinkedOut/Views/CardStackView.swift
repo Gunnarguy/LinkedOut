@@ -14,7 +14,7 @@ struct CardStackView: View {
     @State private var showFilters = false
     @State private var filters = JobFilters()
     @AppStorage("lastViewedTimestamp") private var lastViewedTimestamp: Double = 0
-    @AppStorage("serverURL") private var serverURL: String = "http://Gunnars-Brain-Extension.local:8443"
+    @AppStorage("serverURL") private var serverURL: String = BackendConfig.defaultServerURL
 
     // ── Location Filtering ──
     @AppStorage("preferredLocationsJSON") private var preferredLocationsJSON: String = "[\"Campbell, California\",\"Palo Alto, California\"]"
@@ -103,22 +103,48 @@ struct CardStackView: View {
         return posted > lastViewedDate
     }
 
-    private var isCloudBackend: Bool {
-        serverURL.contains("onrender.com")
+    private var backendBadgeTitle: String {
+        if BackendConfig.isCloud(url: serverURL) {
+            return "Cloud"
+        }
+        if BackendConfig.isPi(url: serverURL) {
+            return "Pi"
+        }
+        return "Local"
+    }
+
+    private var backendBadgeIcon: String {
+        if BackendConfig.isCloud(url: serverURL) {
+            return "icloud.fill"
+        }
+        if BackendConfig.isPi(url: serverURL) {
+            return "server.rack"
+        }
+        return "desktopcomputer"
+    }
+
+    private var backendBadgeColor: Color {
+        if BackendConfig.isCloud(url: serverURL) {
+            return .purple
+        }
+        if BackendConfig.isPi(url: serverURL) {
+            return .blue
+        }
+        return .green
     }
 
     private var backendBadge: some View {
-        Label(isCloudBackend ? "Cloud" : "Local", systemImage: isCloudBackend ? "icloud.fill" : "desktopcomputer")
+        Label(backendBadgeTitle, systemImage: backendBadgeIcon)
             .font(.caption2.weight(.semibold))
-            .foregroundStyle(isCloudBackend ? .purple : .green)
+            .foregroundStyle(backendBadgeColor)
     }
 
     var body: some View {
         NavigationStack {
             Group {
-                if jobs.isLoading && jobs.pendingJobs.isEmpty {
+                if jobs.isLoading && jobs.visiblePendingJobs.isEmpty {
                     loadingView
-                } else if jobs.pendingJobs.isEmpty {
+                } else if jobs.visiblePendingJobs.isEmpty {
                     emptyView
                 } else {
                     VStack(spacing: 0) {
@@ -139,7 +165,7 @@ struct CardStackView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                if jobs.isIngesting && !jobs.pendingJobs.isEmpty {
+                if jobs.isIngesting && !jobs.visiblePendingJobs.isEmpty {
                     ingestBanner
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -220,7 +246,7 @@ struct CardStackView: View {
 
                         if let stats = jobs.stats {
                             HStack(spacing: 12) {
-                                Label("\(jobs.pendingJobs.count)", systemImage: "tray")
+                                Label("\(jobs.visiblePendingJobs.count)", systemImage: "tray")
                                 Label("\(stats.applied)", systemImage: "checkmark.circle")
                             }
                             .font(.caption)
@@ -235,14 +261,11 @@ struct CardStackView: View {
                 if lastViewedTimestamp > 0 {
                     jobs.lastSeenTimestamp = Date(timeIntervalSince1970: lastViewedTimestamp)
                 }
-                await jobs.loadPendingJobs()
-                await jobs.autoIngestIfNeeded()
                 // Mark current time so next session knows what's "new"
                 let now = Date()
                 lastViewedTimestamp = now.timeIntervalSince1970
                 jobs.lastSeenTimestamp = now
             }
-            .task { await jobs.loadStats() }
             .refreshable { await jobs.refreshAll() }
             .sheet(item: $jobs.selectedJob) { job in
                 JobDetailView(job: job)
@@ -280,6 +303,11 @@ struct CardStackView: View {
                             jobs.dismissInfo()
                         }
                         .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                    if let message = jobs.heuristicRecoveryBannerMessage,
+                       let mode = jobs.heuristicRecoveryMode {
+                        RecoveryBanner(message: message, mode: mode)
+                            .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
             }

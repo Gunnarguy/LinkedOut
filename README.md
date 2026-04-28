@@ -42,6 +42,7 @@
   - [Getting Started](#getting-started)
     - [Prerequisites](#prerequisites)
     - [Local Development (Docker)](#local-development-docker)
+    - [Deploy to Raspberry Pi (Tailscale)](#deploy-to-raspberry-pi-tailscale)
     - [Deploy to Render](#deploy-to-render)
     - [iOS App Setup](#ios-app-setup)
   - [Configuration](#configuration)
@@ -97,7 +98,7 @@
 - **Multi-location preferences** — score jobs against multiple preferred cities
 - **LinkedIn OAuth** — authenticate and share applications to your LinkedIn profile
 - **Application tracking** — notes, status pipeline (new → applied → phone screen → interview → offer)
-- **Auto server discovery** — iOS app probes Render cloud, local Docker, LAN, and localhost
+- **Auto server discovery** — iOS app keeps the selected backend if healthy, then falls back across Raspberry Pi over Tailscale, local Docker, and Render
 - **3-layer URL dedup** — fetch-time, ingest-time, and store-time protection against duplicates
 - **Concurrency-safe ingest** — `asyncio.Lock` prevents overlapping periodic and manual ingest cycles
 - **Smart content-aware pruner** — 3-tier job freshness system: HTTP HEAD checks, page content scanning for "position filled" signals, and HN thread analysis via Algolia API + Gemini Flash LLM judge
@@ -143,13 +144,13 @@ LinkedOut/
 
 | Layer           | Technology                                                                        |
 | --------------- | --------------------------------------------------------------------------------- |
-| **iOS App**     | SwiftUI, iOS 17+, MapKit, WebKit, Combine                                         |
+| **iOS App**     | SwiftUI, iOS 26.2+, MapKit, WebKit, Foundation Models                             |
 | **Backend**     | FastAPI, Python 3.12, Pydantic v2, uvicorn                                        |
 | **LLM Scoring** | Google Gemini (primary), OpenAI (fallback)                                        |
 | **Job APIs**    | Remotive, Himalayas, HN Algolia, Jobicy, RemoteOK                                 |
 | **Auth**        | LinkedIn OAuth 2.0                                                                |
 | **Storage**     | JSON file-backed (job_store.json, seen_urls.json, user_prefs.json, sessions.json) |
-| **Deployment**  | Docker on Render (free tier)                                                      |
+| **Deployment**  | Docker on Raspberry Pi via Tailscale or Render                                    |
 
 ---
 
@@ -157,7 +158,7 @@ LinkedOut/
 
 ### Prerequisites
 
-- **Xcode 15+** (for iOS app)
+- **Xcode 26+** (for iOS app)
 - **Docker** (for backend)
 - **API Keys**: At least one of Google Gemini or OpenAI
 - **LinkedIn Developer App** (optional, for OAuth)
@@ -186,6 +187,33 @@ curl -X POST http://localhost:8443/api/ingest/refresh
 
 The backend runs on **port 8443** with job data persisted to `./data/`.
 
+### Deploy to Raspberry Pi (Tailscale)
+
+If you want the backend off your Mac entirely, this repo includes a Pi deploy script that syncs the backend to a Tailscale-reachable Raspberry Pi and starts Docker there.
+
+```bash
+# First deploy or normal code update
+./deploy-to-pi.sh
+
+# Intentionally overwrite the Pi's env or persisted data from your local copy
+./deploy-to-pi.sh --sync-env --sync-data
+```
+
+What it does:
+
+- Syncs `backend/` and `docker-compose.yml` to `~/linkedout` on the Pi
+- Preserves the Pi's live `data/` and `backend/.env` by default
+- Seeds `data/` and `backend/.env` automatically if the Pi copy does not exist yet
+- Rebuilds and restarts the backend with `docker compose up --build -d`
+- Verifies health both on the Pi and through the Pi's Tailscale MagicDNS URL
+
+Operational notes:
+
+- The Pi backend URL is `http://gunzino.taildb93d4.ts.net:8443`
+- iPhone and iPad clients need Tailscale enabled to reach the Pi backend directly
+- Tailscale `Serve` is optional. If it is disabled, the app still works over raw tailnet HTTP
+- Keep `LINKEDIN_REDIRECT_URI` pointed at a stable HTTPS callback registered in LinkedIn unless you later add a Pi-side HTTPS front door
+
 ### Deploy to Render
 
 1. Fork this repo
@@ -203,11 +231,13 @@ The backend runs on **port 8443** with job data persisted to `./data/`.
 
 1. Open `LinkedOut.xcodeproj` in Xcode
 2. Select your development team in Signing & Capabilities
-3. Build and run on a simulator or device (iOS 17+)
+3. Build and run on a simulator or device (iOS 26.2+)
 4. The app auto-discovers the backend via `ServerDiscovery`:
-   - Probes Render cloud → local Docker → LAN IP → localhost
-   - Caches the result for 5 minutes
-   - Re-discovers on network errors
+
+- Keeps the current backend if it is still healthy
+- Falls back to Raspberry Pi over Tailscale → local Docker → Render
+- Caches the result for 5 minutes
+- Re-discovers on network errors
 
 ---
 
