@@ -1040,7 +1040,7 @@ class JobsViewModel: ObservableObject {
     }
 
     /// Trigger a fresh job ingest cycle from APIs → LLM scoring → queue
-    func ingestNewJobs() async {
+    func ingestNewJobs(trigger: String = "manual") async {
         isIngesting = true
         error = nil
         info = nil
@@ -1049,7 +1049,7 @@ class JobsViewModel: ObservableObject {
             isIngesting = false
             ingestProgress = ""
         }
-        print("[VM] ingestNewJobs — starting ingest cycle")
+        print("[VM] ingestNewJobs — starting ingest cycle (trigger=\(trigger))")
 
         do {
             // Kick off ingest (returns immediately — backend runs it in background)
@@ -1058,7 +1058,8 @@ class JobsViewModel: ObservableObject {
             print("[VM] ingestNewJobs — kickoff status=\(kickoff.status ?? "nil")")
 
             let startingPendingCount = pendingJobs.count
-            var lastObservedPendingCount = pendingJobs.count
+            let startingStorePendingCount = max(stats?.pending ?? 0, pendingJobs.count)
+            var lastObservedStorePendingCount = startingStorePendingCount
 
             // Poll for completion — use cycle_active to detect ongoing periodic ingest too
             ingestProgress = "Scanning & scoring with AI..."
@@ -1084,14 +1085,14 @@ class JobsViewModel: ObservableObject {
                     throw error
                 }
                 let stillActive = status.manualRunning || (status.cycleActive ?? false)
+                stats = status.store
 
-                if status.store.pending > lastObservedPendingCount {
-                    print("[VM] ingestNewJobs — pending grew \(lastObservedPendingCount) → \(status.store.pending), live-refreshing queue")
+                if status.store.pending > lastObservedStorePendingCount {
+                    print("[VM] ingestNewJobs — store pending grew \(lastObservedStorePendingCount) → \(status.store.pending), live-refreshing queue")
                     do {
                         let fetchedPending = try await APIClient.shared.fetchPendingJobs()
                         applyFetchedPendingJobs(fetchedPending)
-                        stats = status.store
-                        lastObservedPendingCount = pendingJobs.count
+                        lastObservedStorePendingCount = status.store.pending
                         let newCount = max(pendingJobs.count - startingPendingCount, 0)
                         print("[VM] ingestNewJobs — live queue now has \(pendingJobs.count) jobs (\(newCount) new this run)")
                     } catch {
@@ -1155,7 +1156,7 @@ class JobsViewModel: ObservableObject {
                         } else {
                             detail = "Scoring batch \(p.batch)/\(p.totalBatches)"
                         }
-                        let liveAdded = max(status.store.pending - startingPendingCount, 0)
+                        let liveAdded = max(status.store.pending - startingStorePendingCount, 0)
                         ingestProgress = "\(detail) — \(p.queued) queued so far, \(liveAdded) live"
                     } else if p.phase == "fetching" {
                         ingestProgress = "Fetching from job boards…"
@@ -1205,7 +1206,7 @@ class JobsViewModel: ObservableObject {
         }
         hasAutoIngested = true
         print("[VM] autoIngestIfNeeded — queue empty, triggering auto-ingest")
-        await ingestNewJobs()
+        await ingestNewJobs(trigger: "auto-empty-queue")
     }
 
     // MARK: - Rescore

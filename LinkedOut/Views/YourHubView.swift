@@ -211,7 +211,7 @@ struct YourHubView: View {
                     Button { navigateTo = .pending } label: {
                         StatCard(
                             label: "In Queue",
-                            value: jobs.pendingJobs.count,
+                            value: jobs.visiblePendingJobs.count,
                             icon: "tray.full.fill",
                             gradient: Gradient(colors: [.orange, .yellow])
                         )

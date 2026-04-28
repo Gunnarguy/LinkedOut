@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Applications/Tailscale.app/Contents/MacOS:$PATH"
+
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PI_HOST="${LINKEDOUT_PI_HOST:-gunzino}"
 REMOTE_DIR="${LINKEDOUT_PI_DIR:-linkedout}"
@@ -61,10 +63,6 @@ for cmd in tailscale python3 curl tar; do
 done
 
 LOCAL_ENV="$PROJECT_DIR/backend/.env"
-if [[ ! -f "$LOCAL_ENV" ]]; then
-    echo "Missing backend/.env. Copy backend/.env.example to backend/.env first."
-    exit 1
-fi
 
 echo "Checking Tailscale SSH access to $PI_HOST..."
 tailscale ssh "$PI_HOST" "echo ok" >/dev/null
@@ -81,6 +79,13 @@ tailscale ssh "$PI_HOST" "mkdir -p ~/$REMOTE_DIR/backend ~/$REMOTE_DIR/data"
 
 REMOTE_ENV_PRESENT="$(tailscale ssh "$PI_HOST" "test -f ~/$REMOTE_DIR/backend/.env && echo yes || echo no")"
 REMOTE_DATA_PRESENT="$(tailscale ssh "$PI_HOST" "if [ -f ~/$REMOTE_DIR/data/job_store.json ] || [ -f ~/$REMOTE_DIR/data/sessions.json ]; then echo yes; else echo no; fi")"
+
+if (( SYNC_ENV )) || [[ "$REMOTE_ENV_PRESENT" == "no" ]]; then
+    if [[ ! -f "$LOCAL_ENV" ]]; then
+        echo "Missing backend/.env. Copy backend/.env.example to backend/.env first, or rely on the existing remote env without --sync-env."
+        exit 1
+    fi
+fi
 
 echo "Syncing backend code..."
 cd "$PROJECT_DIR"

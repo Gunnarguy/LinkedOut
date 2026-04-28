@@ -153,6 +153,251 @@ def _save_prefs(prefs: UserPreferences) -> None:
 _user_prefs = _load_prefs()
 
 
+def _contains_any(terms: list[str], text: str) -> bool:
+    return any(term in text for term in terms)
+
+
+def _count_matches(terms: list[str], text: str) -> int:
+    return sum(1 for term in terms if term in text)
+
+
+def _matches_pending_target_lane(job: JobPayload) -> bool:
+    text_blob = " ".join(
+        [
+            job.role_title,
+            job.company_name,
+            job.location,
+            job.description or "",
+            job.company_description or "",
+            job.why_interesting or "",
+            job.job_snapshot or "",
+            job.logic_fit or "",
+            " ".join(job.fit_reasons or []),
+            " ".join(job.tags or []),
+            " ".join(job.tech_stack or []),
+        ]
+    ).lower()
+    title = (job.role_title or "").lower()
+
+    practitioner_title_terms = [
+        "licensed master social worker",
+        "social worker",
+        "therapist",
+        "counselor",
+        "registered nurse",
+        "nurse practitioner",
+        "physician assistant",
+        "pharmacist",
+        "medical science liaison",
+        "case manager",
+        "care manager",
+    ]
+    hard_reject_title_terms = [
+        "multiple roles",
+        "senior engineer",
+        "senior software engineer",
+        "senior backend engineer",
+        "senior platform engineer",
+        "staff engineer",
+        "principal engineer",
+        "lead engineer",
+        "lead software engineer",
+        "engineering manager",
+        "director of engineering",
+        "head of engineering",
+        "platform engineer",
+        "infrastructure engineer",
+        "site reliability engineer",
+        "full-stack engineer",
+        "full stack engineer",
+        "full-stack software engineer",
+        "full-stack developer",
+        "backend engineer",
+        "backend developer",
+        "machine learning engineer",
+        "ml engineer",
+        "security engineer",
+        "sales engineer",
+    ]
+    strong_target_title_terms = [
+        "forward deployed engineer",
+        "forward-deployed engineer",
+        "solutions engineer",
+        "technical solutions engineer",
+        "clinical solutions engineer",
+        "implementation engineer",
+        "technical implementation engineer",
+        "customer engineer",
+        "integration engineer",
+        "workflow engineer",
+        "clinical software engineer",
+        "digital health engineer",
+        "healthcare ai engineer",
+        "medtech engineer",
+        "workflow automation engineer",
+    ]
+    workflow_terms = [
+        "workflow",
+        "implementation",
+        "integration",
+        "customer deployment",
+        "customer workflow",
+        "provider workflow",
+        "clinical workflow",
+        "care navigation",
+        "patient engagement",
+        "interoperability",
+        "ehr",
+        "emr",
+        "epic",
+        "fhir",
+        "hl7",
+        "benefits",
+        "remote patient monitoring",
+        "wearable",
+        "wearables",
+    ]
+    healthcare_terms = [
+        "healthcare",
+        "health tech",
+        "healthtech",
+        "digital health",
+        "medtech",
+        "clinical",
+        "medical device",
+        "patient",
+        "provider",
+        "hipaa",
+        "hospital",
+        "care delivery",
+    ]
+    mobile_terms = [
+        "ios",
+        "swift",
+        "swiftui",
+        "iphone",
+        "ipad",
+        "mobile",
+        "app store",
+    ]
+    ai_product_terms = [
+        "applied ai",
+        "ai product",
+        "llm",
+        "rag",
+        "agent",
+        "agentic",
+        "generative ai",
+        "automation",
+        "developer tools",
+        "mcp",
+    ]
+    builder_terms = [
+        "portfolio",
+        "what you've built",
+        "what you have built",
+        "show us what you've built",
+        "builder-first",
+        "non-traditional",
+        "shipped products",
+        "ship fast",
+        "rapid prototyping",
+        "0-to-1",
+        "zero-to-one",
+        "founding",
+        "first engineer",
+    ]
+
+    if _contains_any(practitioner_title_terms, title):
+        return False
+
+    if "multiple roles" in title:
+        return False
+
+    strong_title_match = _contains_any(strong_target_title_terms, title)
+    workflow_hits = _count_matches(workflow_terms, text_blob)
+    healthcare_hits = _count_matches(healthcare_terms, text_blob)
+    mobile_hits = _count_matches(mobile_terms, text_blob)
+    ai_hits = _count_matches(ai_product_terms, text_blob)
+    builder_hits = _count_matches(builder_terms, text_blob)
+    strong_positive_groups = sum(
+        1 for hit in [workflow_hits, healthcare_hits, mobile_hits, ai_hits, builder_hits] if hit > 0
+    )
+
+    if strong_title_match:
+        return True
+
+    if _contains_any(hard_reject_title_terms, title):
+        escape_hatch = (
+            (healthcare_hits > 0 and workflow_hits > 0)
+            or (healthcare_hits > 0 and mobile_hits > 0)
+            or (ai_hits > 0 and workflow_hits > 0)
+        )
+        return escape_hatch
+
+    if _contains_any(["ios engineer", "ios developer", "swiftui engineer", "mobile engineer"], title):
+        return mobile_hits > 0 and (healthcare_hits > 0 or workflow_hits > 0)
+
+    if _contains_any(
+        ["product engineer", "prototype engineer", "founding engineer", "ai product engineer", "applied ai engineer", "ai product builder"],
+        title,
+    ):
+        return workflow_hits > 0 or healthcare_hits > 0 or (healthcare_hits > 0 and ai_hits > 0)
+
+    if "software engineer" in title:
+        return (
+            (healthcare_hits > 0 and workflow_hits > 0)
+            or (healthcare_hits > 0 and mobile_hits > 0)
+            or (ai_hits > 0 and workflow_hits > 0)
+        )
+
+    return strong_positive_groups >= 2 and (workflow_hits > 0 or healthcare_hits > 0)
+
+
+def _matches_pending_preferences(job: JobPayload, prefs: UserPreferences) -> bool:
+    if prefs.require_remote and not job.is_remote:
+        return False
+
+    salary_ceiling = job.salary_max if (job.salary_max or 0) > 0 else job.salary_floor
+    if salary_ceiling and salary_ceiling < prefs.min_salary:
+        return False
+
+    searchable_text = " ".join(
+        [
+            job.role_title,
+            job.company_name,
+            job.location,
+            job.description or "",
+            job.company_description or "",
+            job.logic_fit or "",
+            job.why_interesting or "",
+            job.job_snapshot or "",
+            " ".join(job.tags or []),
+            " ".join(job.tech_stack or []),
+        ]
+    ).lower()
+
+    for keyword in prefs.excluded_keywords:
+        normalized = keyword.strip().lower()
+        if normalized and normalized in searchable_text:
+            return False
+
+    return True
+
+
+def _eligible_pending_jobs(prefs: UserPreferences) -> list[JobPayload]:
+    jobs = store.get_pending(
+        limit=store.pending_count,
+        offset=0,
+        min_builder_score=prefs.score_cutoff,
+    )
+    return [
+        job for job in jobs
+        if _matches_pending_preferences(job, prefs)
+        and _matches_pending_target_lane(job)
+    ]
+
+
 async def _run_ingest_cycle():
     """Fetch real jobs from APIs, score them through the LLM, add to pending.
 
@@ -893,7 +1138,8 @@ async def get_pending_jobs(
     offset: int = Query(0, ge=0),
 ):
     """Get pending (unreviewed) jobs, sorted by builder_score descending."""
-    return store.get_pending(limit=limit, offset=offset)
+    jobs = _eligible_pending_jobs(_user_prefs)
+    return jobs[offset : offset + limit]
 
 
 @app.post("/api/jobs/action", response_model=JobActionResponse)
@@ -958,7 +1204,9 @@ async def import_jobs(jobs: list[JobPayload], force: bool = Query(False)):
 @app.get("/api/jobs/stats")
 async def get_stats():
     """Pipeline statistics."""
-    return store.stats
+    stats = dict(store.stats)
+    stats["pending"] = len(_eligible_pending_jobs(_user_prefs))
+    return stats
 
 
 @app.post("/api/jobs/undo")
@@ -1508,6 +1756,8 @@ async def update_preferences(prefs: UserPreferences):
     global _user_prefs
     _user_prefs = prefs
     _save_prefs(prefs)
+    store.prune_pending_below_score(prefs.score_cutoff)
+    store.expire_old_jobs()
     return _user_prefs
 
 

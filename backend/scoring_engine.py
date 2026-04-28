@@ -14,7 +14,7 @@ import logging
 import re
 import time as _time_mod
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from openai import AsyncOpenAI
 
@@ -391,21 +391,18 @@ _NARROW_TARGET_TITLE_TERMS = [
     "mobile engineer",
     "swift engineer",
     "swiftui",
-    "product engineer",
-    "prototype engineer",
-    "founding engineer",
     "clinical software",
     "healthcare ai",
     "digital health",
     "medtech",
     "medical device",
     "applied ai",
-    "ai product",
     "ai product builder",
     "ai prototyper",
 ]
 
 _GENERIC_GENERALIST_TITLE_TERMS = [
+    "multiple roles",
     "full-stack engineer",
     "full stack engineer",
     "full-stack software engineer",
@@ -642,10 +639,20 @@ def _has_realistic_target_lane(title: str, text: str) -> bool:
     ai_product_hits = _count_matches(text, _APPLIED_AI_PRODUCT_TERMS)
     workflow_hits = _count_matches(text, _WORKFLOW_SIGNAL_TERMS)
     workflow_title = _contains_any(title, _WORKFLOW_OR_SOLUTIONS_TITLE_TERMS)
+    builder_title = _contains_any(
+        title,
+        ["product engineer", "prototype engineer", "founding engineer", "ai product"],
+    )
 
-    if healthcare_hits >= 1:
+    if mobile_hits >= 1 and not _is_specialist_mismatch_title(title):
         return True
-    if mobile_hits >= 1:
+    if healthcare_hits >= 1 and (
+        workflow_hits >= 1
+        or mobile_hits >= 1
+        or ai_product_hits >= 1
+        or builder_hits >= 1
+        or builder_title
+    ):
         return True
     if workflow_title and (
         workflow_hits >= 2
@@ -654,7 +661,20 @@ def _has_realistic_target_lane(title: str, text: str) -> bool:
         or builder_hits >= 1
     ):
         return True
-    if ai_product_hits >= 2 and builder_hits >= 1:
+    if builder_title and (
+        workflow_hits >= 1
+        or healthcare_hits >= 1
+        or mobile_hits >= 1
+        or ai_product_hits >= 1
+        or builder_hits >= 1
+    ):
+        return True
+    if ai_product_hits >= 2 and (
+        builder_hits >= 1
+        or workflow_hits >= 1
+        or healthcare_hits >= 1
+        or mobile_hits >= 1
+    ):
         return True
     return False
 
@@ -735,6 +755,18 @@ def _programmatic_hard_reject(
 
     if _is_specialist_mismatch_title(title) and not realistic_target_lane:
         return "Listing is a specialist ML or security role rather than the product-builder lane you're targeting."
+
+    if _is_generic_generalist_title(title) and not realistic_target_lane:
+        return "Listing is a generic software or backend role outside your narrower target lanes."
+
+    if raw.posted_at:
+        posted_at = raw.posted_at
+        if posted_at.tzinfo is None:
+            posted_at = posted_at.replace(tzinfo=timezone.utc)
+        else:
+            posted_at = posted_at.astimezone(timezone.utc)
+        if posted_at < datetime.now(timezone.utc) - timedelta(days=45):
+            return "Listing appears stale because it is older than 45 days."
 
     if prefs.require_remote:
         if onsite_signal:

@@ -17,9 +17,11 @@ STORE_FILE = DATA_DIR / "job_store.json"
 SEEN_FILE = DATA_DIR / "seen_urls.json"
 
 
-# Jobs scoring at or above this threshold are "high salience" and
-# protected from age-based expiry.  They clearly describe *you*.
+# Jobs scoring at or above this threshold get a slightly longer TTL,
+# but nothing in pending should live forever.
 HIGH_SALIENCE_THRESHOLD = 0.65
+STANDARD_PENDING_MAX_AGE_DAYS = 21
+HIGH_SALIENCE_MAX_AGE_DAYS = 25
 
 
 class JobStore:
@@ -36,6 +38,8 @@ class JobStore:
         self._load()
         self._dedup_on_load()
         self._normalize_scoring_on_load()
+        self.expire_old_jobs()
+        self.expire_stale_seen_urls()
 
     def _normalize_signature_text(self, value: str) -> str:
         return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
@@ -421,27 +425,61 @@ class JobStore:
         self._save()
         return count
 
-    def expire_old_jobs(self, max_age_days: int = 30) -> int:
-        """Remove pending jobs older than max_age_days.
-        High-salience jobs (score >= HIGH_SALIENCE_THRESHOLD) are NEVER expired.
-        Jobs with no posted_at are kept (not silently deleted).
-        Returns count removed."""
-        cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+    def expire_old_jobs(
+        self,
+        max_age_days: int = STANDARD_PENDING_MAX_AGE_DAYS,
+        high_salience_max_age_days: int = HIGH_SALIENCE_MAX_AGE_DAYS,
+    ) -> int:
+        """Remove stale pending jobs.
+
+        Regular pending jobs expire after max_age_days.
+        High-salience pending jobs get a slightly longer TTL but do not live forever.
+        Jobs with no posted_at are kept.
+        Returns count removed.
+        """
+        now = datetime.now(timezone.utc)
+        standard_cutoff = now - timedelta(days=max_age_days)
+        high_salience_cutoff = now - timedelta(days=high_salience_max_age_days)
         to_remove = []
         for jid, job in self._pending.items():
-            # Never expire high-salience jobs — these are your best matches
-            if job.builder_score >= HIGH_SALIENCE_THRESHOLD:
-                continue
-            # Keep jobs with no posted_at rather than silently deleting them
             if not job.posted_at:
                 continue
+            cutoff = (
+                high_salience_cutoff
+                if job.builder_score >= HIGH_SALIENCE_THRESHOLD
+                else standard_cutoff
+            )
             if job.posted_at < cutoff:
                 to_remove.append(jid)
         for jid in to_remove:
             self._pending.pop(jid)
         if to_remove:
+            self._rebuild_url_index()
             self._save()
-            logger.info(f"Expired {len(to_remove)} low-score jobs older than {max_age_days} days")
+            logger.info(
+                "Expired %s stale pending jobs older than %s/%s days",
+                len(to_remove),
+                max_age_days,
+                high_salience_max_age_days,
+            )
+        return len(to_remove)
+
+    def prune_pending_below_score(self, min_builder_score: float) -> int:
+        """Remove pending jobs that no longer meet the active cutoff."""
+        to_remove = [
+            jid for jid, job in self._pending.items()
+            if float(job.builder_score or 0.0) < min_builder_score
+        ]
+        for jid in to_remove:
+            self._pending.pop(jid)
+        if to_remove:
+            self._rebuild_url_index()
+            self._save()
+            logger.info(
+                "Pruned %s pending jobs below active score cutoff %.2f",
+                len(to_remove),
+                min_builder_score,
+            )
         return len(to_remove)
 
     def purge_keyword_scored(self) -> int:
@@ -495,8 +533,16 @@ class JobStore:
         self._save()
         self._save_seen()
 
-    def get_pending(self, limit: int = 20, offset: int = 0) -> list[JobPayload]:
-        jobs = list(self._pending.values())
+    def get_pending(
+        self,
+        limit: int = 20,
+        offset: int = 0,
+        min_builder_score: float = 0.0,
+    ) -> list[JobPayload]:
+        jobs = [
+            job for job in self._pending.values()
+            if float(job.builder_score or 0.0) >= min_builder_score
+        ]
         jobs.sort(key=lambda j: j.builder_score, reverse=True)
         return jobs[offset : offset + limit]
 

@@ -197,7 +197,7 @@ struct CardStackView: View {
 
                         Button {
                             haptic()
-                            Task { await jobs.ingestNewJobs() }
+                            Task { await jobs.ingestNewJobs(trigger: "toolbar-scan") }
                         } label: {
                             if jobs.isIngesting {
                                 ProgressView()
@@ -571,7 +571,7 @@ struct CardStackView: View {
             } else {
                 Button {
                     haptic()
-                    Task { await jobs.ingestNewJobs() }
+                    Task { await jobs.ingestNewJobs(trigger: "empty-state-scan") }
                 } label: {
                     Label("Find New Jobs", systemImage: "sparkle.magnifyingglass")
                         .font(.headline)
