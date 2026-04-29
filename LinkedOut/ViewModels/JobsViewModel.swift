@@ -122,12 +122,6 @@ class JobsViewModel: ObservableObject {
             job.location,
             job.description ?? "",
             job.companyDescription ?? "",
-            job.whyInteresting ?? "",
-            job.jobSnapshot ?? "",
-            job.logicFit ?? "",
-            (job.fitReasons ?? []).joined(separator: " "),
-            (job.tags).joined(separator: " "),
-            (job.techStack ?? []).joined(separator: " "),
         ].joined(separator: " ").lowercased()
 
         let title = job.roleTitle.lowercased()
@@ -299,7 +293,9 @@ class JobsViewModel: ObservableObject {
         }
 
         if containsAny(["ios engineer", "ios developer", "swiftui engineer", "mobile engineer"], in: title) {
-            return mobileHits > 0 && (healthcareHits > 0 || workflowHits > 0)
+            return mobileHits > 0 && (
+                healthcareHits > 0 || workflowHits >= 2 || aiHits > 0 || builderHits > 0
+            )
         }
 
         if containsAny(["product engineer", "prototype engineer", "founding engineer", "ai product engineer", "applied ai engineer", "ai product builder"], in: title) {

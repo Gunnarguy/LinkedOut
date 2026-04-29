@@ -68,14 +68,20 @@ logger = logging.getLogger(__name__)
 SEARCH_QUERIES = [
     # Workflow / solutions / implementation — HIGHEST PROBABILITY
     "forward deployed engineer",
+    "forward deployed engineer healthcare",
     "solutions engineer healthcare",
+    "solutions engineer medtech",
     "solutions engineer AI",
     "technical solutions engineer",
     "clinical solutions engineer",
     "implementation engineer healthcare",
+    "implementation engineer remote",
+    "healthcare implementation engineer",
     "technical implementation engineer",
     "customer engineer AI",
+    "customer engineer healthcare",
     "integration engineer healthcare",
+    "clinical integration engineer",
     "workflow engineer",
     "workflow automation engineer",
     # Healthcare / MedTech / Clinical software — PRIMARY DOMAIN EDGE
@@ -84,6 +90,7 @@ SEARCH_QUERIES = [
     "clinical software",
     "healthcare AI engineer",
     "healthcare iOS",
+    "ios engineer digital health",
     "care navigation software",
     "patient engagement platform",
     "provider workflow software",
@@ -93,8 +100,11 @@ SEARCH_QUERIES = [
     "healthcare interoperability",
     "FHIR integration engineer",
     "HL7 integration engineer",
+    "FHIR implementation engineer",
+    "EHR integration engineer",
     # AI product / prototype building — CORE BUILDING STYLE
     "AI product engineer",
+    "applied AI product engineer",
     "applied AI engineer",
     "AI product builder",
     "prototype engineer",
@@ -106,9 +116,12 @@ SEARCH_QUERIES = [
     # iOS / Mobile — STRONGEST PROOF OF EXECUTION
     "iOS engineer health",
     "iOS engineer remote",
+    "iOS engineer digital health",
     "iOS developer health",
+    "swift developer remote",
     "SwiftUI engineer",
     "mobile product engineer",
+    "mobile engineer healthcare",
     "wearables engineer iOS",
     # Adjacent but still plausible
     "healthcare product engineer",
@@ -744,15 +757,20 @@ async def fetch_serpapi_google_jobs(
     # Use a targeted subset of queries to stay within free tier budget
     serpapi_queries = [
         "forward deployed engineer healthcare remote",
+        "forward deployed engineer medtech remote",
         "solutions engineer AI remote",
+        "solutions engineer healthcare remote",
         "implementation engineer healthcare remote",
+        "integration engineer healthcare remote",
         "customer engineer AI remote",
         "workflow engineer healthcare remote",
+        "FHIR integration engineer remote",
         "AI product engineer",
         "medical device software engineer",
         "care navigation software engineer",
         "patient engagement platform engineer",
         "SwiftUI engineer remote",
+        "swift developer remote",
         "applied AI engineer",
         "digital health engineer",
         "clinical software engineer",
@@ -853,13 +871,16 @@ async def fetch_adzuna(locations: list[str] | None = None) -> list[RawJobListing
         "forward deployed engineer",
         "solutions engineer healthcare",
         "implementation engineer healthcare",
+        "integration engineer healthcare",
         "customer engineer AI",
         "iOS developer",
+        "SwiftUI engineer",
         "founding engineer",
         "product engineer startup",
         "health tech software",
         "care navigation software",
         "medical software engineer",
+        "FHIR integration engineer",
     ]
 
     # Build search plan: (query, location_filter)
@@ -975,10 +996,12 @@ async def fetch_findwork(locations: list[str] | None = None) -> list[RawJobListi
         "forward deployed",
         "solutions engineer",
         "implementation engineer",
+        "integration engineer",
         "customer engineer",
         "iOS",
+        "SwiftUI",
         "healthcare",
-        "startup",
+        "digital health",
         "product engineer",
         "founding engineer",
     ]
@@ -1069,11 +1092,14 @@ async def fetch_reed(locations: list[str] | None = None) -> list[RawJobListing]:
 
     reed_queries = [
         "AI engineer remote",
-        "machine learning remote",
+        "applied AI engineer remote",
+        "solutions engineer healthcare remote",
+        "implementation engineer healthcare remote",
         "iOS developer remote",
         "health tech engineer",
+        "SwiftUI engineer remote",
         "product engineer startup",
-        "LLM engineer",
+        "clinical software engineer",
     ]
 
     # Build search plan: (query, location_filter)
@@ -1173,13 +1199,13 @@ async def fetch_usajobs(locations: list[str] | None = None) -> list[RawJobListin
 
     usajobs_queries = [
         "artificial intelligence",
-        "software engineer",
-        "data scientist",
         "health IT",
-        "iOS developer",
-        "machine learning",
-        "cybersecurity",
         "digital services",
+        "interoperability",
+        "FHIR",
+        "software engineer health IT",
+        "iOS developer",
+        "implementation engineer",
     ]
 
     # Build search plan: (query, location_filter)
@@ -1299,7 +1325,7 @@ async def fetch_workingnomads() -> list[RawJobListing]:
     seen_urls: set[str] = set()
 
     # Working Nomads returns ALL jobs in one call — filter client-side
-    target_categories = {"development", "data", "design", "management", "devops"}
+    target_categories = {"development", "data", "design"}
 
     async with httpx.AsyncClient(
         timeout=TIMEOUT, headers={"User-Agent": "LinkedOut/1.0"}
@@ -1368,11 +1394,11 @@ async def fetch_jobspresso() -> list[RawJobListing]:
     # Jobspresso RSS supports search_keywords and job_types params
     rss_urls = [
         "https://jobspresso.co/?feed=job_feed&job_types=ai-data,developer,product-mgmt&search_keywords=AI+engineer",
-        "https://jobspresso.co/?feed=job_feed&job_types=ai-data,developer&search_keywords=machine+learning",
+        "https://jobspresso.co/?feed=job_feed&job_types=ai-data,developer&search_keywords=applied+AI",
         "https://jobspresso.co/?feed=job_feed&job_types=developer&search_keywords=iOS+engineer",
         "https://jobspresso.co/?feed=job_feed&job_types=developer&search_keywords=founding+engineer",
         "https://jobspresso.co/?feed=job_feed&job_types=ai-data,developer&search_keywords=healthcare+AI",
-        "https://jobspresso.co/?feed=job_feed&job_types=developer&search_keywords=full+stack+startup",
+        "https://jobspresso.co/?feed=job_feed&job_types=developer&search_keywords=solutions+engineer",
     ]
 
     # XML namespaces used by Jobspresso RSS

@@ -169,12 +169,6 @@ def _matches_pending_target_lane(job: JobPayload) -> bool:
             job.location,
             job.description or "",
             job.company_description or "",
-            job.why_interesting or "",
-            job.job_snapshot or "",
-            job.logic_fit or "",
-            " ".join(job.fit_reasons or []),
-            " ".join(job.tags or []),
-            " ".join(job.tech_stack or []),
         ]
     ).lower()
     title = (job.role_title or "").lower()
@@ -336,7 +330,12 @@ def _matches_pending_target_lane(job: JobPayload) -> bool:
         return escape_hatch
 
     if _contains_any(["ios engineer", "ios developer", "swiftui engineer", "mobile engineer"], title):
-        return mobile_hits > 0 and (healthcare_hits > 0 or workflow_hits > 0)
+        return mobile_hits > 0 and (
+            healthcare_hits > 0
+            or workflow_hits >= 2
+            or ai_hits > 0
+            or builder_hits > 0
+        )
 
     if _contains_any(
         ["product engineer", "prototype engineer", "founding engineer", "ai product engineer", "applied ai engineer", "ai product builder"],
@@ -396,6 +395,12 @@ def _eligible_pending_jobs(prefs: UserPreferences) -> list[JobPayload]:
         if _matches_pending_preferences(job, prefs)
         and _matches_pending_target_lane(job)
     ]
+
+
+def _eligible_store_stats(prefs: UserPreferences) -> dict:
+    stats = dict(store.stats)
+    stats["pending"] = len(_eligible_pending_jobs(prefs))
+    return stats
 
 
 async def _run_ingest_cycle():
@@ -883,7 +888,7 @@ app.add_middleware(
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "store": store.stats}
+    return {"status": "ok", "store": _eligible_store_stats(_user_prefs)}
 
 
 # ── Auth Routes ──────────────────────────────────────────────────────────────
@@ -1204,9 +1209,7 @@ async def import_jobs(jobs: list[JobPayload], force: bool = Query(False)):
 @app.get("/api/jobs/stats")
 async def get_stats():
     """Pipeline statistics."""
-    stats = dict(store.stats)
-    stats["pending"] = len(_eligible_pending_jobs(_user_prefs))
-    return stats
+    return _eligible_store_stats(_user_prefs)
 
 
 @app.post("/api/jobs/undo")
@@ -1705,8 +1708,8 @@ async def ingest_refresh():
         return {
             "status": "already_running",
             "ingested": 0,
-            "total_pending": store.pending_count,
-            "store": store.stats,
+            "total_pending": len(_eligible_pending_jobs(_user_prefs)),
+            "store": _eligible_store_stats(_user_prefs),
         }
 
     _last_ingest_result = None
@@ -1714,7 +1717,7 @@ async def ingest_refresh():
     async def _do_manual_ingest():
         global _last_ingest_result
         async with _ingest_lock:
-            store.expire_old_jobs(max_age_days=30)
+            store.expire_old_jobs()
             store.expire_stale_seen_urls(max_age_days=30)
             _last_ingest_result = await _run_ingest_cycle()
 
@@ -1722,8 +1725,8 @@ async def ingest_refresh():
     return {
         "status": "started",
         "ingested": 0,
-        "total_pending": store.pending_count,
-        "store": store.stats,
+        "total_pending": len(_eligible_pending_jobs(_user_prefs)),
+        "store": _eligible_store_stats(_user_prefs),
     }
 
 
@@ -1737,7 +1740,7 @@ async def ingest_status():
         "manual_running": manual_running,
         "cycle_active": _ingest_lock.locked(),
         "last_ingest_result": _last_ingest_result,
-        "store": store.stats,
+        "store": _eligible_store_stats(_user_prefs),
     }
 
 
@@ -2525,7 +2528,7 @@ async def get_telemetry(log_lines: int = Query(50, ge=0, le=500)):
     }
 
     # ── Store stats ──
-    stats = store.stats
+    stats = _eligible_store_stats(_user_prefs)
     store_info = {
         **stats,
         "seen_urls": len(store._seen_urls) if hasattr(store, '_seen_urls') else None,

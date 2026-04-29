@@ -644,7 +644,12 @@ def _has_realistic_target_lane(title: str, text: str) -> bool:
         ["product engineer", "prototype engineer", "founding engineer", "ai product"],
     )
 
-    if mobile_hits >= 1 and not _is_specialist_mismatch_title(title):
+    if mobile_hits >= 1 and not _is_specialist_mismatch_title(title) and (
+        healthcare_hits >= 1
+        or workflow_hits >= 2
+        or ai_product_hits >= 1
+        or builder_hits >= 1
+    ):
         return True
     if healthcare_hits >= 1 and (
         workflow_hits >= 1
@@ -1953,6 +1958,8 @@ async def triage_job(raw: RawJobListing, prefs: UserPreferences | None = None) -
 
     # ── Programmatic pre-triage: only reject obvious non-software junk ────
     title_lower = raw.title.lower()
+    normalized_title = _normalize_match_text(raw.title)
+    normalized_text = _job_match_text(raw)
     junk_titles = [
         "account executive",
         "sales representative",
@@ -1970,6 +1977,16 @@ async def triage_job(raw: RawJobListing, prefs: UserPreferences | None = None) -
                 f"[TRIAGE] PRE-REJECT (junk title '{junk}') | {raw.title} @ {raw.company}"
             )
             return False
+
+    if _contains_any(normalized_title, _NARROW_TARGET_TITLE_TERMS) or _contains_any(
+        normalized_title, _WORKFLOW_OR_SOLUTIONS_TITLE_TERMS
+    ):
+        logger.info(f"[TRIAGE] PRE-PASS (target title) | {raw.title} @ {raw.company}")
+        return True
+
+    if _has_realistic_target_lane(normalized_title, normalized_text):
+        logger.info(f"[TRIAGE] PRE-PASS (target lane) | {raw.title} @ {raw.company}")
+        return True
 
     triage_sys = TRIAGE_PROMPT.replace(
         "{professional_profile}", prefs.professional_profile
